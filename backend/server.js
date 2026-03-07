@@ -78,6 +78,9 @@ async function gracefulShutdown(signal) {
     
     // 关闭 Redis 连接
     await cacheService.disconnect();
+
+    // 刷新并关闭日志写入流
+    await logger.closeStreams();
     
     // 关闭 HTTP 服务器
     server.close(() => {

@@ -1,10 +1,15 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect, useMemo, useState } from 'react'
 import { useLogStore } from '../store/useAppStore'
 import './LogViewer.css'
+
+const LOG_LINE_HEIGHT = 20
+const LOG_OVERSCAN = 20
 
 function LogViewer({ type }) {
   const logRef = useRef(null)
   const shouldAutoScroll = useRef(true)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const [scrollTop, setScrollTop] = useState(0)
 
   const {
     filters,
@@ -19,23 +24,46 @@ function LogViewer({ type }) {
   const { logLevel, searchTerm } = filters[type]
   const originalLines = getLogLines(type)
 
-  const lines = useMemo(() => {
-    return getFilteredLogs(type)
-  }, [getFilteredLogs, type, logLevel, searchTerm, originalLines])
-
-  const logs = useMemo(() => lines.join('\n'), [lines])
+  const lines = useMemo(() => getFilteredLogs(type), [getFilteredLogs, type, logLevel, searchTerm, originalLines])
   const originalLogs = useMemo(() => originalLines.join('\n'), [originalLines])
+
+  useEffect(() => {
+    if (!logRef.current) {
+      return undefined
+    }
+
+    const updateHeight = () => {
+      if (logRef.current) {
+        setViewportHeight(logRef.current.clientHeight)
+      }
+    }
+
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(logRef.current)
+
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     if (logRef.current && shouldAutoScroll.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight
+      setScrollTop(logRef.current.scrollTop)
     }
-  }, [logs])
+  }, [lines])
+
+  const totalHeight = lines.length * LOG_LINE_HEIGHT
+  const visibleCount = Math.max(Math.ceil(viewportHeight / LOG_LINE_HEIGHT), 1)
+  const startIndex = Math.max(Math.floor(scrollTop / LOG_LINE_HEIGHT) - LOG_OVERSCAN, 0)
+  const endIndex = Math.min(startIndex + visibleCount + LOG_OVERSCAN * 2, lines.length)
+  const visibleLines = lines.slice(startIndex, endIndex)
 
   const handleScroll = () => {
     if (logRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = logRef.current
-      shouldAutoScroll.current = scrollHeight - scrollTop - clientHeight < 50
+      const { scrollTop: nextScrollTop, scrollHeight, clientHeight } = logRef.current
+      shouldAutoScroll.current = scrollHeight - nextScrollTop - clientHeight < 50
+      setScrollTop(nextScrollTop)
     }
   }
 
@@ -45,6 +73,7 @@ function LogViewer({ type }) {
     } else {
       clearServiceLogs()
     }
+    setScrollTop(0)
   }
 
   const handleDownload = () => {
@@ -57,10 +86,7 @@ function LogViewer({ type }) {
     URL.revokeObjectURL(url)
   }
 
-  const matchCount = useMemo(() => {
-    if (!searchTerm) return 0
-    return lines.length
-  }, [lines, searchTerm])
+  const matchCount = useMemo(() => (searchTerm ? lines.length : 0), [lines, searchTerm])
 
   return (
     <div className={`log-container ${getThemeClass(type)}`}>
@@ -85,11 +111,7 @@ function LogViewer({ type }) {
               onChange={(e) => setSearchTerm(type, e.target.value)}
               className="log-search-input"
             />
-            {searchTerm && (
-              <span className="match-count">
-                {matchCount} 条匹配
-              </span>
-            )}
+            {searchTerm && <span className="match-count">{matchCount} 条匹配</span>}
           </div>
         </div>
 
@@ -103,12 +125,20 @@ function LogViewer({ type }) {
         </div>
       </div>
 
-      <div
-        ref={logRef}
-        className="log"
-        onScroll={handleScroll}
-      >
-        {logs || <span className="log-placeholder">等待日志输出...</span>}
+      <div ref={logRef} className="log" onScroll={handleScroll}>
+        {lines.length > 0 ? (
+          <div className="log-viewport" style={{ height: `${totalHeight}px` }}>
+            <div className="log-visible" style={{ transform: `translateY(${startIndex * LOG_LINE_HEIGHT}px)` }}>
+              {visibleLines.map((line, index) => (
+                <div key={`${startIndex + index}-${line}`} className="log-line">
+                  {line || ' '}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <span className="log-placeholder">等待日志输出...</span>
+        )}
       </div>
     </div>
   )
