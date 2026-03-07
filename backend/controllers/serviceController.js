@@ -140,6 +140,20 @@ const serviceController = {
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
+  },
+
+  /**
+   * 重启所有服务
+   */
+  async restartAll(req, res) {
+    try {
+      logger.broadcast('\n========== 重启所有服务 ==========', 'service');
+      const results = await processManager.restartAll();
+      res.json({ success: true, data: results });
+    } catch (error) {
+      logger.broadcast(`批量重启失败: ${error.message}`, 'service');
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
 };
 

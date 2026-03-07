@@ -298,21 +298,22 @@ class ProcessManager {
     return { running: Boolean(pid), pid };
   }
 
-  async stopAll() {
-    const results = [];
-    const services = [...config.serviceCatalog].sort((a, b) => b.startOrder - a.startOrder);
+  async _rollbackStartedServices(startedServices) {
+    const rollbackResults = [];
 
-    for (const item of services) {
+    for (const item of [...startedServices].reverse()) {
+      logger.broadcast(`回滚服务启动: ${item.name}`, 'service');
       const result = await this.stop(item.id, config.services[item.id]);
-      results.push({ serviceId: item.id, ...result });
+      rollbackResults.push({ serviceId: item.id, ...result, rollback: true });
     }
 
-    return results;
+    return rollbackResults;
   }
 
-  async startAll() {
+  async _startServicesBatch(services, options = {}) {
     const results = [];
-    const services = [...config.serviceCatalog];
+    const startedServices = [];
+    const rollbackOnFailure = options.rollbackOnFailure !== false;
 
     for (let index = 0; index < services.length; index += 1) {
       const item = services[index];
@@ -324,6 +325,7 @@ class ProcessManager {
         startResult = { pid: status.pid, alreadyRunning: true };
       } else {
         startResult = await this.start(item.id, config.services[item.id]);
+        startedServices.push(item);
       }
 
       const healthResult = await healthChecker.waitForHealthy(item.id, {
@@ -348,6 +350,11 @@ class ProcessManager {
         error: failureMessage
       });
 
+      if (rollbackOnFailure && startedServices.length > 0) {
+        const rollbackResults = await this._rollbackStartedServices(startedServices);
+        results.push(...rollbackResults);
+      }
+
       for (const skipped of services.slice(index + 1)) {
         results.push({
           serviceId: skipped.id,
@@ -360,6 +367,43 @@ class ProcessManager {
     }
 
     return results;
+  }
+
+  async _stopServicesBatch(services, options = {}) {
+    const results = [];
+    const ignoreNotRunning = options.ignoreNotRunning !== false;
+
+    for (const item of services) {
+      const result = await this.stop(item.id, config.services[item.id]);
+      if (ignoreNotRunning || result.success) {
+        results.push({ serviceId: item.id, ...result });
+      } else {
+        results.push({ serviceId: item.id, ...result, failed: true });
+      }
+    }
+
+    return results;
+  }
+
+  async stopAll(options = {}) {
+    const services = [...config.serviceCatalog].sort((a, b) => b.startOrder - a.startOrder);
+    return this._stopServicesBatch(services, options);
+  }
+
+  async startAll(options = {}) {
+    const services = [...config.serviceCatalog];
+    return this._startServicesBatch(services, options);
+  }
+
+  async restartAll() {
+    const stopResults = await this.stopAll({ ignoreNotRunning: true });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const startResults = await this.startAll({ rollbackOnFailure: true });
+
+    return {
+      stopResults,
+      startResults
+    };
   }
 
   async initBuild(moduleConfig) {

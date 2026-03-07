@@ -58,19 +58,24 @@ function ServicesTab() {
   }, [connected, services, setLoading, updateServiceStatus, fetchServices])
 
   const handleBatchAction = useCallback(async (action) => {
-    const endpoint = action === 'start' ? '/api/services/start-all' : '/api/services/stop-all'
+    const actionLabels = {
+      start: '启动',
+      stop: '停止',
+      restart: '重启'
+    }
+    const endpoint = `/api/services/${action}-all`
 
     toast.promise(
       fetch(endpoint, { method: 'POST' }).then((response) => response.json()),
       {
-        loading: `正在${action === 'start' ? '启动' : '停止'}所有服务...`,
-        success: '命令已发送',
-        error: '操作失败'
+        loading: `正在${actionLabels[action]}所有服务...`,
+        success: `${actionLabels[action]}命令已发送`,
+        error: `${actionLabels[action]}失败`
       }
     )
 
     if (!connected) {
-      setTimeout(fetchServices, 5000)
+      setTimeout(fetchServices, action === 'restart' ? 7000 : 5000)
     }
   }, [connected, fetchServices])
 
@@ -87,6 +92,9 @@ function ServicesTab() {
           <div className="batch-actions">
             <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
               启动全部
+            </button>
+            <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
+              重启全部
             </button>
             <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
               停止全部

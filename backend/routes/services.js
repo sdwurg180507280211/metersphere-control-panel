@@ -12,6 +12,7 @@ router.get('/status', serviceController.getAllStatus);
 // 批量操作
 router.post('/start-all', serviceController.startAll);
 router.post('/stop-all', serviceController.stopAll);
+router.post('/restart-all', serviceController.restartAll);
 
 // 单个服务操作
 router.get('/:id/status', serviceController.getStatus);

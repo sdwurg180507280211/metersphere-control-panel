@@ -22,6 +22,15 @@
   background: #28a745;
 }
 
+.btn-restart {
+  background: #007aff;
+  color: white;
+}
+
+.btn-restart:hover {
+  background: #005ecb;
+}
+
 .btn-stop {
   background: #ff3b30;
   color: white;
