@@ -18,6 +18,7 @@ export function useWebSocket() {
   const appendServiceLogRef = useRef(useLogStore.getState().appendServiceLog)
   const appendBuildLogRef = useRef(useLogStore.getState().appendBuildLog)
   const updateBuildProgressRef = useRef(useBuildStore.getState().updateBuildProgress)
+  const updateServiceStatusRef = useRef(useServiceStore.getState().updateServiceStatus)
   const fetchServicesRef = useRef(useServiceStore.getState().fetchServices)
 
   const {
@@ -57,6 +58,8 @@ export function useWebSocket() {
           channels: ['logs:service', 'logs:build', 'build:progress', '*']
         }))
 
+        fetchServicesRef.current()
+
         heartbeatTimerRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'ping' }))
@@ -87,6 +90,9 @@ export function useWebSocket() {
                   if (data.data.status === 'success' || data.data.status === 'failed' || data.data.status === 'cancelled') {
                     setTimeout(() => fetchServicesRef.current(), 1500)
                   }
+                  break
+                case 'service:status':
+                  updateServiceStatusRef.current(data.data.serviceId, data.data.running)
                   break
                 default:
                   break

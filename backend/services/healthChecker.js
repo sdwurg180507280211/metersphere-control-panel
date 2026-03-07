@@ -7,6 +7,36 @@ const config = require('../config');
 class HealthChecker {
   constructor() {
     this.timeout = 2000;
+    this.waitTimeout = 120000;
+    this.waitInterval = 3000;
+  }
+
+  _parseHealthBody(body) {
+    if (!body) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(body);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  _isHealthyResponse(statusCode, payload) {
+    if (statusCode !== 200) {
+      return false;
+    }
+
+    if (!payload || typeof payload !== 'object') {
+      return true;
+    }
+
+    if (typeof payload.status === 'string') {
+      return payload.status.toUpperCase() === 'UP';
+    }
+
+    return true;
   }
 
   /**
@@ -29,14 +59,27 @@ class HealthChecker {
       };
 
       const req = http.get(options, (res) => {
-        if (!responded) {
+        let body = '';
+
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+
+        res.on('end', () => {
+          if (responded) {
+            return;
+          }
+
           responded = true;
-          resolve({ 
-            healthy: res.statusCode === 200,
+          const payload = this._parseHealthBody(body);
+          resolve({
+            healthy: this._isHealthyResponse(res.statusCode, payload),
             statusCode: res.statusCode,
-            service: serviceId
+            service: serviceId,
+            details: payload
           });
-        }
+        });
       });
 
       req.on('error', () => {
@@ -60,11 +103,70 @@ class HealthChecker {
    * 批量检查所有服务
    */
   async checkAll() {
-    const results = {};
-    for (const serviceId of Object.keys(config.services)) {
-      results[serviceId] = await this.check(serviceId);
+    const serviceIds = Object.keys(config.services);
+    const entries = await Promise.allSettled(
+      serviceIds.map(async (serviceId) => [serviceId, await this.check(serviceId)])
+    );
+
+    return entries.reduce((results, entry, index) => {
+      const serviceId = serviceIds[index];
+
+      if (entry.status === 'fulfilled') {
+        const [resolvedServiceId, result] = entry.value;
+        results[resolvedServiceId] = result;
+        return results;
+      }
+
+      results[serviceId] = {
+        healthy: false,
+        service: serviceId,
+        error: entry.reason?.message || '健康检查失败'
+      };
+      return results;
+    }, {});
+  }
+
+  async waitForHealthy(serviceId, options = {}) {
+    const timeout = options.timeout ?? this.waitTimeout;
+    const interval = options.interval ?? this.waitInterval;
+    const initialDelay = options.initialDelay ?? 0;
+    const deadline = Date.now() + timeout;
+    let attempts = 0;
+    let lastResult = null;
+
+    if (initialDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, initialDelay));
     }
-    return results;
+
+    while (Date.now() <= deadline) {
+      attempts += 1;
+      lastResult = await this.check(serviceId);
+
+      if (lastResult.healthy) {
+        return {
+          ...lastResult,
+          attempts,
+          durationMs: timeout - Math.max(deadline - Date.now(), 0)
+        };
+      }
+
+      if (Date.now() + interval > deadline) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+
+    return {
+      healthy: false,
+      service: serviceId,
+      error: lastResult?.error || '健康检查超时',
+      statusCode: lastResult?.statusCode,
+      details: lastResult?.details,
+      attempts,
+      durationMs: timeout,
+      timedOut: true
+    };
   }
 }
 

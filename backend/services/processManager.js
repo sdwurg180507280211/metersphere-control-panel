@@ -9,8 +9,11 @@ const path = require('path');
 const config = require('../config');
 const logger = require('../utils/logger');
 const buildProgressService = require('./buildProgressService');
+const healthChecker = require('./healthChecker');
 
 const PID_DIR = path.join(__dirname, '../../.pids');
+const BATCH_START_HEALTH_TIMEOUT = 120000;
+const BATCH_START_HEALTH_INTERVAL = 3000;
 
 if (!fs.existsSync(PID_DIR)) {
   fs.mkdirSync(PID_DIR, { recursive: true });
@@ -78,6 +81,7 @@ class ProcessManager {
       child
     });
     this._savePid(serviceId, child.pid);
+    this._broadcastServiceStatus(serviceId, true, { pid: child.pid, name: serviceConfig.name });
 
     child.stdout?.on('data', (data) => {
       logger.broadcast(data.toString(), 'service');
@@ -90,12 +94,23 @@ class ProcessManager {
     child.on('close', (code, signal) => {
       logger.broadcast(`\n${serviceConfig.name} 进程退出，代码: ${code ?? 'null'}${signal ? `，信号: ${signal}` : ''}`, 'service');
       this._clearPid(serviceId, child.pid);
+      this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name, code, signal });
     });
 
     child.on('error', (err) => {
       logger.broadcast(`\n${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       this._clearPid(serviceId, child.pid);
+      this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name, error: err.message });
     });
+  }
+
+  _broadcastServiceStatus(serviceId, running, metadata = {}) {
+    try {
+      const websocketService = require('./websocketService');
+      websocketService.broadcastServiceStatus?.(serviceId, running, metadata);
+    } catch (error) {
+      // ignore websocket availability issues
+    }
   }
 
   async _execFileSafe(command, args) {
@@ -180,16 +195,28 @@ class ProcessManager {
     }
   }
 
+  _resolveMavenCommand() {
+    const wrapperName = process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw';
+    const wrapperPath = path.join(this.projectRoot, wrapperName);
+
+    if (fs.existsSync(wrapperPath)) {
+      return wrapperPath;
+    }
+
+    return process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
+  }
+
   async start(serviceId, serviceConfig) {
     const status = await this.getStatus(serviceId);
     if (status.running) {
       return { pid: status.pid, alreadyRunning: true };
     }
 
+    const mavenCommand = this._resolveMavenCommand();
     logger.broadcast(`\n========== 启动 ${serviceConfig.name} ==========`, 'service');
-    logger.broadcast(`执行命令: ./mvnw -f ${serviceConfig.pom} spring-boot:run`, 'service');
+    logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service');
 
-    const child = spawn('./mvnw', ['-f', serviceConfig.pom, 'spring-boot:run'], {
+    const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
       cwd: this.projectRoot,
       detached: process.platform !== 'win32',
       env: process.env
@@ -225,6 +252,7 @@ class ProcessManager {
 
     this._clearPid(serviceId);
     logger.broadcast(`${serviceConfig.name} 已停止`, 'service');
+    this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name });
     return { success: true, method: 'pid' };
   }
 
@@ -283,16 +311,51 @@ class ProcessManager {
 
   async startAll() {
     const results = [];
+    const services = [...config.serviceCatalog];
 
-    for (const item of config.serviceCatalog) {
+    for (let index = 0; index < services.length; index += 1) {
+      const item = services[index];
       const status = await this.getStatus(item.id);
+      let startResult;
+
       if (status.running) {
+        logger.broadcast(`${item.name} 已在运行，等待健康检查通过...`, 'service');
+        startResult = { pid: status.pid, alreadyRunning: true };
+      } else {
+        startResult = await this.start(item.id, config.services[item.id]);
+      }
+
+      const healthResult = await healthChecker.waitForHealthy(item.id, {
+        timeout: BATCH_START_HEALTH_TIMEOUT,
+        interval: BATCH_START_HEALTH_INTERVAL,
+        initialDelay: startResult.alreadyRunning ? 0 : 2000
+      });
+
+      if (healthResult.healthy) {
+        logger.broadcast(`${item.name} 健康检查通过，继续启动下一个服务`, 'service');
+        results.push({ serviceId: item.id, ...startResult, health: healthResult, healthy: true });
         continue;
       }
 
-      const result = await this.start(item.id, config.services[item.id]);
-      results.push({ serviceId: item.id, ...result });
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const failureMessage = healthResult.error || '健康检查未通过';
+      logger.broadcast(`${item.name} 启动后未在预期时间内通过健康检查：${failureMessage}`, 'service');
+      results.push({
+        serviceId: item.id,
+        ...startResult,
+        health: healthResult,
+        healthy: false,
+        error: failureMessage
+      });
+
+      for (const skipped of services.slice(index + 1)) {
+        results.push({
+          serviceId: skipped.id,
+          skipped: true,
+          reason: `${item.name} 健康检查未通过，已停止后续批量启动`
+        });
+      }
+
+      break;
     }
 
     return results;

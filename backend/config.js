@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '../config.json');
+const CONTROL_PANEL_ROOT = path.resolve(__dirname, '..');
 
 const FRONTEND_SERVICE_IDS = [
   'system-setting',
@@ -54,16 +55,47 @@ function buildFrontendModules(services) {
   return [...modules, ...EXTRA_FRONTEND_MODULES];
 }
 
+function isValidProjectRoot(projectRoot, services) {
+  if (!projectRoot || !fs.existsSync(projectRoot)) {
+    return false;
+  }
+
+  const hasMavenWrapper = fs.existsSync(path.join(projectRoot, 'mvnw'));
+  const hasAtLeastOneServicePom = Object.values(services).some((service) => (
+    service?.pom && fs.existsSync(path.join(projectRoot, service.pom))
+  ));
+
+  return hasMavenWrapper && hasAtLeastOneServicePom;
+}
+
+function resolveProjectRoot(projectRootConfig, services) {
+  const candidates = [
+    path.resolve(CONTROL_PANEL_ROOT, projectRootConfig || '..'),
+    path.resolve(CONTROL_PANEL_ROOT, '../metersphere'),
+    path.resolve(CONTROL_PANEL_ROOT, '..')
+  ];
+
+  const uniqueCandidates = [...new Set(candidates)];
+  const detected = uniqueCandidates.find((candidate) => isValidProjectRoot(candidate, services));
+
+  if (detected) {
+    return detected;
+  }
+
+  return uniqueCandidates[0];
+}
+
 function loadConfig() {
   try {
     const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     const services = config.services || {};
     const serviceCatalog = buildServiceCatalog(services);
     const frontendModules = buildFrontendModules(services);
+    const projectRoot = resolveProjectRoot(config.projectRoot, services);
 
     return {
       port: config.port || 3000,
-      projectRoot: path.join(__dirname, '..', config.projectRoot || '..'),
+      projectRoot,
       maxLogLines: config.maxLogLines || 1000,
       services,
       serviceCatalog,

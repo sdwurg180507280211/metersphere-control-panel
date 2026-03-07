@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
-import { useServiceStore } from '../store/useAppStore'
+import { useServiceStore, useWebSocketStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import './ServicesTab.css'
 
@@ -14,13 +14,21 @@ function ServicesTab() {
     setLoading,
     updateServiceStatus
   } = useServiceStore()
+  const { connected } = useWebSocketStore()
 
   useEffect(() => {
     fetchCatalog()
     fetchServices()
+  }, [fetchCatalog, fetchServices])
+
+  useEffect(() => {
+    if (connected) {
+      return undefined
+    }
+
     const interval = setInterval(fetchServices, 5000)
     return () => clearInterval(interval)
-  }, [fetchCatalog, fetchServices])
+  }, [connected, fetchServices])
 
   const toggleService = useCallback(async (serviceId) => {
     const isRunning = services[serviceId]
@@ -35,8 +43,10 @@ function ServicesTab() {
 
       if (data.success) {
         toast.success(`${action}命令已发送`)
-        updateServiceStatus(serviceId, !isRunning)
-        setTimeout(fetchServices, 2000)
+        if (!connected) {
+          updateServiceStatus(serviceId, !isRunning)
+          setTimeout(fetchServices, 2000)
+        }
       } else {
         toast.error(data.error || `${action}失败`)
       }
@@ -45,7 +55,7 @@ function ServicesTab() {
     } finally {
       setTimeout(() => setLoading(serviceId, false), 2000)
     }
-  }, [services, setLoading, updateServiceStatus, fetchServices])
+  }, [connected, services, setLoading, updateServiceStatus, fetchServices])
 
   const handleBatchAction = useCallback(async (action) => {
     const endpoint = action === 'start' ? '/api/services/start-all' : '/api/services/stop-all'
@@ -59,8 +69,10 @@ function ServicesTab() {
       }
     )
 
-    setTimeout(fetchServices, 5000)
-  }, [fetchServices])
+    if (!connected) {
+      setTimeout(fetchServices, 5000)
+    }
+  }, [connected, fetchServices])
 
   const runningCount = catalog.filter((service) => services[service.id]).length
 
