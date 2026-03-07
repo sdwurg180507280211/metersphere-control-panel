@@ -1,0 +1,98 @@
+.batch-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-batch {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-start {
+  background: #34c759;
+  color: white;
+}
+
+.btn-start:hover {
+  background: #28a745;
+}
+
+.btn-stop {
+  background: #ff3b30;
+  color: white;
+}
+
+.btn-stop:hover {
+  background: #d32f2f;
+}
+
+.btn-service {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.btn-service:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btn-service.running {
+  background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+  color: white;
+}
+
+.btn-service.running:hover:not(:disabled) {
+  background: linear-gradient(135deg, #28a745 0%, #28a745 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
+}
+
+.btn-service.stopped {
+  background: linear-gradient(135deg, #8e8e93 0%, #636366 100%);
+  color: white;
+}
+
+.btn-service.stopped:hover:not(:disabled) {
+  background: linear-gradient(135deg, #636366 0%, #48484a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(142, 142, 147, 0.4);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 2s infinite;
+}
+
+.btn-service.stopped .status-dot {
+  animation: none;
+  opacity: 0.5;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}

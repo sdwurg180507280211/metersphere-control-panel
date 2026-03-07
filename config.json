@@ -1,0 +1,84 @@
+{
+  "port": 3000,
+  "projectRoot": "..",
+  "maxLogLines": 1000,
+  "services": {
+    "eureka": {
+      "name": "Eureka",
+      "pom": "framework/eureka/pom.xml",
+      "port": 8761,
+      "healthCheck": "/actuator/health",
+      "startOrder": 1
+    },
+    "gateway": {
+      "name": "Gateway",
+      "pom": "framework/gateway/pom.xml",
+      "port": 8000,
+      "healthCheck": "/actuator/health",
+      "startOrder": 2
+    },
+    "system-setting": {
+      "name": "System Setting",
+      "pom": "system-setting/backend/pom.xml",
+      "port": 8001,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "project-management": {
+      "name": "Project Management",
+      "pom": "project-management/backend/pom.xml",
+      "port": 8002,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "performance-test": {
+      "name": "Performance Test",
+      "pom": "performance-test/backend/pom.xml",
+      "port": 8003,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "api-test": {
+      "name": "API Test",
+      "pom": "api-test/backend/pom.xml",
+      "port": 8004,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "test-track": {
+      "name": "Test Track",
+      "pom": "test-track/backend/pom.xml",
+      "port": 8005,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "report-stat": {
+      "name": "Report Stat",
+      "pom": "report-stat/backend/pom.xml",
+      "port": 8006,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "workstation": {
+      "name": "Workstation",
+      "pom": "workstation/backend/pom.xml",
+      "port": 8007,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "workflow-service": {
+      "name": "Workflow Service",
+      "pom": "workflow-service/backend/pom.xml",
+      "port": 8008,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    },
+    "analytics-stat": {
+      "name": "Analytics Stat",
+      "pom": "analytics-stat/backend/pom.xml",
+      "port": 8009,
+      "healthCheck": "/actuator/health",
+      "startOrder": 3
+    }
+  }
+}
