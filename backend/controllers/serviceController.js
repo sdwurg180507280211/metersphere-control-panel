@@ -7,6 +7,8 @@ const validator = require('../utils/validator');
 const logger = require('../utils/logger');
 const config = require('../config');
 
+const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting']);
+
 const serviceController = {
   /**
    * 获取服务目录
@@ -71,6 +73,9 @@ const serviceController = {
       if (status.running) {
         return res.json({ success: false, error: '服务已在运行中' });
       }
+      if (BUSY_SERVICE_PHASES.has(status.phase)) {
+        return res.status(409).json({ success: false, error: '服务正在处理中，请稍后再试' });
+      }
 
       const result = await processManager.start(id, service);
       res.json({ success: true, data: result });
@@ -87,6 +92,11 @@ const serviceController = {
     try {
       const { id } = req.params;
       const service = validator.getValidService(id);
+
+      const status = await processManager.getStatus(id);
+      if (BUSY_SERVICE_PHASES.has(status.phase) && status.phase !== 'starting' && status.phase !== 'checking_health') {
+        return res.status(409).json({ success: false, error: '服务正在处理中，请稍后再试' });
+      }
 
       const result = await processManager.stop(id, service);
       if (result.success) {
@@ -107,6 +117,11 @@ const serviceController = {
     try {
       const { id } = req.params;
       const service = validator.getValidService(id);
+
+      const status = await processManager.getStatus(id);
+      if (BUSY_SERVICE_PHASES.has(status.phase)) {
+        return res.status(409).json({ success: false, error: '服务正在处理中，请稍后再试' });
+      }
 
       const result = await processManager.restart(id, service);
       res.json({ success: true, data: result });

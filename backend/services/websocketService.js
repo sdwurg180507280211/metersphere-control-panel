@@ -165,8 +165,8 @@ class WebSocketService {
     this.broadcast('build:progress', { buildId, ...progress });
   }
 
-  broadcastServiceStatus(serviceId, running, metadata = {}) {
-    this.broadcast('service:status', { serviceId, running, ...metadata });
+  broadcastServiceStatus(status) {
+    this.broadcast('service:status', status);
   }
 
   getConnectedClients() {

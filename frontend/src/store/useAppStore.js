@@ -8,10 +8,13 @@ export const useServiceStore = create((set) => ({
   loading: {},
 
   setCatalog: (catalog) => set({ catalog }),
-  setServices: (services) => set({ services }),
+  setServices: (services) => set({ services: normalizeServiceStatuses(services) }),
 
   updateServiceStatus: (id, status) => set((state) => ({
-    services: { ...state.services, [id]: status }
+    services: {
+      ...state.services,
+      [id]: normalizeServiceStatus(id, status, state.services[id])
+    }
   })),
 
   setLoading: (id, isLoading) => set((state) => ({
@@ -35,7 +38,7 @@ export const useServiceStore = create((set) => ({
       const res = await fetch('/api/services/status')
       const data = await res.json()
       if (data.success) {
-        set({ services: data.data })
+        set({ services: normalizeServiceStatuses(data.data) })
       }
     } catch (error) {
       console.error('获取服务状态失败:', error)
@@ -269,3 +272,45 @@ function filterLogLines(lines, level, searchTerm) {
 
   return nextLines
 }
+
+
+function normalizeServiceStatuses(services = {}) {
+  return Object.fromEntries(
+    Object.entries(services).map(([serviceId, status]) => [serviceId, normalizeServiceStatus(serviceId, status)])
+  )
+}
+
+function normalizeServiceStatus(serviceId, status, previous = null) {
+  if (typeof status === 'boolean') {
+    return {
+      serviceId,
+      phase: status ? 'running' : 'stopped',
+      running: status,
+      pid: previous?.pid || null,
+      error: null,
+      updatedAt: previous?.updatedAt || new Date().toISOString()
+    }
+  }
+
+  if (!status || typeof status !== 'object') {
+    return previous || {
+      serviceId,
+      phase: 'stopped',
+      running: false,
+      pid: null,
+      error: null,
+      updatedAt: new Date().toISOString()
+    }
+  }
+
+  return {
+    serviceId,
+    phase: status.phase || (status.running ? 'running' : 'stopped'),
+    running: Boolean(status.running),
+    pid: status.pid ?? previous?.pid ?? null,
+    error: status.error ?? null,
+    updatedAt: status.updatedAt || new Date().toISOString(),
+    name: status.name || previous?.name || serviceId
+  }
+}
+

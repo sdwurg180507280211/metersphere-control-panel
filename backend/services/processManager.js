@@ -21,12 +21,131 @@ if (!fs.existsSync(PID_DIR)) {
 }
 
 const serviceProcesses = new Map();
+const serviceStatuses = new Map();
 const buildProcesses = new Map();
+const TRANSITIONAL_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting']);
 
 class ProcessManager {
   constructor() {
     this.pidDir = PID_DIR;
     this.projectRoot = config.projectRoot;
+    this.serviceHealthMonitors = new Map();
+  }
+
+  _getBaseServiceStatus(serviceId, serviceConfig = config.services[serviceId]) {
+    return {
+      serviceId,
+      name: serviceConfig?.name || serviceId,
+      phase: 'stopped',
+      running: false,
+      pid: null,
+      error: null,
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  _getCurrentServiceStatus(serviceId, serviceConfig = config.services[serviceId]) {
+    return serviceStatuses.get(serviceId) || this._getBaseServiceStatus(serviceId, serviceConfig);
+  }
+
+  _setServiceStatus(serviceId, updates = {}, options = {}) {
+    const serviceConfig = options.serviceConfig || config.services[serviceId];
+    const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
+    const next = {
+      ...current,
+      ...updates,
+      serviceId,
+      name: serviceConfig?.name || current.name || serviceId,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (updates.phase && updates.phase !== 'failed' && !Object.prototype.hasOwnProperty.call(updates, 'error')) {
+      next.error = null;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(updates, 'pid') && current.pid && next.running) {
+      next.pid = current.pid;
+    }
+
+    serviceStatuses.set(serviceId, next);
+    if (options.broadcast !== false) {
+      this._broadcastServiceStatus(next);
+    }
+    return next;
+  }
+
+  _isTransitionalPhase(phase) {
+    return TRANSITIONAL_SERVICE_PHASES.has(phase);
+  }
+
+  _clearHealthMonitor(serviceId) {
+    this.serviceHealthMonitors.delete(serviceId);
+  }
+
+  _monitorServiceHealth(serviceId, serviceConfig, options = {}) {
+    const token = Symbol(serviceId);
+    this.serviceHealthMonitors.set(serviceId, token);
+
+    const initialDelay = options.initialDelay ?? 1500;
+    const phase = options.phase || 'checking_health';
+
+    (async () => {
+      if (initialDelay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, initialDelay));
+      }
+
+      if (this.serviceHealthMonitors.get(serviceId) !== token) {
+        return;
+      }
+
+      const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
+      this._setServiceStatus(serviceId, {
+        phase,
+        running: false,
+        pid: current.pid || this._getPid(serviceId) || null
+      }, { serviceConfig });
+
+      const healthResult = await healthChecker.waitForHealthy(serviceId, {
+        timeout: BATCH_START_HEALTH_TIMEOUT,
+        interval: BATCH_START_HEALTH_INTERVAL,
+        initialDelay: 0
+      });
+
+      if (this.serviceHealthMonitors.get(serviceId) !== token) {
+        return;
+      }
+
+      const pid = this._getPid(serviceId);
+      if (healthResult.healthy) {
+        this._setServiceStatus(serviceId, {
+          phase: 'running',
+          running: true,
+          pid,
+          error: null
+        }, { serviceConfig });
+      } else {
+        this._setServiceStatus(serviceId, {
+          phase: 'failed',
+          running: Boolean(pid),
+          pid,
+          error: healthResult.error || '健康检查未通过'
+        }, { serviceConfig });
+      }
+
+      if (this.serviceHealthMonitors.get(serviceId) === token) {
+        this.serviceHealthMonitors.delete(serviceId);
+      }
+    })().catch((error) => {
+      if (this.serviceHealthMonitors.get(serviceId) === token) {
+        this.serviceHealthMonitors.delete(serviceId);
+      }
+      this._setServiceStatus(serviceId, {
+        phase: 'failed',
+        running: false,
+        pid: null,
+        error: error.message
+      }, { serviceConfig });
+    });
   }
 
   _getPidFile(serviceId) {
@@ -82,7 +201,12 @@ class ProcessManager {
       child
     });
     this._savePid(serviceId, child.pid);
-    this._broadcastServiceStatus(serviceId, true, { pid: child.pid, name: serviceConfig.name });
+    const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
+    this._setServiceStatus(serviceId, {
+      phase: current.phase,
+      running: current.phase === 'running',
+      pid: child.pid
+    }, { serviceConfig });
 
     child.stdout?.on('data', (data) => {
       logger.broadcast(data.toString(), 'service');
@@ -93,22 +217,57 @@ class ProcessManager {
     });
 
     child.on('close', (code, signal) => {
-      logger.broadcast(`\n${serviceConfig.name} 进程退出，代码: ${code ?? 'null'}${signal ? `，信号: ${signal}` : ''}`, 'service');
+      logger.broadcast(`
+${serviceConfig.name} 进程退出，代码: ${code ?? 'null'}${signal ? `，信号: ${signal}` : ''}`, 'service');
       this._clearPid(serviceId, child.pid);
-      this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name, code, signal });
+      this._clearHealthMonitor(serviceId);
+
+      const currentStatus = this._getCurrentServiceStatus(serviceId, serviceConfig);
+      if (currentStatus.phase === 'restarting') {
+        this._setServiceStatus(serviceId, {
+          phase: 'restarting',
+          running: false,
+          pid: null
+        }, { serviceConfig });
+        return;
+      }
+
+      if (currentStatus.phase === 'stopping') {
+        this._setServiceStatus(serviceId, {
+          phase: 'stopped',
+          running: false,
+          pid: null,
+          error: null
+        }, { serviceConfig });
+        return;
+      }
+
+      this._setServiceStatus(serviceId, {
+        phase: 'failed',
+        running: false,
+        pid: null,
+        error: code === 0 && !signal ? null : `${serviceConfig.name} 进程异常退出`
+      }, { serviceConfig });
     });
 
     child.on('error', (err) => {
-      logger.broadcast(`\n${serviceConfig.name} 进程错误: ${err.message}`, 'service');
+      logger.broadcast(`
+${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       this._clearPid(serviceId, child.pid);
-      this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name, error: err.message });
+      this._clearHealthMonitor(serviceId);
+      this._setServiceStatus(serviceId, {
+        phase: 'failed',
+        running: false,
+        pid: null,
+        error: err.message
+      }, { serviceConfig });
     });
   }
 
-  _broadcastServiceStatus(serviceId, running, metadata = {}) {
+  _broadcastServiceStatus(status) {
     try {
       const websocketService = require('./websocketService');
-      websocketService.broadcastServiceStatus?.(serviceId, running, metadata);
+      websocketService.broadcastServiceStatus?.(status);
     } catch (error) {
       // ignore websocket availability issues
     }
@@ -207,14 +366,23 @@ class ProcessManager {
     return process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
   }
 
-  async start(serviceId, serviceConfig) {
+  async start(serviceId, serviceConfig, options = {}) {
     const status = await this.getStatus(serviceId);
-    if (status.running) {
-      return { pid: status.pid, alreadyRunning: true };
+    if (status.running || this._isTransitionalPhase(status.phase)) {
+      return { pid: status.pid, alreadyRunning: true, phase: status.phase };
     }
 
+    this._clearHealthMonitor(serviceId);
+    this._setServiceStatus(serviceId, {
+      phase: options.phase || 'starting',
+      running: false,
+      pid: null,
+      error: null
+    }, { serviceConfig });
+
     const mavenCommand = this._resolveMavenCommand();
-    logger.broadcast(`\n========== 启动 ${serviceConfig.name} ==========`, 'service');
+    logger.broadcast(`
+========== 启动 ${serviceConfig.name} ==========`, 'service');
     logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service');
 
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
@@ -224,10 +392,25 @@ class ProcessManager {
     });
 
     this._attachServiceProcess(serviceId, serviceConfig, child);
-    return { pid: child.pid };
+
+    if (options.monitorHealth !== false) {
+      this._monitorServiceHealth(serviceId, serviceConfig, {
+        phase: 'checking_health',
+        initialDelay: options.initialHealthDelay ?? 1500
+      });
+    }
+
+    return { pid: child.pid, phase: options.phase || 'starting' };
   }
 
-  async stop(serviceId, serviceConfig) {
+  async stop(serviceId, serviceConfig, options = {}) {
+    this._clearHealthMonitor(serviceId);
+    this._setServiceStatus(serviceId, {
+      phase: options.phase || 'stopping',
+      running: false,
+      error: null
+    }, { serviceConfig });
+
     const pidCandidates = new Set();
     const trackedPid = this._getPid(serviceId);
     if (trackedPid) {
@@ -244,6 +427,11 @@ class ProcessManager {
 
     if (pidCandidates.size === 0) {
       this._clearPid(serviceId);
+      this._setServiceStatus(serviceId, {
+        phase: options.finalPhase || 'stopped',
+        running: false,
+        pid: null
+      }, { serviceConfig });
       return { success: false, error: '服务未运行或停止失败' };
     }
 
@@ -253,34 +441,92 @@ class ProcessManager {
 
     this._clearPid(serviceId);
     logger.broadcast(`${serviceConfig.name} 已停止`, 'service');
-    this._broadcastServiceStatus(serviceId, false, { name: serviceConfig.name });
-    return { success: true, method: 'pid' };
+    this._setServiceStatus(serviceId, {
+      phase: options.finalPhase || 'stopped',
+      running: false,
+      pid: null,
+      error: null
+    }, { serviceConfig });
+    return { success: true, method: 'pid', phase: options.finalPhase || 'stopped' };
   }
 
   async restart(serviceId, serviceConfig, delay = 2000) {
-    await this.stop(serviceId, serviceConfig);
+    this._clearHealthMonitor(serviceId);
+    this._setServiceStatus(serviceId, {
+      phase: 'restarting',
+      running: false,
+      error: null
+    }, { serviceConfig });
+
+    await this.stop(serviceId, serviceConfig, { phase: 'restarting', finalPhase: 'restarting' });
     await new Promise((resolve) => setTimeout(resolve, delay));
 
-    const result = await this.start(serviceId, serviceConfig);
-    return { ...result, restarted: true };
+    const result = await this.start(serviceId, serviceConfig, { phase: 'restarting' });
+    return { ...result, restarted: true, phase: 'restarting' };
   }
 
   async getAllStatus() {
     const entries = await Promise.all(
       Object.keys(config.services).map(async (serviceId) => {
         const status = await this.getStatus(serviceId);
-        return [serviceId, status.running];
+        return [serviceId, status];
       })
     );
 
     return Object.fromEntries(entries);
   }
 
+  async _resolveObservedServiceStatus(serviceId, serviceConfig, current, pid) {
+    if (current.phase === 'stopping') {
+      return this._setServiceStatus(serviceId, {
+        running: false,
+        pid,
+        phase: 'stopping'
+      }, { serviceConfig, broadcast: false });
+    }
+
+    const health = await healthChecker.check(serviceId);
+    if (health.healthy) {
+      return this._setServiceStatus(serviceId, {
+        running: true,
+        pid,
+        phase: 'running',
+        error: null
+      }, { serviceConfig, broadcast: false });
+    }
+
+    if (current.phase === 'failed') {
+      return this._setServiceStatus(serviceId, {
+        running: true,
+        pid,
+        phase: 'failed',
+        error: current.error || health.error || '健康检查未通过'
+      }, { serviceConfig, broadcast: false });
+    }
+
+    if (current.phase === 'starting' || current.phase === 'checking_health' || current.phase === 'restarting') {
+      return this._setServiceStatus(serviceId, {
+        running: false,
+        pid,
+        phase: 'checking_health',
+        error: null
+      }, { serviceConfig, broadcast: false });
+    }
+
+    return this._setServiceStatus(serviceId, {
+      running: true,
+      pid,
+      phase: 'running',
+      error: null
+    }, { serviceConfig, broadcast: false });
+  }
+
   async getStatus(serviceId) {
     const serviceConfig = config.services[serviceId];
+    const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const trackedPid = this._getPid(serviceId);
     if (trackedPid && this._isProcessRunning(trackedPid)) {
-      return { running: true, pid: trackedPid };
+      return this._resolveObservedServiceStatus(serviceId, serviceConfig, current, trackedPid);
     }
 
     const pidsByPom = await this._findPidsByPom(serviceConfig.pom);
@@ -293,9 +539,26 @@ class ProcessManager {
         port: serviceConfig.port,
         child: null
       });
+
+      return this._resolveObservedServiceStatus(serviceId, serviceConfig, current, pid);
     }
 
-    return { running: Boolean(pid), pid };
+    this._clearPid(serviceId);
+
+    if (current.phase === 'failed') {
+      return this._setServiceStatus(serviceId, {
+        running: false,
+        pid: null,
+        phase: 'failed'
+      }, { serviceConfig, broadcast: false });
+    }
+
+    return this._setServiceStatus(serviceId, {
+      running: false,
+      pid: null,
+      phase: 'stopped',
+      error: current.phase === 'stopping' ? null : current.error
+    }, { serviceConfig, broadcast: false });
   }
 
   async _rollbackStartedServices(startedServices) {
@@ -324,9 +587,15 @@ class ProcessManager {
         logger.broadcast(`${item.name} 已在运行，等待健康检查通过...`, 'service');
         startResult = { pid: status.pid, alreadyRunning: true };
       } else {
-        startResult = await this.start(item.id, config.services[item.id]);
+        startResult = await this.start(item.id, config.services[item.id], { monitorHealth: false, phase: 'starting' });
         startedServices.push(item);
       }
+
+      this._setServiceStatus(item.id, {
+        phase: 'checking_health',
+        running: startResult.alreadyRunning,
+        pid: startResult.pid || status.pid || null
+      }, { serviceConfig: config.services[item.id] });
 
       const healthResult = await healthChecker.waitForHealthy(item.id, {
         timeout: BATCH_START_HEALTH_TIMEOUT,
@@ -336,12 +605,24 @@ class ProcessManager {
 
       if (healthResult.healthy) {
         logger.broadcast(`${item.name} 健康检查通过，继续启动下一个服务`, 'service');
+        this._setServiceStatus(item.id, {
+          phase: 'running',
+          running: true,
+          pid: startResult.pid || status.pid || this._getPid(item.id) || null,
+          error: null
+        }, { serviceConfig: config.services[item.id] });
         results.push({ serviceId: item.id, ...startResult, health: healthResult, healthy: true });
         continue;
       }
 
       const failureMessage = healthResult.error || '健康检查未通过';
       logger.broadcast(`${item.name} 启动后未在预期时间内通过健康检查：${failureMessage}`, 'service');
+      this._setServiceStatus(item.id, {
+        phase: 'failed',
+        running: Boolean(this._getPid(item.id)),
+        pid: this._getPid(item.id) || null,
+        error: failureMessage
+      }, { serviceConfig: config.services[item.id] });
       results.push({
         serviceId: item.id,
         ...startResult,

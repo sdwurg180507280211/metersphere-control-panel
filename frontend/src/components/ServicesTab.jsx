@@ -4,6 +4,8 @@ import { useServiceStore, useWebSocketStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import './ServicesTab.css'
 
+const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting'])
+
 function ServicesTab() {
   const {
     catalog,
@@ -31,7 +33,8 @@ function ServicesTab() {
   }, [connected, fetchServices])
 
   const toggleService = useCallback(async (serviceId) => {
-    const isRunning = services[serviceId]
+    const serviceStatus = services[serviceId] || { running: false, phase: 'stopped' }
+    const isRunning = serviceStatus.running
     const action = isRunning ? '停止' : '启动'
 
     setLoading(serviceId, true)
@@ -43,8 +46,13 @@ function ServicesTab() {
 
       if (data.success) {
         toast.success(`${action}命令已发送`)
+        updateServiceStatus(serviceId, {
+          ...serviceStatus,
+          phase: isRunning ? 'stopping' : 'starting',
+          running: false,
+          error: null
+        })
         if (!connected) {
-          updateServiceStatus(serviceId, !isRunning)
           setTimeout(fetchServices, 2000)
         }
       } else {
@@ -79,7 +87,7 @@ function ServicesTab() {
     }
   }, [connected, fetchServices])
 
-  const runningCount = catalog.filter((service) => services[service.id]).length
+  const runningCount = catalog.filter((service) => services[service.id]?.running).length
 
   return (
     <div className="tab-content">
@@ -103,23 +111,39 @@ function ServicesTab() {
         </div>
         <div className="btn-grid">
           {catalog.map((service) => {
-            const isRunning = services[service.id]
+            const serviceStatus = services[service.id] || { running: false, phase: 'stopped', error: null }
+            const isRunning = serviceStatus.running
             const isLoading = loading[service.id]
+            const isBusy = BUSY_SERVICE_PHASES.has(serviceStatus.phase)
+            const actionLabel = isRunning ? '停止' : '启动'
 
             return (
               <button
                 key={service.id}
-                className={`btn-service ${isRunning ? 'running' : 'stopped'}`}
+                className={`btn-service ${getServiceStateClass(serviceStatus.phase, isRunning)}`}
                 onClick={() => toggleService(service.id)}
-                disabled={isLoading}
+                disabled={isLoading || isBusy}
               >
                 {isLoading ? (
                   <span className="loading"></span>
                 ) : (
-                  <>
-                    <span className="status-dot"></span>
-                    {service.name}
-                  </>
+                  <div className="service-button-content">
+                    <div className="service-name-row">
+                      <span className="status-dot"></span>
+                      <span className="service-name">{service.name}</span>
+                    </div>
+                    <div className="service-meta-row">
+                      <span className={`service-status-badge ${getServiceStateClass(serviceStatus.phase, isRunning)}`}>
+                        {getServicePhaseText(serviceStatus.phase, isRunning)}
+                      </span>
+                      {!isBusy && <span className="service-action-hint">点击{actionLabel}</span>}
+                    </div>
+                    {serviceStatus.error && (
+                      <span className="service-error-text" title={serviceStatus.error}>
+                        {serviceStatus.error}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             )
@@ -135,6 +159,32 @@ function ServicesTab() {
       </div>
     </div>
   )
+}
+
+function getServicePhaseText(phase, running) {
+  switch (phase) {
+    case 'starting':
+      return '启动中'
+    case 'checking_health':
+      return '健康检查中'
+    case 'stopping':
+      return '停止中'
+    case 'restarting':
+      return '重启中'
+    case 'failed':
+      return '启动失败'
+    case 'running':
+      return '运行中'
+    case 'stopped':
+    default:
+      return running ? '运行中' : '已停止'
+  }
+}
+
+function getServiceStateClass(phase, running) {
+  if (phase === 'failed') return 'failed'
+  if (phase === 'starting' || phase === 'checking_health' || phase === 'stopping' || phase === 'restarting') return 'pending'
+  return running ? 'running' : 'stopped'
 }
 
 export default ServicesTab

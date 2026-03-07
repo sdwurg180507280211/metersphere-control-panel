@@ -92,7 +92,7 @@ export function useWebSocket() {
                   }
                   break
                 case 'service:status':
-                  updateServiceStatusRef.current(data.data.serviceId, data.data.running)
+                  updateServiceStatusRef.current(data.data.serviceId, data.data)
                   break
                 default:
                   break
