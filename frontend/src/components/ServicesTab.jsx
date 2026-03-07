@@ -1,10 +1,70 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { useServiceStore, useWebSocketStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import './ServicesTab.css'
 
 const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting'])
+
+// 状态配置
+const STATE_CONFIG = {
+  starting: { 
+    icon: '⏳', 
+    color: '#faad14', 
+    bgColor: '#fffbe6',
+    borderColor: '#ffe58f',
+    text: '启动中',
+    spin: true 
+  },
+  checking_health: { 
+    icon: '🔍', 
+    color: '#1890ff', 
+    bgColor: '#e6f7ff',
+    borderColor: '#91d5ff',
+    text: '健康检查中',
+    spin: true 
+  },
+  running: { 
+    icon: '✓', 
+    color: '#52c41a', 
+    bgColor: '#f6ffed',
+    borderColor: '#b7eb8f',
+    text: '运行中',
+    spin: false 
+  },
+  stopping: { 
+    icon: '🛑', 
+    color: '#fa8c16', 
+    bgColor: '#fff7e6',
+    borderColor: '#ffd591',
+    text: '停止中',
+    spin: true 
+  },
+  stopped: { 
+    icon: '○', 
+    color: '#8c8c8c', 
+    bgColor: '#f5f5f5',
+    borderColor: '#d9d9d9',
+    text: '已停止',
+    spin: false 
+  },
+  failed: { 
+    icon: '✗', 
+    color: '#f5222d', 
+    bgColor: '#fff1f0',
+    borderColor: '#ffa39e',
+    text: '启动失败',
+    spin: false 
+  },
+  restarting: { 
+    icon: '🔄', 
+    color: '#722ed1', 
+    bgColor: '#f9f0ff',
+    borderColor: '#d3adf7',
+    text: '重启中',
+    spin: true 
+  }
+}
 
 function ServicesTab() {
   const {
@@ -17,6 +77,7 @@ function ServicesTab() {
     updateServiceStatus
   } = useServiceStore()
   const { connected } = useWebSocketStore()
+  const [expandedErrors, setExpandedErrors] = useState(new Set())
 
   useEffect(() => {
     fetchCatalog()
@@ -31,6 +92,18 @@ function ServicesTab() {
     const interval = setInterval(fetchServices, 5000)
     return () => clearInterval(interval)
   }, [connected, fetchServices])
+
+  const toggleErrorExpand = useCallback((serviceId) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev)
+      if (next.has(serviceId)) {
+        next.delete(serviceId)
+      } else {
+        next.add(serviceId)
+      }
+      return next
+    })
+  }, [])
 
   const toggleService = useCallback(async (serviceId) => {
     const serviceStatus = services[serviceId] || { running: false, phase: 'stopped' }
@@ -65,6 +138,35 @@ function ServicesTab() {
     }
   }, [connected, services, setLoading, updateServiceStatus, fetchServices])
 
+  const handleRestart = useCallback(async (serviceId, e) => {
+    e.stopPropagation()
+    const serviceStatus = services[serviceId] || { running: false, phase: 'stopped' }
+    
+    setLoading(serviceId, true)
+
+    try {
+      const endpoint = `/api/services/${serviceId}/restart`
+      const res = await fetch(endpoint, { method: 'POST' })
+      const data = await res.json()
+
+      if (data.success) {
+        toast.success('重启命令已发送')
+        updateServiceStatus(serviceId, {
+          ...serviceStatus,
+          phase: 'restarting',
+          running: false,
+          error: null
+        })
+      } else {
+        toast.error(data.error || '重启失败')
+      }
+    } catch (error) {
+      toast.error(`网络错误: ${error.message}`)
+    } finally {
+      setTimeout(() => setLoading(serviceId, false), 2000)
+    }
+  }, [services, setLoading, updateServiceStatus])
+
   const handleBatchAction = useCallback(async (action) => {
     const actionLabels = {
       start: '启动',
@@ -72,6 +174,22 @@ function ServicesTab() {
       restart: '重启'
     }
     const endpoint = `/api/services/${action}-all`
+
+    const phaseMap = {
+      start: 'starting',
+      stop: 'stopping',
+      restart: 'restarting'
+    }
+
+    catalog.forEach((service) => {
+      const serviceStatus = services[service.id] || { running: false, phase: 'stopped' }
+      updateServiceStatus(service.id, {
+        ...serviceStatus,
+        phase: phaseMap[action],
+        running: false,
+        error: null
+      })
+    })
 
     toast.promise(
       fetch(endpoint, { method: 'POST' }).then((response) => response.json()),
@@ -85,7 +203,7 @@ function ServicesTab() {
     if (!connected) {
       setTimeout(fetchServices, action === 'restart' ? 7000 : 5000)
     }
-  }, [connected, fetchServices])
+  }, [connected, fetchServices, catalog, services, updateServiceStatus])
 
   const runningCount = catalog.filter((service) => services[service.id]?.running).length
 
@@ -110,44 +228,18 @@ function ServicesTab() {
           </div>
         </div>
         <div className="btn-grid">
-          {catalog.map((service) => {
-            const serviceStatus = services[service.id] || { running: false, phase: 'stopped', error: null }
-            const isRunning = serviceStatus.running
-            const isLoading = loading[service.id]
-            const isBusy = BUSY_SERVICE_PHASES.has(serviceStatus.phase)
-            const actionLabel = isRunning ? '停止' : '启动'
-
-            return (
-              <button
-                key={service.id}
-                className={`btn-service ${getServiceStateClass(serviceStatus.phase, isRunning)}`}
-                onClick={() => toggleService(service.id)}
-                disabled={isLoading || isBusy}
-              >
-                {isLoading ? (
-                  <span className="loading"></span>
-                ) : (
-                  <div className="service-button-content">
-                    <div className="service-name-row">
-                      <span className="status-dot"></span>
-                      <span className="service-name">{service.name}</span>
-                    </div>
-                    <div className="service-meta-row">
-                      <span className={`service-status-badge ${getServiceStateClass(serviceStatus.phase, isRunning)}`}>
-                        {getServicePhaseText(serviceStatus.phase, isRunning)}
-                      </span>
-                      {!isBusy && <span className="service-action-hint">点击{actionLabel}</span>}
-                    </div>
-                    {serviceStatus.error && (
-                      <span className="service-error-text" title={serviceStatus.error}>
-                        {serviceStatus.error}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </button>
-            )
-          })}
+          {catalog.map((service) => (
+            <ServiceButton
+              key={service.id}
+              service={service}
+              status={services[service.id] || { running: false, phase: 'stopped', error: null }}
+              isLoading={loading[service.id]}
+              isErrorExpanded={expandedErrors.has(service.id)}
+              onToggle={() => toggleService(service.id)}
+              onRestart={(e) => handleRestart(service.id, e)}
+              onToggleError={() => toggleErrorExpand(service.id)}
+            />
+          ))}
         </div>
       </div>
 
@@ -161,30 +253,110 @@ function ServicesTab() {
   )
 }
 
-function getServicePhaseText(phase, running) {
-  switch (phase) {
-    case 'starting':
-      return '启动中'
-    case 'checking_health':
-      return '健康检查中'
-    case 'stopping':
-      return '停止中'
-    case 'restarting':
-      return '重启中'
-    case 'failed':
-      return '启动失败'
-    case 'running':
-      return '运行中'
-    case 'stopped':
-    default:
-      return running ? '运行中' : '已停止'
-  }
-}
+function ServiceButton({ 
+  service, 
+  status, 
+  isLoading, 
+  isErrorExpanded,
+  onToggle, 
+  onRestart,
+  onToggleError 
+}) {
+  const { phase, running, error, pid } = status
+  const isBusy = BUSY_SERVICE_PHASES.has(phase)
+  const actionLabel = running ? '停止' : '启动'
+  const config = STATE_CONFIG[phase] || STATE_CONFIG[running ? 'running' : 'stopped']
 
-function getServiceStateClass(phase, running) {
-  if (phase === 'failed') return 'failed'
-  if (phase === 'starting' || phase === 'checking_health' || phase === 'stopping' || phase === 'restarting') return 'pending'
-  return running ? 'running' : 'stopped'
+  return (
+    <div
+      className={`service-card phase-${phase}`}
+      style={{
+        backgroundColor: config.bgColor,
+        borderColor: config.borderColor
+      }}
+    >
+      <button
+        className="service-btn-main"
+        onClick={onToggle}
+        disabled={isLoading || isBusy}
+      >
+        {isLoading ? (
+          <span className="loading-spinner" />
+        ) : (
+          <div className="service-btn-content">
+            <div className="service-main-row">
+              <div className="service-info">
+                <span className={`status-icon ${config.spin ? 'spinning' : ''}`} style={{ color: config.color }}>
+                  {config.icon}
+                </span>
+                <span className="service-name">{service.name}</span>
+              </div>
+              <span 
+                className="status-badge" 
+                style={{ 
+                  backgroundColor: config.color + '20', 
+                  color: config.color,
+                  border: `1px solid ${config.borderColor}`
+                }}
+              >
+                {config.text}
+              </span>
+            </div>
+            
+            <div className="service-meta-row">
+              {pid && (
+                <span className="service-pid">PID: {pid}</span>
+              )}
+              {!isBusy && (
+                <span className="service-action-hint">
+                  点击{actionLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </button>
+
+      {/* 操作按钮区域 */}
+      {phase === 'running' && (
+        <div className="service-actions">
+          <button 
+            className="btn-icon btn-restart-small" 
+            onClick={onRestart}
+            title="重启服务"
+          >
+            🔄
+          </button>
+        </div>
+      )}
+
+      {/* 错误摘要展示 */}
+      {error && phase === 'failed' && (
+        <div className="error-section">
+          <div className="error-header" onClick={onToggleError}>
+            <span className="error-label">错误信息</span>
+            <span className="error-toggle">
+              {isErrorExpanded ? '收起 ▲' : '展开 ▼'}
+            </span>
+          </div>
+          <div className={`error-content ${isErrorExpanded ? 'expanded' : ''}`}>
+            <p className="error-text">{error}</p>
+            <button 
+              className="btn-retry" 
+              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            >
+              重试启动
+            </button>
+          </div>
+          {!isErrorExpanded && (
+            <p className="error-text collapsed" title={error}>
+              {error.length > 40 ? error.slice(0, 40) + '...' : error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default ServicesTab

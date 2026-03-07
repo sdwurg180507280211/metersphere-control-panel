@@ -1,3 +1,4 @@
+/* 批量操作按钮 */
 .batch-actions {
   display: flex;
   gap: 8px;
@@ -40,60 +41,50 @@
   background: #d32f2f;
 }
 
-.btn-service {
+/* 服务卡片容器 */
+.btn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 4px;
+}
+
+/* 服务卡片 */
+.service-card {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.service-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* 主按钮区域 */
+.service-btn-main {
+  flex: 1;
   padding: 14px 16px;
   border: none;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
+  background: transparent;
   cursor: pointer;
-  transition: all 0.3s;
+  text-align: left;
   display: flex;
   align-items: stretch;
-  justify-content: flex-start;
-  text-align: left;
-  min-height: 92px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  min-height: 80px;
+  transition: all 0.2s;
 }
 
-.btn-service:disabled {
-  opacity: 0.78;
+.service-btn-main:disabled {
   cursor: not-allowed;
+  opacity: 0.85;
 }
 
-.btn-service.running {
-  background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
-  color: white;
-}
-
-.btn-service.running:hover:not(:disabled) {
-  background: linear-gradient(135deg, #28a745 0%, #28a745 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
-}
-
-.btn-service.stopped {
-  background: linear-gradient(135deg, #8e8e93 0%, #636366 100%);
-  color: white;
-}
-
-.btn-service.stopped:hover:not(:disabled) {
-  background: linear-gradient(135deg, #636366 0%, #48484a 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(142, 142, 147, 0.4);
-}
-
-.btn-service.pending {
-  background: linear-gradient(135deg, #ff9500 0%, #ffb340 100%);
-  color: white;
-}
-
-.btn-service.failed {
-  background: linear-gradient(135deg, #ff453a 0%, #ff6b63 100%);
-  color: white;
-}
-
-.service-button-content {
+.service-btn-content {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -101,74 +92,244 @@
   min-width: 0;
 }
 
-.service-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.service-name {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.service-meta-row {
+/* 主要信息行 */
+.service-main-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.service-status-badge {
+.service-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.status-icon {
+  font-size: 16px;
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.status-icon.spinning {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.service-name {
+  font-size: 14px;
   font-weight: 600;
-  background: rgba(255,255,255,0.18);
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 状态标签 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 元信息行 */
+.service-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
+.service-pid {
+  font-family: monospace;
+  font-size: 11px;
+  color: #888;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .service-action-hint {
   font-size: 11px;
-  opacity: 0.85;
-  white-space: nowrap;
+  color: #888;
+  font-style: italic;
 }
 
-.service-error-text {
+/* 操作按钮区域 */
+.service-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 12px 8px;
+  gap: 6px;
+}
+
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: rgba(0, 0, 0, 0.08);
+  transform: scale(1.05);
+}
+
+.btn-restart-small {
+  color: #722ed1;
+}
+
+/* 错误区域 */
+.error-section {
+  border-top: 1px dashed rgba(245, 34, 45, 0.3);
+  background: rgba(255, 241, 240, 0.5);
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+  transition: background 0.2s;
+}
+
+.error-header:hover {
+  background: rgba(245, 34, 45, 0.05);
+}
+
+.error-label {
+  font-weight: 500;
+  color: #f5222d;
+}
+
+.error-toggle {
   font-size: 11px;
-  opacity: 0.95;
+  color: #888;
+}
+
+.error-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 0 12px;
+}
+
+.error-content.expanded {
+  max-height: 200px;
+  padding: 0 12px 12px;
+}
+
+.error-text {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #cf1322;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.error-text.collapsed {
+  margin: 0;
+  padding: 0 12px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
+.btn-retry {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #ff4d4f;
+  background: #fff;
+  color: #ff4d4f;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-retry:hover {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+/* Loading 动画 */
+.loading-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-left-color: currentColor;
   border-radius: 50%;
-  background: currentColor;
-  animation: pulse 2s infinite;
-  flex-shrink: 0;
+  animation: spin 1s linear infinite;
 }
 
-.btn-service.stopped .status-dot,
-.btn-service.failed .status-dot {
-  animation: none;
-  opacity: 0.85;
+/* 各状态特定样式 */
+.phase-starting .service-btn-main,
+.phase-checking_health .service-btn-main,
+.phase-restarting .service-btn-main {
+  cursor: wait;
 }
 
-.btn-service.pending .status-dot {
-  animation: pulse 1s infinite;
+.phase-failed .service-btn-main {
+  cursor: pointer;
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
+.phase-failed .service-btn-main:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* 服务计数 */
+.service-count {
+  font-size: 13px;
+  font-weight: 400;
+  color: #666;
+  margin-left: 8px;
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .btn-grid {
+    grid-template-columns: 1fr;
   }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
+  
+  .batch-actions {
+    flex-wrap: wrap;
+  }
+  
+  .btn-batch {
+    flex: 1;
+    min-width: 80px;
   }
 }

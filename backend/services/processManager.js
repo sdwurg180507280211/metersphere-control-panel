@@ -495,6 +495,15 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       }, { serviceConfig, broadcast: false });
     }
 
+    if (current.phase === 'starting' || current.phase === 'checking_health' || current.phase === 'restarting') {
+      return this._setServiceStatus(serviceId, {
+        running: true,
+        pid,
+        phase: 'failed',
+        error: health.error || '健康检查未通过'
+      }, { serviceConfig, broadcast: false });
+    }
+
     if (current.phase === 'failed') {
       return this._setServiceStatus(serviceId, {
         running: true,
@@ -504,20 +513,11 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       }, { serviceConfig, broadcast: false });
     }
 
-    if (current.phase === 'starting' || current.phase === 'checking_health' || current.phase === 'restarting') {
-      return this._setServiceStatus(serviceId, {
-        running: false,
-        pid,
-        phase: 'checking_health',
-        error: null
-      }, { serviceConfig, broadcast: false });
-    }
-
     return this._setServiceStatus(serviceId, {
       running: true,
       pid,
-      phase: 'running',
-      error: null
+      phase: 'failed',
+      error: health.error || '健康检查未通过'
     }, { serviceConfig, broadcast: false });
   }
 
@@ -525,7 +525,22 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const serviceConfig = config.services[serviceId];
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const trackedPid = this._getPid(serviceId);
+    
     if (trackedPid && this._isProcessRunning(trackedPid)) {
+      // 若进程存在但状态是过渡状态，自动恢复健康检查流程
+      if (this._isTransitionalPhase(current.phase)) {
+        // 检查是否已经在健康检查监控中
+        if (!this.serviceHealthMonitors.has(serviceId)) {
+          logger.broadcast(`[${serviceConfig.name}] 检测到进程运行中但状态为 ${current.phase}，自动恢复健康检查`, 'service');
+          // 自动恢复健康检查流程
+          this._monitorServiceHealth(serviceId, serviceConfig, {
+            phase: 'checking_health',
+            initialDelay: 500
+          });
+        }
+        // 返回当前过渡状态（已更新为 checking_health），不直接判定为失败
+        return this._getCurrentServiceStatus(serviceId, serviceConfig);
+      }
       return this._resolveObservedServiceStatus(serviceId, serviceConfig, current, trackedPid);
     }
 
@@ -539,6 +554,18 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         port: serviceConfig.port,
         child: null
       });
+
+      // 同样处理外部发现的进程
+      if (this._isTransitionalPhase(current.phase)) {
+        if (!this.serviceHealthMonitors.has(serviceId)) {
+          logger.broadcast(`[${serviceConfig.name}] 检测到外部进程运行中但状态为 ${current.phase}，自动恢复健康检查`, 'service');
+          this._monitorServiceHealth(serviceId, serviceConfig, {
+            phase: 'checking_health',
+            initialDelay: 500
+          });
+        }
+        return this._getCurrentServiceStatus(serviceId, serviceConfig);
+      }
 
       return this._resolveObservedServiceStatus(serviceId, serviceConfig, current, pid);
     }
