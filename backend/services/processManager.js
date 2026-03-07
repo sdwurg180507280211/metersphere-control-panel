@@ -6,6 +6,7 @@ const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const crypto = require('crypto');
 const config = require('../config');
 const logger = require('../utils/logger');
 const buildProgressService = require('./buildProgressService');
@@ -365,12 +366,81 @@ class ProcessManager {
     return buildProgressService.startBuild(moduleConfig);
   }
 
-  _shouldInstallDependencies(frontendDir, forceInstall = false) {
-    if (forceInstall) {
-      return true;
+  _getDependencyStateFile(frontendDir) {
+    return path.join(frontendDir, 'node_modules', '.metersphere-control-panel-deps.json');
+  }
+
+  _getDependencyLockfile(frontendDir) {
+    const candidates = ['package-lock.json', 'npm-shrinkwrap.json', 'package.json'];
+    return candidates
+      .map((file) => path.join(frontendDir, file))
+      .find((file) => fs.existsSync(file)) || null;
+  }
+
+  _computeDependencyFingerprint(frontendDir) {
+    const fingerprintSource = this._getDependencyLockfile(frontendDir);
+    if (!fingerprintSource) {
+      return null;
     }
 
-    return !fs.existsSync(path.join(frontendDir, 'node_modules'));
+    const content = fs.readFileSync(fingerprintSource);
+    return {
+      source: path.basename(fingerprintSource),
+      hash: crypto.createHash('sha256').update(content).digest('hex')
+    };
+  }
+
+  _readDependencyState(frontendDir) {
+    const stateFile = this._getDependencyStateFile(frontendDir);
+    if (!fs.existsSync(stateFile)) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  _writeDependencyState(frontendDir, fingerprint) {
+    if (!fingerprint) {
+      return;
+    }
+
+    const stateFile = this._getDependencyStateFile(frontendDir);
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(stateFile, JSON.stringify({
+      ...fingerprint,
+      updatedAt: new Date().toISOString()
+    }, null, 2));
+  }
+
+  _getDependencyInstallDecision(frontendDir, forceInstall = false) {
+    if (forceInstall) {
+      return { shouldInstall: true, reason: '用户手动启用了强制安装依赖' };
+    }
+
+    if (!fs.existsSync(path.join(frontendDir, 'node_modules'))) {
+      return { shouldInstall: true, reason: '未检测到 node_modules，需要先安装依赖' };
+    }
+
+    const fingerprint = this._computeDependencyFingerprint(frontendDir);
+    if (!fingerprint) {
+      return { shouldInstall: false, reason: '未检测到 lockfile，沿用现有 node_modules' };
+    }
+
+    const previousState = this._readDependencyState(frontendDir);
+    if (!previousState) {
+      this._writeDependencyState(frontendDir, fingerprint);
+      return { shouldInstall: false, reason: `已记录当前 ${fingerprint.source} 指纹，沿用现有 node_modules`, fingerprint };
+    }
+
+    if (previousState.hash !== fingerprint.hash || previousState.source !== fingerprint.source) {
+      return { shouldInstall: true, reason: `${fingerprint.source} 已变更，需要重新安装依赖`, fingerprint };
+    }
+
+    return { shouldInstall: false, reason: `${fingerprint.source} 未变化，跳过依赖安装`, fingerprint };
   }
 
   async executeBuild(moduleConfig, buildId, options = {}) {
@@ -387,8 +457,10 @@ class ProcessManager {
       await buildProgressService.updateStep(buildId, 0, 'completed', 100, '环境准备完成');
 
       await buildProgressService.updateStep(buildId, 1, 'running', 0, '检查依赖...');
-      if (this._shouldInstallDependencies(frontendDir, options.forceInstall)) {
+      const dependencyDecision = this._getDependencyInstallDecision(frontendDir, options.forceInstall);
+      if (dependencyDecision.shouldInstall) {
         const installCommand = fs.existsSync(path.join(frontendDir, 'package-lock.json')) ? 'ci' : 'install';
+        logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
         await this._runCommandWithProgress({
           command: 'npm',
           args: [installCommand],
@@ -398,8 +470,9 @@ class ProcessManager {
           stepName: '安装依赖',
           logType: 'build'
         });
+        this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || this._computeDependencyFingerprint(frontendDir));
       } else {
-        await buildProgressService.updateStep(buildId, 1, 'completed', 100, '检测到 node_modules，跳过依赖安装');
+        await buildProgressService.updateStep(buildId, 1, 'completed', 100, dependencyDecision.reason);
       }
 
       this._throwIfCancelled(buildId);
