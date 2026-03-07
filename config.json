@@ -7,6 +7,7 @@
       "name": "Eureka",
       "pom": "framework/eureka/pom.xml",
       "port": 8761,
+      "healthCheckPort": 8752,
       "healthCheck": "/actuator/health",
       "startOrder": 1
     },
@@ -14,6 +15,7 @@
       "name": "Gateway",
       "pom": "framework/gateway/pom.xml",
       "port": 8000,
+      "healthCheckPort": 7421,
       "healthCheck": "/actuator/health",
       "startOrder": 2
     },
@@ -21,6 +23,7 @@
       "name": "System Setting",
       "pom": "system-setting/backend/pom.xml",
       "port": 8001,
+      "healthCheckPort": 7001,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -28,6 +31,7 @@
       "name": "Project Management",
       "pom": "project-management/backend/pom.xml",
       "port": 8002,
+      "healthCheckPort": 7002,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -35,6 +39,7 @@
       "name": "Performance Test",
       "pom": "performance-test/backend/pom.xml",
       "port": 8003,
+      "healthCheckPort": 7003,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -42,6 +47,7 @@
       "name": "API Test",
       "pom": "api-test/backend/pom.xml",
       "port": 8004,
+      "healthCheckPort": 7004,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -49,6 +55,7 @@
       "name": "Test Track",
       "pom": "test-track/backend/pom.xml",
       "port": 8005,
+      "healthCheckPort": 7005,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -56,6 +63,7 @@
       "name": "Report Stat",
       "pom": "report-stat/backend/pom.xml",
       "port": 8006,
+      "healthCheckPort": 7006,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -63,6 +71,7 @@
       "name": "Workstation",
       "pom": "workstation/backend/pom.xml",
       "port": 8007,
+      "healthCheckPort": 7007,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -70,6 +79,7 @@
       "name": "Workflow Service",
       "pom": "workflow-service/backend/pom.xml",
       "port": 8008,
+      "healthCheckPort": 7008,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     },
@@ -77,6 +87,7 @@
       "name": "Analytics Stat",
       "pom": "analytics-stat/backend/pom.xml",
       "port": 8009,
+      "healthCheckPort": 7009,
       "healthCheck": "/actuator/health",
       "startOrder": 3
     }

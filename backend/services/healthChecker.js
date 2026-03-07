@@ -85,7 +85,7 @@ class HealthChecker {
 
       const options = {
         host: 'localhost',
-        port: service.port,
+        port: service.healthCheckPort || service.port,
         path: service.healthCheck || '/',
         timeout: this.timeout
       };
