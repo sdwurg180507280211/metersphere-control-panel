@@ -37,6 +37,11 @@
   cursor: pointer;
 }
 
+.log-select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
 .log-search {
   display: flex;
   align-items: center;
@@ -112,29 +117,126 @@
 
 .log-line {
   min-height: 20px;
+  border-radius: 2px;
+  transition: background-color 0.1s;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 
+.log-line:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 日志级别徽章 */
+.log-level-badge {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+  min-width: 36px;
+  text-align: center;
+}
+
+/* 日志级别样式 */
+.log-line-error {
+  font-weight: 500;
+}
+
+.log-line-error:hover {
+  background-color: rgba(255, 77, 79, 0.1);
+}
+
+.log-line-warn {
+  font-weight: 500;
+}
+
+.log-line-warn:hover {
+  background-color: rgba(250, 173, 20, 0.1);
+}
+
+.log-line-info {
+  color: #d4d4d4;
+}
+
+.log-line-debug {
+  color: #8c8c8c;
+}
+
+.log-line-trace {
+  color: #666;
+}
+
+/* 分隔线样式 */
+.log-line-separator {
+  color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.1);
+  padding: 2px 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+/* 堆栈跟踪样式 */
+.log-line-stacktrace {
+  color: #ff7875;
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.log-line-stacktrace:hover {
+  opacity: 1;
+  background-color: rgba(255, 120, 117, 0.1);
+}
+
+.stacktrace-toggle {
+  display: inline-block;
+  width: 16px;
+  cursor: pointer;
+  user-select: none;
+  color: #888;
+  font-size: 10px;
+}
+
+.stacktrace-toggle:hover {
+  color: #fff;
+}
+
+.log-line-stacktrace.collapsed {
+  max-height: 20px;
+  overflow: hidden;
+}
+
+.log-line-content {
+  display: inline;
+}
+
+/* 空行 */
+.log-line-empty {
+  height: 20px;
+}
+
+/* 占位符 */
 .log-placeholder {
   color: #6e7681;
   font-style: italic;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
 }
 
-.log :global(.error) {
-  color: #f85149;
+/* 主题定制 */
+.log-theme-build {
+  /* 构建日志主题 */
 }
 
-.log :global(.success) {
-  color: #3fb950;
+.log-theme-service {
+  /* 服务日志主题 */
 }
 
-.log :global(.warning) {
-  color: #d29922;
-}
-
-.log :global(.info) {
-  color: #58a6ff;
-}
-
+/* 滚动条样式 */
 .log::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -153,6 +255,7 @@
   background: #4f4f4f;
 }
 
+/* 响应式 */
 @media (max-width: 768px) {
   .log-toolbar {
     flex-direction: column;
@@ -167,4 +270,14 @@
   .log-search {
     width: 100%;
   }
+
+  .log-line {
+    font-size: 11px;
+  }
+}
+
+/* 高亮搜索匹配 */
+.log-line .highlight {
+  background-color: rgba(255, 255, 0, 0.3);
+  border-radius: 2px;
 }

@@ -157,8 +157,14 @@ class WebSocketService {
     }
   }
 
-  broadcastLog(type, message) {
-    this.broadcast(`logs:${type}`, { message, type });
+  broadcastLog(type, logData) {
+    // 支持新的增强日志格式（包含 lines 数组）和旧的字符串格式
+    if (typeof logData === 'string') {
+      this.broadcast(`logs:${type}`, { message: logData, type });
+    } else {
+      // 新的格式：{ message, type, timestamp, lines: [...] }
+      this.broadcast(`logs:${type}`, logData);
+    }
   }
 
   broadcastBuildProgress(buildId, progress) {

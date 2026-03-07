@@ -192,20 +192,61 @@ export const useWebSocketStore = create((set) => ({
   resetReconnect: () => set({ reconnectAttempts: 0 })
 }))
 
-function appendLogChunk(state, type, message) {
+function appendLogChunk(state, type, logData) {
   const linesKey = getLinesKey(type)
   const existingLines = state[linesKey]
-  const previousTail = state.logTails[type] || ''
-  const { lines, tail } = splitLogChunk(message, previousTail)
-  const nextLines = limitLogLines(existingLines, lines)
+  
+  // 解析新的日志数据格式
+  const parsed = parseLogData(logData)
+  
+  let newLines
+  if (parsed.lines) {
+    // 使用后端解析好的带级别信息的行
+    newLines = parsed.lines
+  } else {
+    // 回退到字符串处理（旧格式兼容）
+    const previousTail = state.logTails[type] || ''
+    const { lines, tail } = splitLogChunk(parsed.message, previousTail)
+    newLines = lines.map(text => ({
+      text,
+      level: detectLogLevel(text),
+      isStackTrace: false,
+      isEmpty: !text || text.trim() === ''
+    }))
+    
+    // 更新 tail（只有旧格式需要）
+    if (tail) {
+      return {
+        [linesKey]: limitLogLines(existingLines, newLines),
+        logTails: {
+          ...state.logTails,
+          [type]: tail
+        }
+      }
+    }
+  }
+  
+  const nextLines = limitLogLines(existingLines, newLines)
 
   return {
     [linesKey]: nextLines,
     logTails: {
       ...state.logTails,
-      [type]: tail
+      [type]: ''
     }
   }
+}
+
+// 从文本检测日志级别（前端回退处理）
+function detectLogLevel(text) {
+  if (!text) return 'info'
+  const upper = text.toUpperCase()
+  if (upper.includes('ERROR')) return 'error'
+  if (upper.includes('WARN')) return 'warn'
+  if (upper.includes('INFO')) return 'info'
+  if (upper.includes('DEBUG')) return 'debug'
+  if (upper.includes('TRACE')) return 'trace'
+  return 'info'
 }
 
 function splitLogChunk(message = '', previousTail = '') {
@@ -253,21 +294,68 @@ function getLogLinesForType(state, type) {
   return tail ? [...lines, tail] : lines
 }
 
+// 日志级别优先级（用于过滤）
+const LOG_LEVEL_PRIORITY = {
+  'error': 0,
+  'warn': 1,
+  'info': 2,
+  'debug': 3,
+  'trace': 4
+}
+
+function parseLogData(logData) {
+  // 支持新的增强格式和旧格式
+  if (typeof logData === 'string') {
+    // 旧格式：纯字符串
+    return { message: logData, lines: null }
+  }
+  
+  if (logData && typeof logData === 'object') {
+    // 新格式：{ message, type, timestamp, lines }
+    if (logData.lines && Array.isArray(logData.lines)) {
+      return { 
+        message: logData.message, 
+        lines: logData.lines.map(item => ({
+          text: item.text || item,
+          level: item.level || 'info',
+          isStackTrace: item.isStackTrace || false,
+          isEmpty: item.isEmpty || false
+        }))
+      }
+    }
+    return { message: logData.message || String(logData), lines: null }
+  }
+  
+  return { message: String(logData), lines: null }
+}
+
 function filterLogLines(lines, level, searchTerm) {
   let nextLines = lines
 
+  // 处理带级别信息的日志行对象
   if (level !== 'all') {
+    const targetPriority = LOG_LEVEL_PRIORITY[level]
     nextLines = nextLines.filter((line) => {
-      if (level === 'error') return line.includes('ERROR') || line.includes('✗') || line.includes('失败')
-      if (level === 'warn') return line.includes('WARN') || line.includes('warning')
-      if (level === 'info') return line.includes('INFO') || line.includes('[系统]')
+      // 如果是对象格式（新格式）
+      if (typeof line === 'object' && line.level) {
+        const linePriority = LOG_LEVEL_PRIORITY[line.level] ?? 2
+        return linePriority <= targetPriority
+      }
+      // 如果是字符串格式（旧格式），回退到字符串匹配
+      const lineStr = String(line)
+      if (level === 'error') return lineStr.includes('ERROR') || lineStr.includes('✗') || lineStr.includes('失败')
+      if (level === 'warn') return lineStr.includes('WARN') || lineStr.includes('warning')
+      if (level === 'info') return !lineStr.includes('ERROR') && !lineStr.includes('WARN')
       return true
     })
   }
 
   if (searchTerm) {
     const term = searchTerm.toLowerCase()
-    nextLines = nextLines.filter((line) => line.toLowerCase().includes(term))
+    nextLines = nextLines.filter((line) => {
+      const text = typeof line === 'object' ? line.text : String(line)
+      return text.toLowerCase().includes(term)
+    })
   }
 
   return nextLines

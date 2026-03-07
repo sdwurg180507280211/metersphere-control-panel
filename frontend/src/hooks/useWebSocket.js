@@ -80,10 +80,12 @@ export function useWebSocket() {
             case 'message':
               switch (data.channel) {
                 case 'logs:service':
-                  appendServiceLogRef.current(data.data.message)
+                  // 支持新的增强格式（包含 lines 数组）和旧格式
+                  appendServiceLogRef.current(data.data.lines ? data.data : data.data.message)
                   break
                 case 'logs:build':
-                  appendBuildLogRef.current(data.data.message)
+                  // 支持新的增强格式（包含 lines 数组）和旧格式
+                  appendBuildLogRef.current(data.data.lines ? data.data : data.data.message)
                   break
                 case 'build:progress':
                   updateBuildProgressRef.current(data.data.buildId, data.data)

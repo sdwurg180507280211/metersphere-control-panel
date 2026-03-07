@@ -5,11 +5,23 @@ import './LogViewer.css'
 const LOG_LINE_HEIGHT = 20
 const LOG_OVERSCAN = 20
 
+// 日志级别配置
+const LOG_LEVEL_CONFIG = {
+  error: { label: 'ERROR', color: '#ff4d4f', bgColor: '#fff1f0', borderColor: '#ffccc7' },
+  warn: { label: 'WARN', color: '#faad14', bgColor: '#fffbe6', borderColor: '#ffe58f' },
+  info: { label: 'INFO', color: '#52c41a', bgColor: 'transparent', borderColor: 'transparent' },
+  debug: { label: 'DEBUG', color: '#8c8c8c', bgColor: '#f5f5f5', borderColor: '#d9d9d9' },
+  trace: { label: 'TRACE', color: '#bfbfbf', bgColor: 'transparent', borderColor: 'transparent' },
+  separator: { label: '', color: '#1890ff', bgColor: '#e6f7ff', borderColor: '#91d5ff' },
+  stacktrace: { label: '', color: '#ff4d4f', bgColor: 'transparent', borderColor: 'transparent' }
+}
+
 function LogViewer({ type }) {
   const logRef = useRef(null)
   const shouldAutoScroll = useRef(true)
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
+  const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
 
   const {
     filters,
@@ -25,7 +37,9 @@ function LogViewer({ type }) {
   const originalLines = getLogLines(type)
 
   const lines = useMemo(() => getFilteredLogs(type), [getFilteredLogs, type, logLevel, searchTerm, originalLines])
-  const originalLogs = useMemo(() => originalLines.join('\n'), [originalLines])
+  const originalLogs = useMemo(() => {
+    return originalLines.map(line => typeof line === 'object' ? line.text : line).join('\n')
+  }, [originalLines])
 
   useEffect(() => {
     if (!logRef.current) {
@@ -86,7 +100,90 @@ function LogViewer({ type }) {
     URL.revokeObjectURL(url)
   }
 
+  const toggleStackTrace = (index) => {
+    setExpandedStackTraces(prev => {
+      const next = new Set(prev)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }
+
   const matchCount = useMemo(() => (searchTerm ? lines.length : 0), [lines, searchTerm])
+
+  // 渲染单行日志
+  const renderLogLine = (line, index) => {
+    const isObject = typeof line === 'object'
+    const text = isObject ? line.text : line
+    const level = isObject ? line.level : 'info'
+    const isStackTrace = isObject ? line.isStackTrace : false
+    const isEmpty = isObject ? line.isEmpty : !text || text.trim() === ''
+
+    if (isEmpty) {
+      return <div key={`${startIndex + index}-empty`} className="log-line log-line-empty"> </div>
+    }
+
+    // 分隔线特殊处理
+    if (text.startsWith('=====')) {
+      return (
+        <div key={`${startIndex + index}-sep`} className="log-line log-line-separator">
+          {text}
+        </div>
+      )
+    }
+
+    // 堆栈跟踪行处理
+    if (isStackTrace) {
+      const isExpanded = expandedStackTraces.has(startIndex + index)
+      // 检测是否是堆栈跟踪的开头（Caused by 或异常类名）
+      const isStackStart = text.match(/^\s*(Caused by:|\w+Exception:|\w+Error:)/)
+      
+      return (
+        <div 
+          key={`${startIndex + index}-${text.slice(0, 50)}`} 
+          className={`log-line log-line-stacktrace ${isExpanded ? 'expanded' : 'collapsed'}`}
+          style={{ paddingLeft: '20px' }}
+          onClick={() => isStackStart && toggleStackTrace(startIndex + index)}
+        >
+          {isStackStart && (
+            <span className="stacktrace-toggle">
+              {isExpanded ? '▼' : '▶'}
+            </span>
+          )}
+          <span className="log-line-content">{text}</span>
+        </div>
+      )
+    }
+
+    // 普通日志行
+    const levelConfig = LOG_LEVEL_CONFIG[level] || LOG_LEVEL_CONFIG.info
+    
+    return (
+      <div 
+        key={`${startIndex + index}-${text.slice(0, 50)}`} 
+        className={`log-line log-line-${level}`}
+        style={{
+          color: levelConfig.color,
+          backgroundColor: levelConfig.bgColor,
+          borderLeft: level !== 'info' && level !== 'trace' ? `3px solid ${levelConfig.borderColor}` : 'none',
+          paddingLeft: level !== 'info' && level !== 'trace' ? '8px' : '12px'
+        }}
+      >
+        {level !== 'info' && level !== 'trace' && (
+          <span className="log-level-badge" style={{ 
+            backgroundColor: levelConfig.borderColor,
+            color: levelConfig.color
+          }}>
+            {levelConfig.label}
+          </span>
+        )}
+        <span className="log-line-content">{text}</span>
+      </div>
+    )
+  }
 
   return (
     <div className={`log-container ${getThemeClass(type)}`}>
@@ -98,9 +195,10 @@ function LogViewer({ type }) {
             className="log-select"
           >
             <option value="all">全部级别</option>
-            <option value="error">错误</option>
-            <option value="warn">警告</option>
-            <option value="info">信息</option>
+            <option value="error">错误 (ERROR)</option>
+            <option value="warn">警告 (WARN)</option>
+            <option value="info">信息 (INFO)</option>
+            <option value="debug">调试 (DEBUG)</option>
           </select>
 
           <div className="log-search">
@@ -129,11 +227,7 @@ function LogViewer({ type }) {
         {lines.length > 0 ? (
           <div className="log-viewport" style={{ height: `${totalHeight}px` }}>
             <div className="log-visible" style={{ transform: `translateY(${startIndex * LOG_LINE_HEIGHT}px)` }}>
-              {visibleLines.map((line, index) => (
-                <div key={`${startIndex + index}-${line}`} className="log-line">
-                  {line || ' '}
-                </div>
-              ))}
+              {visibleLines.map((line, index) => renderLogLine(line, index))}
             </div>
           </div>
         ) : (
