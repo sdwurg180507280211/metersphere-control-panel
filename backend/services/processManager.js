@@ -385,10 +385,23 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 ========== 启动 ${serviceConfig.name} ==========`, 'service');
     logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service');
 
+     // 确保日志目录存在
+    const logDir = path.join(this.projectRoot, 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    // 设置 JVM 崩溃日志路径，统一输出到 logs/ 目录
+    const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
+    const jvmOpts = `-XX:ErrorFile=${errorFilePath}`;
+
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
       cwd: this.projectRoot,
       detached: process.platform !== 'win32',
-      env: process.env
+      env: {
+        ...process.env,
+        MAVEN_OPTS: `${process.env.MAVEN_OPTS || ''} ${jvmOpts}`.trim()
+      }
     });
 
     this._attachServiceProcess(serviceId, serviceConfig, child);
@@ -525,7 +538,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const serviceConfig = config.services[serviceId];
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const trackedPid = this._getPid(serviceId);
-    
+
     if (trackedPid && this._isProcessRunning(trackedPid)) {
       // 若进程存在但状态是过渡状态，自动恢复健康检查流程
       if (this._isTransitionalPhase(current.phase)) {
