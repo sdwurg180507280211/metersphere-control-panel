@@ -209,11 +209,11 @@ class ProcessManager {
     }, { serviceConfig });
 
     child.stdout?.on('data', (data) => {
-      logger.broadcast(data.toString(), 'service');
+      logger.broadcast(data.toString(), 'service', serviceId);
     });
 
     child.stderr?.on('data', (data) => {
-      logger.broadcast(data.toString(), 'service');
+      logger.broadcast(data.toString(), 'service', serviceId);
     });
 
     child.on('close', (code, signal) => {
@@ -382,25 +382,26 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     const mavenCommand = this._resolveMavenCommand();
     logger.broadcast(`
-========== 启动 ${serviceConfig.name} ==========`, 'service');
-    logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service');
+========== 启动 ${serviceConfig.name} ==========`, 'service', serviceId);
+    logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service', serviceId);
 
-     // 确保日志目录存在
-    const logDir = path.join(this.projectRoot, 'logs');
+    // 确保日志目录存在（使用控制面板项目自己的 logs 目录）
+    const logDir = path.join(__dirname, '../../logs');
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }
 
-    // 设置 JVM 崩溃日志路径，统一输出到 logs/ 目录
+    // 设置 JVM 崩溃日志路径，统一输出到控制面板项目的 logs/ 目录
     const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
     const jvmOpts = `-XX:ErrorFile=${errorFilePath}`;
 
+    // 使用 JAVA_TOOL_OPTIONS 环境变量确保 JVM 参数生效
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
       cwd: this.projectRoot,
       detached: process.platform !== 'win32',
       env: {
         ...process.env,
-        MAVEN_OPTS: `${process.env.MAVEN_OPTS || ''} ${jvmOpts}`.trim()
+        JAVA_TOOL_OPTIONS: `${process.env.JAVA_TOOL_OPTIONS || ''} ${jvmOpts}`.trim()
       }
     });
 
@@ -453,7 +454,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     this._clearPid(serviceId);
-    logger.broadcast(`${serviceConfig.name} 已停止`, 'service');
+    logger.broadcast(`${serviceConfig.name} 已停止`, 'service', serviceId);
     this._setServiceStatus(serviceId, {
       phase: options.finalPhase || 'stopped',
       running: false,
@@ -544,7 +545,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       if (this._isTransitionalPhase(current.phase)) {
         // 检查是否已经在健康检查监控中
         if (!this.serviceHealthMonitors.has(serviceId)) {
-          logger.broadcast(`[${serviceConfig.name}] 检测到进程运行中但状态为 ${current.phase}，自动恢复健康检查`, 'service');
+          logger.broadcast(`[${serviceConfig.name}] 检测到进程运行中但状态为 ${current.phase}，自动恢复健康检查`, 'service', serviceId);
           // 自动恢复健康检查流程
           this._monitorServiceHealth(serviceId, serviceConfig, {
             phase: 'checking_health',
@@ -605,7 +606,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const rollbackResults = [];
 
     for (const item of [...startedServices].reverse()) {
-      logger.broadcast(`回滚服务启动: ${item.name}`, 'service');
+      logger.broadcast(`回滚服务启动: ${item.name}`, 'service', item.id);
       const result = await this.stop(item.id, config.services[item.id]);
       rollbackResults.push({ serviceId: item.id, ...result, rollback: true });
     }
@@ -624,7 +625,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       let startResult;
 
       if (status.running) {
-        logger.broadcast(`${item.name} 已在运行，等待健康检查通过...`, 'service');
+        logger.broadcast(`${item.name} 已在运行，等待健康检查通过...`, 'service', item.id);
         startResult = { pid: status.pid, alreadyRunning: true };
       } else {
         startResult = await this.start(item.id, config.services[item.id], { monitorHealth: false, phase: 'starting' });
@@ -644,7 +645,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       });
 
       if (healthResult.healthy) {
-        logger.broadcast(`${item.name} 健康检查通过，继续启动下一个服务`, 'service');
+        logger.broadcast(`${item.name} 健康检查通过，继续启动下一个服务`, 'service', item.id);
         this._setServiceStatus(item.id, {
           phase: 'running',
           running: true,

@@ -1,7 +1,7 @@
 /**
  * 日志工具模块
  * 支持 WebSocket / SSE 实时日志推送和流式文件日志
- * 增强功能：Java 日志级别识别、彩色渲染支持
+ * 增强功能：Java 日志级别识别、彩色渲染支持、按级别分目录存储
  */
 const fs = require('fs');
 const path = require('path');
@@ -37,10 +37,33 @@ class Logger {
     this.maxLogLines = options.maxLogLines || 1000;
     this.logDir = options.logDir || path.join(__dirname, '../../logs');
     this.logStreams = new Map();
+    
+    // 按级别分目录的路径
+    this.errorLogDir = path.join(this.logDir, 'error');
+    this.warnLogDir = path.join(this.logDir, 'warn');
+    
+    // 确保所有日志目录存在
+    this._ensureDirectories();
+  }
 
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
-    }
+  /**
+   * 确保日志目录结构存在
+   */
+  _ensureDirectories() {
+    [this.logDir, this.errorLogDir, this.warnLogDir].forEach(dir => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    });
+  }
+
+  /**
+   * 获取当前服务标识（从调用上下文推断）
+   */
+  _getCurrentServiceId() {
+    // 从环境变量或调用栈推断当前服务
+    // 实际使用中，可以通过消息内容中的服务名来识别
+    return process.env.CURRENT_SERVICE || 'unknown';
   }
 
   addClient(res) {
@@ -87,6 +110,56 @@ class Logger {
   }
 
   /**
+   * 从日志内容中提取服务名称
+   * @param {string} message - 日志消息
+   * @returns {string} - 服务标识
+   */
+  extractServiceId(message) {
+    // 尝试从启动日志中提取服务名
+    // 格式: ========== 启动 {服务名} ==========
+    const startMatch = message.match(/={3,}\s*启动\s+(.+?)\s*={3,}/);
+    if (startMatch) {
+      return this._normalizeServiceName(startMatch[1]);
+    }
+    
+    // 从进程退出日志提取
+    const exitMatch = message.match(/(.+?)\s+进程退出/);
+    if (exitMatch) {
+      return this._normalizeServiceName(exitMatch[1]);
+    }
+    
+    // 从 ERROR 日志中的类名推断
+    const classMatch = message.match(/io\.metersphere\.(\w+)/);
+    if (classMatch) {
+      return classMatch[1].toLowerCase();
+    }
+    
+    return 'unknown';
+  }
+
+  /**
+   * 标准化服务名称
+   */
+  _normalizeServiceName(name) {
+    const nameMap = {
+      'eureka': 'eureka',
+      'gateway': 'gateway',
+      'system setting': 'system-setting',
+      'project management': 'project-management',
+      'performance test': 'performance-test',
+      'api test': 'api-test',
+      'test track': 'test-track',
+      'report stat': 'report-stat',
+      'workstation': 'workstation',
+      'workflow service': 'workflow-service',
+      'analytics stat': 'analytics-stat'
+    };
+    
+    const normalized = name.toLowerCase().trim();
+    return nameMap[normalized] || normalized.replace(/\s+/g, '-');
+  }
+
+  /**
    * 解析多行日志，为每行添加级别标记
    * @param {string} message - 原始日志消息
    * @returns {Array<{line: string, level: string, isStackTrace: boolean}>}
@@ -123,7 +196,7 @@ class Logger {
     });
   }
 
-  broadcast(message, type = 'service') {
+  broadcast(message, type = 'service', serviceId = null) {
     const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     const lines = message.split('\n');
     
@@ -136,12 +209,16 @@ class Logger {
 
     // 解析日志级别
     const parsedLines = this.parseLogLines(message);
+    
+    // 提取服务标识（如果未提供）
+    const effectiveServiceId = serviceId || this.extractServiceId(message);
 
     // 构建增强的日志数据
     const logData = {
       message: timestampedMessage,
       type,
       timestamp: new Date().toISOString(),
+      serviceId: effectiveServiceId,
       lines: parsedLines.map(item => ({
         text: item.line,
         level: item.level,
@@ -149,6 +226,9 @@ class Logger {
         isEmpty: item.isEmpty || false
       }))
     };
+
+    // 按级别分文件存储
+    this._writeLevelBasedLogs(effectiveServiceId, timestampedMessage, parsedLines, timestamp);
 
     this.logClients.forEach((client) => {
       try {
@@ -169,6 +249,59 @@ class Logger {
     this.writeToFile(timestampedMessage, type);
 
     return timestampedMessage;
+  }
+
+  /**
+   * 按级别写入不同的日志文件
+   * @param {string} serviceId - 服务标识
+   * @param {string} message - 完整消息
+   * @param {Array} parsedLines - 解析后的日志行
+   * @param {string} timestamp - 时间戳
+   */
+  _writeLevelBasedLogs(serviceId, message, parsedLines, timestamp) {
+    const date = new Date().toISOString().split('T')[0];
+    
+    // 检查是否包含 error 或 warn 级别的日志
+    const hasError = parsedLines.some(line => line.level === 'error');
+    const hasWarn = parsedLines.some(line => line.level === 'warn' || line.level === 'warning');
+    
+    // 写入 error 日志（包含 error 和 stacktrace）
+    if (hasError) {
+      const errorContent = parsedLines
+        .filter(line => line.level === 'error' || line.level === 'stacktrace' || line.isStackTrace)
+        .map(line => `[${timestamp}] ${line.line}`)
+        .join('\n') + '\n';
+      
+      this._writeToLevelFile('error', serviceId, date, errorContent);
+    }
+    
+    // 写入 warn 日志
+    if (hasWarn) {
+      const warnContent = parsedLines
+        .filter(line => line.level === 'warn' || line.level === 'warning')
+        .map(line => `[${timestamp}] ${line.line}`)
+        .join('\n') + '\n';
+      
+      this._writeToLevelFile('warn', serviceId, date, warnContent);
+    }
+  }
+
+  /**
+   * 写入级别特定的日志文件
+   * @param {string} level - 日志级别 (error/warn)
+   * @param {string} serviceId - 服务标识
+   * @param {string} date - 日期
+   * @param {string} content - 日志内容
+   */
+  _writeToLevelFile(level, serviceId, date, content) {
+    const dir = level === 'error' ? this.errorLogDir : this.warnLogDir;
+    const logFile = path.join(dir, `${serviceId}-${date}.log`);
+    
+    try {
+      fs.appendFileSync(logFile, content);
+    } catch (error) {
+      console.error(`写入${level}日志失败 (${serviceId}):`, error.message);
+    }
   }
 
   getLogStream(type, date = new Date().toISOString().split('T')[0]) {
@@ -201,25 +334,62 @@ class Logger {
     stream.write(message);
   }
 
-  getLogFiles() {
-    if (!fs.existsSync(this.logDir)) return [];
-    return fs.readdirSync(this.logDir)
-      .filter((file) => file.endsWith('.log'))
-      .map((file) => ({
-        name: file,
-        path: path.join(this.logDir, file),
-        size: fs.statSync(path.join(this.logDir, file)).size
-      }));
+  /**
+   * 获取指定级别的日志文件列表
+   * @param {string} level - 日志级别 (error/warn/null表示全部)
+   * @returns {Array} - 日志文件列表
+   */
+  getLogFiles(level = null) {
+    const dirs = [];
+    
+    if (!level || level === 'all') {
+      dirs.push(this.logDir);
+    }
+    if (!level || level === 'error') {
+      dirs.push(this.errorLogDir);
+    }
+    if (!level || level === 'warn') {
+      dirs.push(this.warnLogDir);
+    }
+    
+    const files = [];
+    dirs.forEach(dir => {
+      if (!fs.existsSync(dir)) return;
+      
+      fs.readdirSync(dir).forEach(file => {
+        if (file.endsWith('.log')) {
+          const filePath = path.join(dir, file);
+          const stats = fs.statSync(filePath);
+          files.push({
+            name: file,
+            path: filePath,
+            size: stats.size,
+            level: dir === this.errorLogDir ? 'error' : (dir === this.warnLogDir ? 'warn' : 'all'),
+            mtime: stats.mtime
+          });
+        }
+      });
+    });
+    
+    return files.sort((a, b) => b.mtime - a.mtime);
   }
 
-  cleanOldLogs(days = 7) {
+  /**
+   * 清理旧的日志文件
+   * @param {number} days - 保留天数
+   * @param {string} level - 指定级别清理，null表示全部
+   */
+  cleanOldLogs(days = 7, level = null) {
     const now = Date.now();
     const maxAge = days * 24 * 60 * 60 * 1000;
 
-    this.getLogFiles().forEach((file) => {
-      const stats = fs.statSync(file.path);
-      if (now - stats.mtime.getTime() > maxAge) {
-        fs.unlinkSync(file.path);
+    this.getLogFiles(level).forEach((file) => {
+      if (now - file.mtime.getTime() > maxAge) {
+        try {
+          fs.unlinkSync(file.path);
+        } catch (error) {
+          console.error(`删除旧日志失败 (${file.path}):`, error.message);
+        }
       }
     });
   }
