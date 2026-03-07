@@ -211,14 +211,14 @@
 /* 错误区域 */
 .error-section {
   border-top: 1px dashed rgba(245, 34, 45, 0.3);
-  background: rgba(255, 241, 240, 0.5);
+  background: rgba(255, 241, 240, 0.6);
 }
 
 .error-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 12px;
   cursor: pointer;
   font-size: 12px;
   color: #666;
@@ -226,17 +226,26 @@
 }
 
 .error-header:hover {
-  background: rgba(245, 34, 45, 0.05);
+  background: rgba(245, 34, 45, 0.08);
 }
 
 .error-label {
-  font-weight: 500;
-  color: #f5222d;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #cf1322;
+  font-size: 12px;
+}
+
+.error-icon {
+  font-size: 14px;
 }
 
 .error-toggle {
   font-size: 11px;
   color: #888;
+  font-weight: 500;
 }
 
 .error-content {
@@ -247,16 +256,20 @@
 }
 
 .error-content.expanded {
-  max-height: 200px;
+  max-height: 300px;
   padding: 0 12px 12px;
 }
 
 .error-text {
   margin: 0 0 10px;
   font-size: 12px;
-  color: #cf1322;
-  line-height: 1.5;
+  color: #595959;
+  line-height: 1.6;
   word-break: break-word;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid #ff4d4f;
 }
 
 .error-text.collapsed {
@@ -265,6 +278,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: transparent;
+  border-left: none;
+}
+
+.error-hint {
+  margin: 0 0 12px;
+  font-size: 11px;
+  color: #8c8c8c;
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: rgba(250, 173, 20, 0.1);
+  border-radius: 6px;
+  border: 1px dashed rgba(250, 173, 20, 0.3);
 }
 
 .btn-retry {

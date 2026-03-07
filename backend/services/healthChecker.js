@@ -39,6 +39,38 @@ class HealthChecker {
     return true;
   }
 
+  _getErrorMessage(statusCode, payload, defaultError) {
+    // 服务返回 500 系列错误，说明服务已启动但内部异常
+    if (statusCode >= 500 && statusCode < 600) {
+      return `服务内部错误 (HTTP ${statusCode})，请检查服务日志`;
+    }
+    
+    // 服务返回 404，可能是健康检查端点配置错误
+    if (statusCode === 404) {
+      return `健康检查端点不存在 (HTTP 404)，请检查配置`;
+    }
+    
+    // 服务返回 401/403，可能是权限问题
+    if (statusCode === 401 || statusCode === 403) {
+      return `健康检查权限不足 (HTTP ${statusCode})`;
+    }
+    
+    // 有错误信息从响应体中解析
+    if (payload && typeof payload === 'object') {
+      if (payload.error) {
+        return payload.error;
+      }
+      if (payload.message) {
+        return payload.message;
+      }
+      if (typeof payload.status === 'string' && payload.status.toUpperCase() !== 'UP') {
+        return `服务状态: ${payload.status}`;
+      }
+    }
+    
+    return defaultError;
+  }
+
   /**
    * 检查服务健康状态
    */
@@ -73,11 +105,19 @@ class HealthChecker {
 
           responded = true;
           const payload = this._parseHealthBody(body);
+          const healthy = this._isHealthyResponse(res.statusCode, payload);
+          const error = healthy ? null : this._getErrorMessage(
+            res.statusCode, 
+            payload, 
+            res.statusCode === 200 ? '服务未就绪' : `HTTP ${res.statusCode}`
+          );
+          
           resolve({
-            healthy: this._isHealthyResponse(res.statusCode, payload),
+            healthy,
             statusCode: res.statusCode,
             service: serviceId,
-            details: payload
+            details: payload,
+            error
           });
         });
       });

@@ -253,6 +253,45 @@ function ServicesTab() {
   )
 }
 
+// 错误类型识别
+function getErrorTypeLabel(error) {
+  if (!error) return '错误信息'
+  if (error.includes('服务内部错误') || error.includes('HTTP 50')) {
+    return '服务异常'
+  }
+  if (error.includes('连接失败')) {
+    return '连接失败'
+  }
+  if (error.includes('超时')) {
+    return '检查超时'
+  }
+  if (error.includes('404')) {
+    return '端点错误'
+  }
+  if (error.includes('权限')) {
+    return '权限不足'
+  }
+  return '启动失败'
+}
+
+// 错误提示建议
+function getErrorHint(error) {
+  if (!error) return null
+  if (error.includes('服务内部错误') || error.includes('HTTP 50')) {
+    return '服务进程已启动但内部报错，请查看右侧服务日志排查问题'
+  }
+  if (error.includes('连接失败')) {
+    return '服务可能尚未启动或端口未监听'
+  }
+  if (error.includes('超时')) {
+    return '服务启动较慢或健康检查未及时响应，可尝试重试'
+  }
+  if (error.includes('404')) {
+    return '请检查 config.json 中健康检查端点配置是否正确'
+  }
+  return null
+}
+
 function ServiceButton({ 
   service, 
   status, 
@@ -334,13 +373,19 @@ function ServiceButton({
       {error && phase === 'failed' && (
         <div className="error-section">
           <div className="error-header" onClick={onToggleError}>
-            <span className="error-label">错误信息</span>
+            <span className="error-label">
+              <span className="error-icon">⚠️</span>
+              {getErrorTypeLabel(error)}
+            </span>
             <span className="error-toggle">
               {isErrorExpanded ? '收起 ▲' : '展开 ▼'}
             </span>
           </div>
           <div className={`error-content ${isErrorExpanded ? 'expanded' : ''}`}>
             <p className="error-text">{error}</p>
+            {getErrorHint(error) && (
+              <p className="error-hint">💡 {getErrorHint(error)}</p>
+            )}
             <button 
               className="btn-retry" 
               onClick={(e) => { e.stopPropagation(); onToggle(); }}
