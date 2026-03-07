@@ -10,18 +10,21 @@ function LogViewer({ type }) {
     filters,
     setLogLevel,
     setSearchTerm,
-    serviceLogs,
-    buildLogs,
+    getLogLines,
+    getFilteredLogs,
     clearServiceLogs,
     clearBuildLogs
   } = useLogStore()
 
   const { logLevel, searchTerm } = filters[type]
-  const originalLogs = type === 'build' ? buildLogs : serviceLogs
+  const originalLines = getLogLines(type)
 
-  const logs = useMemo(() => {
-    return filterLogs(originalLogs, logLevel, searchTerm)
-  }, [originalLogs, logLevel, searchTerm])
+  const lines = useMemo(() => {
+    return getFilteredLogs(type)
+  }, [getFilteredLogs, type, logLevel, searchTerm, originalLines])
+
+  const logs = useMemo(() => lines.join('\n'), [lines])
+  const originalLogs = useMemo(() => originalLines.join('\n'), [originalLines])
 
   useEffect(() => {
     if (logRef.current && shouldAutoScroll.current) {
@@ -56,8 +59,8 @@ function LogViewer({ type }) {
 
   const matchCount = useMemo(() => {
     if (!searchTerm) return 0
-    return logs.split('\n').filter((line) => line.toLowerCase().includes(searchTerm.toLowerCase())).length
-  }, [logs, searchTerm])
+    return lines.length
+  }, [lines, searchTerm])
 
   return (
     <div className={`log-container ${getThemeClass(type)}`}>
@@ -119,28 +122,6 @@ function getThemeClass(type) {
     default:
       return 'log-theme-service'
   }
-}
-
-function filterLogs(logs, level, searchTerm) {
-  if (!logs) return ''
-
-  let lines = logs.split('\n')
-
-  if (level !== 'all') {
-    lines = lines.filter((line) => {
-      if (level === 'error') return line.includes('ERROR') || line.includes('✗') || line.includes('失败')
-      if (level === 'warn') return line.includes('WARN') || line.includes('warning')
-      if (level === 'info') return line.includes('INFO') || line.includes('[系统]')
-      return true
-    })
-  }
-
-  if (searchTerm) {
-    const term = searchTerm.toLowerCase()
-    lines = lines.filter((line) => line.toLowerCase().includes(term))
-  }
-
-  return lines.join('\n')
 }
 
 export default LogViewer

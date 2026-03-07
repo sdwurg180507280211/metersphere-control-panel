@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 
+const MAX_LOG_LINES = 1000
+
 export const useServiceStore = create((set) => ({
   catalog: [],
   services: {},
@@ -42,23 +44,28 @@ export const useServiceStore = create((set) => ({
 }))
 
 export const useLogStore = create((set, get) => ({
-  serviceLogs: '',
-  buildLogs: '',
+  serviceLogLines: [],
+  buildLogLines: [],
+  logTails: {
+    service: '',
+    build: ''
+  },
   filters: {
     service: { logLevel: 'all', searchTerm: '' },
     build: { logLevel: 'all', searchTerm: '' }
   },
 
-  appendServiceLog: (message) => set((state) => ({
-    serviceLogs: limitLogs(state.serviceLogs + message)
-  })),
+  appendServiceLog: (message) => set((state) => appendLogChunk(state, 'service', message)),
+  appendBuildLog: (message) => set((state) => appendLogChunk(state, 'build', message)),
 
-  appendBuildLog: (message) => set((state) => ({
-    buildLogs: limitLogs(state.buildLogs + message)
+  clearServiceLogs: () => set((state) => ({
+    serviceLogLines: [],
+    logTails: { ...state.logTails, service: '' }
   })),
-
-  clearServiceLogs: () => set({ serviceLogs: '' }),
-  clearBuildLogs: () => set({ buildLogs: '' }),
+  clearBuildLogs: () => set((state) => ({
+    buildLogLines: [],
+    logTails: { ...state.logTails, build: '' }
+  })),
 
   setLogLevel: (type, level) => set((state) => ({
     filters: {
@@ -74,10 +81,12 @@ export const useLogStore = create((set, get) => ({
     }
   })),
 
+  getLogLines: (type) => getLogLinesForType(get(), type),
+
   getFilteredLogs: (type) => {
     const filters = get().filters[type]
-    const logs = type === 'build' ? get().buildLogs : get().serviceLogs
-    return filterLogs(logs, filters.logLevel, filters.searchTerm)
+    const lines = getLogLinesForType(get(), type)
+    return filterLogLines(lines, filters.logLevel, filters.searchTerm)
   }
 }))
 
@@ -180,19 +189,72 @@ export const useWebSocketStore = create((set) => ({
   resetReconnect: () => set({ reconnectAttempts: 0 })
 }))
 
-function limitLogs(logs, maxLines = 1000) {
-  const lines = logs.split('\n')
-  if (lines.length > maxLines) {
-    return lines.slice(-maxLines).join('\n')
+function appendLogChunk(state, type, message) {
+  const linesKey = getLinesKey(type)
+  const existingLines = state[linesKey]
+  const previousTail = state.logTails[type] || ''
+  const { lines, tail } = splitLogChunk(message, previousTail)
+  const nextLines = limitLogLines(existingLines, lines)
+
+  return {
+    [linesKey]: nextLines,
+    logTails: {
+      ...state.logTails,
+      [type]: tail
+    }
   }
-  return logs
 }
 
-function filterLogs(logs, level, searchTerm) {
-  let lines = logs.split('\n')
+function splitLogChunk(message = '', previousTail = '') {
+  const normalized = String(message)
+  if (!normalized) {
+    return { lines: [], tail: previousTail }
+  }
+
+  const fragments = normalized.split('\n')
+  fragments[0] = `${previousTail}${fragments[0]}`
+
+  if (normalized.endsWith('\n')) {
+    return {
+      lines: fragments,
+      tail: ''
+    }
+  }
+
+  return {
+    lines: fragments.slice(0, -1),
+    tail: fragments[fragments.length - 1]
+  }
+}
+
+function limitLogLines(existingLines, newLines, maxLines = MAX_LOG_LINES) {
+  if (!newLines.length) {
+    return existingLines
+  }
+
+  const mergedLines = [...existingLines, ...newLines]
+  if (mergedLines.length <= maxLines) {
+    return mergedLines
+  }
+
+  return mergedLines.slice(-maxLines)
+}
+
+function getLinesKey(type) {
+  return type === 'build' ? 'buildLogLines' : 'serviceLogLines'
+}
+
+function getLogLinesForType(state, type) {
+  const lines = state[getLinesKey(type)] || []
+  const tail = state.logTails[type] || ''
+  return tail ? [...lines, tail] : lines
+}
+
+function filterLogLines(lines, level, searchTerm) {
+  let nextLines = lines
 
   if (level !== 'all') {
-    lines = lines.filter((line) => {
+    nextLines = nextLines.filter((line) => {
       if (level === 'error') return line.includes('ERROR') || line.includes('✗') || line.includes('失败')
       if (level === 'warn') return line.includes('WARN') || line.includes('warning')
       if (level === 'info') return line.includes('INFO') || line.includes('[系统]')
@@ -202,8 +264,8 @@ function filterLogs(logs, level, searchTerm) {
 
   if (searchTerm) {
     const term = searchTerm.toLowerCase()
-    lines = lines.filter((line) => line.toLowerCase().includes(term))
+    nextLines = nextLines.filter((line) => line.toLowerCase().includes(term))
   }
 
-  return lines.join('\n')
+  return nextLines
 }
