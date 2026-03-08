@@ -8,7 +8,7 @@ function BuildProgress() {
 
   useEffect(() => {
     fetchActiveBuilds()
-    const interval = setInterval(fetchActiveBuilds, 5000)
+    const interval = setInterval(fetchActiveBuilds, 2000)
     return () => clearInterval(interval)
   }, [fetchActiveBuilds])
 
@@ -34,7 +34,7 @@ function BuildProgress() {
   return (
     <div className="build-progress-container">
       {activeBuilds.map((build) => (
-        <BuildCard
+        <BuildItem
           key={build.id}
           build={build}
           onCancel={() => handleCancel(build.id)}
@@ -45,85 +45,79 @@ function BuildProgress() {
   )
 }
 
-function BuildCard({ build, onCancel, onDismiss }) {
+function BuildItem({ build, onCancel, onDismiss }) {
   const isRunning = build.status === 'running'
   const isFailed = build.status === 'failed'
   const isSuccess = build.status === 'success'
-  const isCancelled = build.status === 'cancelled'
 
   const formatDuration = (ms) => {
     if (!ms) return ''
     const seconds = Math.floor(ms / 1000)
-    if (seconds < 60) return `${seconds}秒`
+    if (seconds < 60) return `${seconds}s`
     const minutes = Math.floor(seconds / 60)
     const remaining = seconds % 60
-    return `${minutes}分${remaining}秒`
+    return `${minutes}m${remaining}s`
   }
 
+  const progress = build.overallProgress || 0
+  const currentStep = build.currentStep || 0
+  const totalSteps = build.totalSteps || 5
+
   return (
-    <div className={`build-card ${build.status}`}>
-      <div className="build-card-header">
-        <div className="build-info">
+    <div className={`build-item ${build.status}`}>
+      {/* 左侧：状态图标 */}
+      <div className="build-item-status">
+        {isRunning && <span className="status-icon spin">⚙️</span>}
+        {isSuccess && <span className="status-icon success">✓</span>}
+        {isFailed && <span className="status-icon failed">✕</span>}
+        {!isRunning && !isSuccess && !isFailed && (
+          <span className="status-icon">⏹</span>
+        )}
+      </div>
+
+      {/* 中间：进度信息 */}
+      <div className="build-item-content">
+        <div className="build-item-header">
           <span className="build-module">{build.module}</span>
-          <span className={`build-status ${build.status}`}>
-            {isRunning && '🔄'}
-            {isSuccess && '✅'}
-            {isFailed && '❌'}
-            {isCancelled && '🚫'}{' '}
-            {getStatusText(build.status)}
-          </span>
+          <span className="build-percent">{Math.round(progress)}%</span>
         </div>
-        <div className="build-actions">
-          {isRunning && (
-            <button className="btn-cancel" onClick={onCancel}>
-              取消
-            </button>
-          )}
-          {!isRunning && (
-            <button className="btn-dismiss" onClick={onDismiss}>
-              ✕
-            </button>
+        
+        <div className="build-mini-bar">
+          <div 
+            className={`build-mini-fill ${isRunning ? 'animated' : ''}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        
+        <div className="build-item-meta">
+          <span className="step-text">{build.stepName || '准备中'}</span>
+          <span className="step-count">{currentStep + 1}/{totalSteps}</span>
+          {build.duration && (
+            <span className="duration">⏱ {formatDuration(build.duration)}</span>
           )}
         </div>
-      </div>
 
-      <div className="build-progress-bar">
-        <div
-          className="build-progress-fill"
-          style={{ width: `${build.overallProgress || 0}%` }}
-        />
-      </div>
-
-      <div className="build-details">
-        <div className="build-step">
-          <span className="step-name">{build.stepName || '准备中...'}</span>
-          <span className="step-progress">步骤 {build.currentStep + 1} / {build.totalSteps}</span>
-        </div>
-
-        {build.duration && (
-          <div className="build-duration">
-            耗时: {formatDuration(build.duration)}
+        {build.error && (
+          <div className="build-item-error" title={build.error}>
+            {build.error}
           </div>
         )}
       </div>
 
-      {build.error && (
-        <div className="build-error">
-          错误: {build.error}
-        </div>
-      )}
+      {/* 右侧：操作按钮 */}
+      <div className="build-item-actions">
+        {isRunning ? (
+          <button className="btn-item-cancel" onClick={onCancel} title="取消">
+            ⏹
+          </button>
+        ) : (
+          <button className="btn-item-dismiss" onClick={onDismiss} title="关闭">
+            ✕
+          </button>
+        )}
+      </div>
     </div>
   )
-}
-
-function getStatusText(status) {
-  const map = {
-    running: '构建中',
-    success: '构建成功',
-    failed: '构建失败',
-    cancelled: '已取消'
-  }
-  return map[status] || status
 }
 
 export default BuildProgress

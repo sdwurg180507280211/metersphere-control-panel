@@ -318,20 +318,50 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       }
     };
 
+    // 先找到所有子进程
+    const childPids = await this._findChildPids(pid);
+
     if (process.platform === 'win32') {
       await this._execFileSafe('taskkill', ['/PID', String(pid), '/T', '/F']);
       return;
     }
 
-    killOne(-pid, 'SIGTERM') || killOne(pid, 'SIGTERM');
+    // macOS/Linux: 先终止子进程，再终止父进程
+    // 注意：不使用 -pid（进程组），避免误杀其他服务
+    for (const childPid of childPids) {
+      killOne(childPid, 'SIGTERM');
+    }
+    killOne(pid, 'SIGTERM');
 
     const deadline = Date.now() + 5000;
     while (this._isProcessRunning(pid) && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
+    // 强制终止
     if (this._isProcessRunning(pid)) {
-      killOne(-pid, 'SIGKILL') || killOne(pid, 'SIGKILL');
+      for (const childPid of childPids) {
+        if (this._isProcessRunning(childPid)) {
+          killOne(childPid, 'SIGKILL');
+        }
+      }
+      killOne(pid, 'SIGKILL');
+    }
+  }
+
+  /**
+   * 查找指定进程的所有子进程
+   */
+  async _findChildPids(parentPid) {
+    try {
+      // macOS: 使用 pgrep -P 查找子进程
+      const stdout = await this._execFileSafe('pgrep', ['-P', String(parentPid)]);
+      return stdout
+        .split(/\s+/)
+        .map((value) => parseInt(value, 10))
+        .filter((pid) => !Number.isNaN(pid));
+    } catch (error) {
+      return [];
     }
   }
 

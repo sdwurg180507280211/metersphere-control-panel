@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import Sidebar from './components/Sidebar'
@@ -11,6 +11,17 @@ function App() {
   
   // 初始化 WebSocket 连接
   useWebSocket()
+
+  // 监听切换页签事件（从 WebSocket 处理器触发）
+  useEffect(() => {
+    const handleSwitchTab = (event) => {
+      if (event.detail && (event.detail === 'build' || event.detail === 'services')) {
+        setActiveTab(event.detail)
+      }
+    }
+    window.addEventListener('switchTab', handleSwitchTab)
+    return () => window.removeEventListener('switchTab', handleSwitchTab)
+  }, [])
 
   return (
     <div className="app">

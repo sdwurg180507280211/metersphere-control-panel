@@ -1,38 +1,42 @@
+/* 构建进度容器 */
 .build-progress-container {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* 紧凑的构建项 */
+.build-item {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
-}
-
-.build-card {
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  animation: slideIn 0.3s ease-out;
+  border-radius: 8px;
+  border-left: 3px solid #007aff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.2s ease-out;
 }
 
-.build-card.running {
-  border-left: 4px solid #007aff;
+.build-item.running {
+  border-left-color: #007aff;
 }
 
-.build-card.success {
-  border-left: 4px solid #34c759;
+.build-item.success {
+  border-left-color: #34c759;
+  background: rgba(52, 199, 89, 0.05);
 }
 
-.build-card.failed {
-  border-left: 4px solid #ff3b30;
+.build-item.failed {
+  border-left-color: #ff3b30;
+  background: rgba(255, 59, 48, 0.05);
 }
 
-.build-card.cancelled {
-  border-left: 4px solid #8e8e93;
-}
-
-@keyframes slideIn {
+@keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-5px);
   }
   to {
     opacity: 1;
@@ -40,143 +44,208 @@
   }
 }
 
-.build-card-header {
+/* 状态图标 */
+.build-item-status {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-icon.success {
+  background: #34c759;
+  color: white;
+}
+
+.status-icon.failed {
+  background: #ff3b30;
+  color: white;
+}
+
+.status-icon.spin {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 中间内容区 */
+.build-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.build-item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-}
-
-.build-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .build-module {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   color: #1d1d1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.build-status {
+.build-percent {
   font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.build-status.running {
-  background: #e3f2fd;
+  font-weight: 600;
   color: #007aff;
+  flex-shrink: 0;
 }
 
-.build-status.success {
-  background: #e8f5e9;
+.build-item.success .build-percent {
   color: #34c759;
 }
 
-.build-status.failed {
-  background: #ffebee;
+.build-item.failed .build-percent {
   color: #ff3b30;
 }
 
-.build-status.cancelled {
-  background: #f5f5f5;
+/* 迷你进度条 */
+.build-mini-bar {
+  height: 4px;
+  background: #e5e5e5;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.build-mini-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #007aff, #5856d6);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.build-mini-fill.animated {
+  background: linear-gradient(90deg, #007aff 0%, #5856d6 50%, #007aff 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.build-item.success .build-mini-fill {
+  background: #34c759;
+}
+
+.build-item.failed .build-mini-fill {
+  background: #ff3b30;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 元信息 */
+.build-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
   color: #8e8e93;
 }
 
-.build-actions {
+.step-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.step-count {
+  padding: 1px 6px;
+  background: #f2f2f7;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.duration {
+  font-size: 10px;
+  color: #999;
+}
+
+/* 错误信息 */
+.build-item-error {
+  font-size: 11px;
+  color: #ff3b30;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 操作按钮 */
+.build-item-actions {
+  flex-shrink: 0;
   display: flex;
-  gap: 8px;
+  align-items: center;
 }
 
-.btn-cancel {
-  padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
-  background: #ff3b30;
-  color: white;
-  font-size: 12px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.btn-cancel:hover {
-  opacity: 0.9;
-}
-
-.btn-dismiss {
-  padding: 4px 8px;
+.btn-item-cancel,
+.btn-item-dismiss {
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: #8e8e93;
-  font-size: 14px;
+  font-size: 12px;
   cursor: pointer;
-}
-
-.btn-dismiss:hover {
-  background: #f5f5f5;
-}
-
-.build-progress-bar {
-  height: 6px;
-  background: #e5e5e5;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.build-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #007aff, #5856d6);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.build-card.success .build-progress-fill {
-  background: #34c759;
-}
-
-.build-card.failed .build-progress-fill {
-  background: #ff3b30;
-}
-
-.build-details {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-  color: #666;
+  justify-content: center;
+  transition: all 0.2s;
 }
 
-.build-step {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.btn-item-cancel {
+  color: #ff3b30;
 }
 
-.step-name {
-  font-weight: 500;
-  color: #333;
-}
-
-.step-progress {
-  font-size: 11px;
-  color: #999;
-}
-
-.build-duration {
-  font-size: 11px;
-  color: #999;
-}
-
-.build-error {
-  margin-top: 12px;
-  padding: 8px 12px;
+.btn-item-cancel:hover {
   background: #ffebee;
-  color: #c62828;
-  border-radius: 6px;
-  font-size: 12px;
+}
+
+.btn-item-dismiss:hover {
+  background: #f2f2f7;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .build-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  
+  .build-item-status {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+  
+  .build-module {
+    font-size: 12px;
+  }
 }

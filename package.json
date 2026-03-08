@@ -5,7 +5,7 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-    "predev": "kill -9 $(lsof -t -i:3000) 2>/dev/null; echo '端口已清理'",
+    "predev": "node scripts/clean-port.js 3000 5000",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "nodemon backend/server.js",
     "dev:frontend": "cd frontend && npm run dev",

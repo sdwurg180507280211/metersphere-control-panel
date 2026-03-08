@@ -14,6 +14,7 @@ function BuildTab() {
   }, [fetchModules, fetchActiveBuilds])
 
   const isBuilding = activeBuilds.some((build) => build.status === 'running')
+  const buildCount = activeBuilds.length
 
   const handleBuild = useCallback(async (moduleId) => {
     if (isBuilding) {
@@ -59,31 +60,41 @@ function BuildTab() {
   }, [isBuilding, modules, addActiveBuild])
 
   return (
-    <div className="tab-content">
-      <BuildProgress />
+    <div className="tab-content build-tab">
+      {/* 构建进度条 - 紧凑模式 */}
+      {buildCount > 0 && <BuildProgress />}
 
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">前端构建</h2>
-          {isBuilding && <span className="building-badge">构建中...</span>}
+      {/* 构建控制区 */}
+      <div className="build-control">
+        <div className="build-control-header">
+          <h3 className="section-title">
+            前端模块
+            {isBuilding && <span className="building-indicator">构建中...</span>}
+          </h3>
+          <span className="module-count">{modules.length} 个模块</span>
         </div>
-        <div className="btn-grid">
+        
+        <div className="module-list">
           {modules.map((module) => (
             <button
               key={module.id}
-              className="btn-build"
+              className="module-btn"
               onClick={() => handleBuild(module.id)}
               disabled={isBuilding}
+              title={isBuilding ? '等待当前构建完成' : `构建 ${module.name}`}
             >
-              {module.name}
+              <span className="module-icon">📦</span>
+              <span className="module-name">{module.name}</span>
+              {isBuilding && <span className="module-spinner">⏳</span>}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="card log-card">
-        <div className="card-header">
-          <h2 className="card-title">构建日志</h2>
+      {/* 构建日志 */}
+      <div className="build-log-section">
+        <div className="log-header">
+          <h3 className="section-title">构建日志</h3>
         </div>
         <LogViewer type="build" />
       </div>
