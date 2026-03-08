@@ -1,146 +1,85 @@
-.log-container {
-  flex: 1;
-  min-height: 0;
-  background: #1e1e1e;
-  border-radius: 0 0 12px 12px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
+/* ==================== 日志工具栏 ==================== */
 .log-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding: 8px 12px;
   background: #252526;
   border-bottom: 1px solid #333;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .log-filters {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
 }
 
 .log-select {
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
   border: 1px solid #444;
   background: #333;
   color: #ccc;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.log-select:hover {
-  border-color: #555;
 }
 
 .log-select:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
-}
-
-.log-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+  border-color: #667eea;
 }
 
 .log-search-input {
-  flex: 1;
-  min-width: 120px;
-  padding: 6px 10px;
-  border-radius: 6px;
+  width: 140px;
+  padding: 4px 8px;
+  border-radius: 4px;
   border: 1px solid #444;
   background: #333;
   color: #ccc;
   font-size: 12px;
-  transition: all 0.2s;
-}
-
-.log-search-input:hover {
-  border-color: #555;
 }
 
 .log-search-input:focus {
   outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+  border-color: #667eea;
 }
 
 .log-search-input::placeholder {
   color: #666;
 }
 
-.match-count {
-  font-size: 11px;
-  color: #888;
-  white-space: nowrap;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.match-count.no-match {
-  color: #ff6b6b;
-}
-
 .log-actions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 
-.btn-icon {
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+.log-btn {
+  padding: 4px 10px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #333;
   color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.btn-icon:hover {
+.log-btn:hover {
+  border-color: #555;
   background: #3c3c3c;
-  transform: scale(1.1);
 }
 
-.btn-icon:active {
-  transform: scale(0.95);
-}
-
-.btn-icon.copied {
-  background: #34c759;
-  color: white;
-  animation: pulse 0.3s ease-out;
-}
-
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-  100% { transform: scale(1); }
-}
-
-.log {
+/* ==================== 日志内容区 ==================== */
+.log-content {
   flex: 1;
-  min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 8px 12px;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 12px;
-  line-height: 20px;
+  line-height: 18px;
   color: #d4d4d4;
-  white-space: pre;
+  position: relative;
 }
 
 .log-viewport {
@@ -156,215 +95,69 @@
 }
 
 .log-line {
-  min-height: 20px;
-  border-radius: 2px;
-  transition: background-color 0.1s;
-  word-break: break-all;
   white-space: pre-wrap;
+  word-break: break-all;
+  padding: 0 4px;
+  border-radius: 2px;
 }
 
 .log-line:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-/* 日志级别徽章 */
-.log-level-badge {
-  display: inline-block;
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: bold;
-  margin-right: 8px;
-  min-width: 36px;
-  text-align: center;
+.log-line.empty {
+  background: transparent;
 }
 
-/* 日志级别样式 */
-.log-line-error {
+.log-line.level-error {
   font-weight: 500;
 }
 
-.log-line-error:hover {
-  background-color: rgba(255, 77, 79, 0.1);
-}
-
-.log-line-warn {
-  font-weight: 500;
-}
-
-.log-line-warn:hover {
-  background-color: rgba(250, 173, 20, 0.1);
-}
-
-.log-line-info {
-  color: #d4d4d4;
-}
-
-.log-line-debug {
-  color: #8c8c8c;
-}
-
-.log-line-trace {
-  color: #666;
-}
-
-/* 分隔线样式 */
-.log-line-separator {
-  color: #1890ff;
-  background-color: rgba(24, 144, 255, 0.1);
-  padding: 2px 8px;
-  margin: 4px 0;
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-/* 堆栈跟踪样式 */
-.log-line-stacktrace {
-  color: #ff7875;
-  font-size: 11px;
-  opacity: 0.9;
-}
-
-.log-line-stacktrace:hover {
-  opacity: 1;
-  background-color: rgba(255, 120, 117, 0.1);
-}
-
-.stacktrace-toggle {
-  display: inline-block;
-  width: 16px;
-  cursor: pointer;
-  user-select: none;
-  color: #888;
-  font-size: 10px;
-  transition: color 0.2s;
-}
-
-.stacktrace-toggle:hover {
-  color: #fff;
-}
-
-.log-line-stacktrace.collapsed {
-  max-height: 20px;
-  overflow: hidden;
-}
-
-.log-line-content {
-  display: inline;
-}
-
-/* 空行 */
-.log-line-empty {
-  height: 20px;
-}
-
-/* 占位符 */
-.log-placeholder {
-  color: #6e7681;
-  font-style: italic;
+.log-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
+  color: #666;
+  font-style: italic;
 }
 
-/* 主题定制 */
-.log-theme-build {
-  /* 构建日志主题 */
-}
-
-.log-theme-service {
-  /* 服务日志主题 */
-}
-
-/* 滚动条样式 */
-.log::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.log::-webkit-scrollbar-track {
-  background: #1e1e1e;
-}
-
-.log::-webkit-scrollbar-thumb {
-  background: #424242;
-  border-radius: 5px;
-}
-
-.log::-webkit-scrollbar-thumb:hover {
-  background: #4f4f4f;
-}
-
-/* 响应式 */
-@media (max-width: 768px) {
-  .log-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .log-filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .log-search {
-    width: 100%;
-  }
-
-  .log-line {
-    font-size: 11px;
-  }
-}
-
-/* 高亮搜索匹配 */
-.log-line .highlight {
-  background-color: rgba(255, 200, 0, 0.4);
-  border-radius: 2px;
-  padding: 0 2px;
-  font-weight: 600;
-}
-
-/* 回到底部按钮 */
-.scroll-to-bottom {
+/* ==================== 滚动到底部按钮 ==================== */
+.scroll-bottom-btn {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
-  padding: 8px 16px;
+  bottom: 16px;
+  right: 16px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  border-radius: 4px;
+  background: #667eea;
+  color: #fff;
   font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   transition: all 0.2s;
-  animation: slideUp 0.3s ease-out;
   z-index: 10;
 }
 
-.scroll-to-bottom:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+.scroll-bottom-btn:hover {
+  background: #5a6fd6;
 }
 
-.scroll-to-bottom:active {
-  transform: translateY(0);
+/* ==================== 滚动条 ==================== */
+.log-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.log-content::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.log-content::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+.log-content::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }

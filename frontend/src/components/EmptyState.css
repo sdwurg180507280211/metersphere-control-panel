@@ -1,3 +1,4 @@
+/* ==================== 空状态 ==================== */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -11,47 +12,67 @@
 .empty-state-icon {
   font-size: 48px;
   margin-bottom: 16px;
-  opacity: 0.6;
+  opacity: 0.5;
   animation: bounce 2s ease-in-out infinite;
 }
 
 .empty-state-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1d1d1f;
+  color: #1f1f1f;
   margin: 0 0 8px;
 }
 
 .empty-state-description {
   font-size: 13px;
-  color: #8e8e93;
+  color: #8c8c8c;
   margin: 0 0 20px;
   max-width: 280px;
   line-height: 1.5;
 }
 
 .empty-state-action {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border: none;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 6px;
+  background: #667eea;
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .empty-state-action:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: #5a6fd6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 .empty-state-action:active {
   transform: translateY(0);
 }
 
+/* ==================== 日志区域的空状态 ==================== */
+.log-container .empty-state {
+  height: 100%;
+  background: transparent;
+}
+
+.log-container .empty-state-icon {
+  font-size: 36px;
+  opacity: 0.3;
+}
+
+.log-container .empty-state-title {
+  color: #888;
+}
+
+.log-container .empty-state-description {
+  color: #666;
+}
+
+/* ==================== 动画 ==================== */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -70,23 +91,4 @@
   50% {
     transform: translateY(-8px);
   }
-}
-
-/* 日志区域的空状态 */
-.log-container .empty-state {
-  height: 100%;
-  background: transparent;
-}
-
-.log-container .empty-state-icon {
-  font-size: 36px;
-  opacity: 0.4;
-}
-
-.log-container .empty-state-title {
-  color: #888;
-}
-
-.log-container .empty-state-description {
-  color: #666;
 }

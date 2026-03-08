@@ -5,7 +5,6 @@ const SHORTCUTS = [
   { key: '?', description: '显示/隐藏快捷键帮助' },
   { key: '1', description: '切换到构建页面' },
   { key: '2', description: '切换到服务管理页面' },
-  { key: 'b', description: '开始构建（在构建页面）' },
   { key: 'r', description: '刷新数据' },
   { key: 'c', description: '清除当前日志' },
   { key: 's', description: '聚焦搜索框' },

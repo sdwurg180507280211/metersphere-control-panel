@@ -99,19 +99,31 @@ export const useBuildStore = create((set, get) => ({
   buildHistory: [],
   currentBuild: null,
   buildProgress: 0,
+  dismissedBuildIds: [],
 
   setModules: (modules) => set({ modules }),
-  setActiveBuilds: (builds) => set({ activeBuilds: builds }),
+  setActiveBuilds: (builds) => set((state) => ({
+    activeBuilds: builds.filter((build) => !state.dismissedBuildIds.includes(build.id))
+  })),
   setBuildHistory: (history) => set({ buildHistory: history }),
 
   addActiveBuild: (build) => set((state) => {
+    const dismissedBuildIds = state.dismissedBuildIds.filter((id) => id !== build.id)
     const exists = state.activeBuilds.some((item) => item.id === build.id)
+
     return exists
-      ? state
-      : { activeBuilds: [...state.activeBuilds, build] }
+      ? { dismissedBuildIds }
+      : {
+          activeBuilds: [...state.activeBuilds, build],
+          dismissedBuildIds
+        }
   }),
 
   updateBuildProgress: (buildId, progress) => set((state) => {
+    if (state.dismissedBuildIds.includes(buildId)) {
+      return state
+    }
+
     const exists = state.activeBuilds.some((item) => item.id === buildId)
     const nextBuilds = exists
       ? state.activeBuilds.map((item) => (item.id === buildId ? { ...item, ...progress } : item))
@@ -126,7 +138,10 @@ export const useBuildStore = create((set, get) => ({
   }),
 
   removeActiveBuild: (buildId) => set((state) => ({
-    activeBuilds: state.activeBuilds.filter((item) => item.id !== buildId)
+    activeBuilds: state.activeBuilds.filter((item) => item.id !== buildId),
+    dismissedBuildIds: state.dismissedBuildIds.includes(buildId)
+      ? state.dismissedBuildIds
+      : [...state.dismissedBuildIds, buildId]
   })),
 
   setCurrentBuild: (build) => set({ currentBuild: build }),
@@ -148,7 +163,9 @@ export const useBuildStore = create((set, get) => ({
       const res = await fetch('/api/progress/active')
       const data = await res.json()
       if (data.success) {
-        set({ activeBuilds: data.data })
+        set((state) => ({
+          activeBuilds: data.data.filter((build) => !state.dismissedBuildIds.includes(build.id))
+        }))
       }
     } catch (error) {
       console.error('获取构建任务失败:', error)

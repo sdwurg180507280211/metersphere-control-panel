@@ -1,9 +1,15 @@
+/* ==================== 构建历史 ==================== */
 .build-history {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  margin-bottom: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  animation: slideDown 0.3s ease-out;
+  transition: box-shadow 0.2s;
+}
+
+.build-history:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .build-history-header {
@@ -14,26 +20,35 @@
   cursor: pointer;
   transition: background 0.2s;
   user-select: none;
+  border-bottom: 1px solid transparent;
 }
 
 .build-history-header:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: #fafafa;
+}
+
+.build-history-header.has-items {
+  border-bottom-color: #f0f0f0;
 }
 
 .build-history-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1d1d1f;
+  color: #1f1f1f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .build-history-toggle {
   font-size: 12px;
-  color: #8e8e93;
+  color: #667eea;
+  font-weight: 500;
   transition: color 0.2s;
 }
 
 .build-history-header:hover .build-history-toggle {
-  color: #667eea;
+  color: #5a6fd6;
 }
 
 .build-history-list {
@@ -50,15 +65,19 @@
 .build-history-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 10px 16px;
   font-size: 12px;
-  border-top: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f5f5f5;
   transition: background 0.2s;
 }
 
+.build-history-item:last-child {
+  border-bottom: none;
+}
+
 .build-history-item:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: #fafafa;
 }
 
 .history-status-icon {
@@ -74,31 +93,31 @@
 }
 
 .build-history-item.success .history-status-icon {
-  background: #34c759;
+  background: #52c41a;
   color: white;
 }
 
 .build-history-item.failed .history-status-icon {
-  background: #ff3b30;
+  background: #ff4d4f;
   color: white;
 }
 
 .build-history-item:not(.success):not(.failed) .history-status-icon {
-  background: #8e8e93;
+  background: #8c8c8c;
   color: white;
 }
 
 .history-module {
   flex: 1;
   font-weight: 500;
-  color: #1d1d1f;
+  color: #1f1f1f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .history-time {
-  color: #8e8e93;
+  color: #8c8c8c;
   font-family: 'Menlo', 'Monaco', monospace;
   font-size: 11px;
 }
@@ -108,20 +127,10 @@
   font-size: 11px;
   min-width: 50px;
   text-align: right;
+  font-family: 'Menlo', 'Monaco', monospace;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 滚动条 */
+/* ==================== 滚动条 ==================== */
 .build-history-list::-webkit-scrollbar {
   width: 6px;
 }
@@ -131,10 +140,10 @@
 }
 
 .build-history-list::-webkit-scrollbar-thumb {
-  background: #ddd;
+  background: #e8e8e8;
   border-radius: 3px;
 }
 
 .build-history-list::-webkit-scrollbar-thumb:hover {
-  background: #ccc;
+  background: #d9d9d9;
 }

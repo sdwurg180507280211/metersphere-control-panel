@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useServiceStore, useBuildStore, useLogStore } from './store/useAppStore'
@@ -7,21 +7,18 @@ import BuildTab from './components/BuildTab'
 import ServicesTab from './components/ServicesTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
-import TabTransition from './components/TabTransition'
 import './styles/App.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('build')
-  const searchInputRef = useRef(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   
   const { fetchServices, fetchCatalog } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
   const { clearServiceLogs, clearBuildLogs } = useLogStore()
 
-  // 初始化 WebSocket 连接
   useWebSocket()
 
-  // 监听切换页签事件（从 WebSocket 处理器触发）
   useEffect(() => {
     const handleSwitchTab = (event) => {
       if (event.detail && (event.detail === 'build' || event.detail === 'services')) {
@@ -32,7 +29,6 @@ function App() {
     return () => window.removeEventListener('switchTab', handleSwitchTab)
   }, [])
 
-  // 刷新数据
   const handleRefresh = useCallback(() => {
     fetchCatalog()
     fetchServices()
@@ -40,7 +36,6 @@ function App() {
     fetchActiveBuilds()
   }, [fetchCatalog, fetchServices, fetchModules, fetchActiveBuilds])
 
-  // 清除当前页签的日志
   const handleClearLogs = useCallback(() => {
     if (activeTab === 'build') {
       clearBuildLogs()
@@ -49,14 +44,12 @@ function App() {
     }
   }, [activeTab, clearBuildLogs, clearServiceLogs])
 
-  // 聚焦搜索框
   const handleFocusSearch = useCallback(() => {
-    // 发送自定义事件通知当前活动的日志查看器聚焦搜索框
     window.dispatchEvent(new CustomEvent('focusSearch', { detail: activeTab }))
   }, [activeTab])
 
   return (
-    <div className="app">
+    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -64,59 +57,26 @@ function App() {
           style: {
             background: '#363636',
             color: '#fff',
-            borderRadius: '10px',
+            borderRadius: '8px',
             padding: '12px 16px',
-          },
-          success: {
-            iconTheme: {
-              primary: '#34c759',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ff3b30',
-              secondary: '#fff',
-            },
-            duration: 5000,
           },
         }}
       />
       
-      {/* 连接状态指示器 */}
       <ConnectionStatus />
       
-      <div className="container">
-        <header className="app-header">
-          <h1 className="title">
-            <span className="title-icon">🚀</span>
-            MeterSphere 控制面板
-          </h1>
-          <div className="header-actions">
-            <button 
-              className="header-btn" 
-              onClick={handleRefresh}
-              title="刷新数据 (R)"
-            >
-              🔄
-            </button>
-          </div>
-        </header>
-        
-        <div className="layout">
-          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-          <main className="content">
-            <TabTransition activeTab={activeTab} tabId="build">
-              <BuildTab searchInputRef={searchInputRef} />
-            </TabTransition>
-            <TabTransition activeTab={activeTab} tabId="services">
-              <ServicesTab searchInputRef={searchInputRef} />
-            </TabTransition>
-          </main>
-        </div>
-      </div>
+      <Sidebar 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
       
-      {/* 快捷键帮助 */}
+      <main className="main-content">
+        {activeTab === 'build' && <BuildTab />}
+        {activeTab === 'services' && <ServicesTab />}
+      </main>
+      
       <KeyboardShortcuts 
         onSwitchTab={setActiveTab}
         onRefresh={handleRefresh}

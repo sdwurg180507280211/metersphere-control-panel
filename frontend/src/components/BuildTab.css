@@ -1,119 +1,5 @@
-/* 构建标签页 */
-.build-tab {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* 骨架屏样式 */
-.skeleton-wrapper .module-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.loading-dots::after {
-  content: '';
-  animation: dots 1.5s steps(4, end) infinite;
-}
-
-@keyframes dots {
-  0% { content: ''; }
-  25% { content: '.'; }
-  50% { content: '..'; }
-  75% { content: '...'; }
-  100% { content: ''; }
-}
-
-.skeleton-log-placeholder {
-  flex: 1;
-  background: #1e1e1e;
-  padding: 16px;
-}
-
-.skeleton-log-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.skeleton-log-line {
-  height: 12px;
-  background: linear-gradient(90deg, #333 25%, #3c3c3c 50%, #333 75%);
-  background-size: 200% 100%;
-  border-radius: 2px;
-  animation: skeleton-loading 1.5s ease-in-out infinite;
-}
-
-@keyframes skeleton-loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* 构建控制区 */
-.build-control {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
-  padding: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  animation: slideIn 0.3s ease-out;
-}
-
-.build-control-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1d1d1f;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.building-indicator {
-  font-size: 11px;
-  color: #007aff;
-  background: rgba(0, 122, 255, 0.1);
-  padding: 4px 10px;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pulse-dot {
-  width: 6px;
-  height: 6px;
-  background: #007aff;
-  border-radius: 50%;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { 
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% { 
-    opacity: 0.5;
-    transform: scale(0.8);
-  }
-}
-
-.module-count {
-  font-size: 12px;
-  color: #8e8e93;
-  font-weight: 500;
-}
-
-/* 模块列表 */
-.module-list {
+/* ==================== 模块网格 ==================== */
+.modules-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -123,160 +9,64 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 8px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fff;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
-  color: white;
-  box-shadow: 0 2px 6px rgba(0, 122, 255, 0.3);
-  position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.3s ease-out backwards;
+  transition: all 0.2s;
+  font-size: 13px;
+  color: #333;
 }
 
-.module-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.2),
-    transparent
-  );
-  transition: left 0.5s;
-}
-
-.module-btn:hover:not(:disabled)::before {
-  left: 100%;
-}
-
-.module-btn:hover:not(:disabled) {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
-}
-
-.module-btn:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
+.module-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.04);
 }
 
 .module-btn:disabled,
 .module-btn.disabled {
-  background: linear-gradient(135deg, #c7c7cc 0%, #8e8e93 100%);
+  opacity: 0.5;
   cursor: not-allowed;
-  opacity: 0.7;
-  transform: none !important;
-  box-shadow: none;
+  border-color: #e8e8e8;
+  color: #999;
+  background: #f5f5f5;
 }
 
-.module-icon {
+.module-btn-icon {
   font-size: 14px;
-  transition: transform 0.2s;
 }
 
-.module-btn:hover:not(:disabled) .module-icon {
-  transform: scale(1.2);
-}
-
-.module-name {
-  white-space: nowrap;
-}
-
-.module-spinner {
+.module-btn-spinner {
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border: 2px solid #e8e8e8;
+  border-top-color: #667eea;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  margin-left: 4px;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 构建日志区 */
-.build-log-section {
-  flex: 1;
-  min-height: 0;
+/* ==================== 构建指示器 ==================== */
+.building-indicator {
   display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  animation: slideIn 0.3s ease-out 0.1s backwards;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #1890ff;
+  font-weight: 500;
 }
 
-.log-header {
-  padding: 10px 12px;
-  border-bottom: 1px solid #e5e5e5;
-  background: #f9f9f9;
-}
-
-.log-header .section-title {
-  font-size: 13px;
-}
-
-/* 响应式 */
-@media (max-width: 768px) {
-  .build-control {
-    padding: 10px;
-  }
-  
-  .module-list {
-    gap: 6px;
-  }
-  
-  .module-btn {
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-  
-  .section-title {
-    font-size: 13px;
-  }
-}
-
-/* 暗色日志主题优化 */
-.log-container {
-  background: #1e1e1e;
-}
-
-/* 按钮点击波纹效果 */
-.module-btn::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: rgba(255, 255, 255, 0.3);
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e6f7ff;
+  border-top-color: #1890ff;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: width 0.4s, height 0.4s;
-}
-
-.module-btn:active::after {
-  width: 200px;
-  height: 200px;
+  animation: spin 0.8s linear infinite;
 }
