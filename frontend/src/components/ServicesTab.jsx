@@ -1,7 +1,11 @@
 import { useEffect, useCallback, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { useServiceStore, useWebSocketStore } from '../store/useAppStore'
+import { useServiceStore, useWebSocketStore, useLogStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
+import EmptyState from './EmptyState'
+import ConfirmDialog from './ConfirmDialog'
+import Tooltip from './Tooltip'
+import { ServiceCardSkeleton } from './Skeleton'
 import './ServicesTab.css'
 
 const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting'])
@@ -66,7 +70,7 @@ const STATE_CONFIG = {
   }
 }
 
-function ServicesTab() {
+function ServicesTab({ searchInputRef }) {
   const {
     catalog,
     services,
@@ -78,10 +82,20 @@ function ServicesTab() {
   } = useServiceStore()
   const { connected } = useWebSocketStore()
   const [expandedErrors, setExpandedErrors] = useState(new Set())
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [confirmDialog, setConfirmDialog] = useState({ 
+    isOpen: false, 
+    action: '', 
+    title: '', 
+    message: '' 
+  })
 
   useEffect(() => {
-    fetchCatalog()
-    fetchServices()
+    const loadData = async () => {
+      await Promise.all([fetchCatalog(), fetchServices()])
+      setTimeout(() => setInitialLoading(false), 300)
+    }
+    loadData()
   }, [fetchCatalog, fetchServices])
 
   useEffect(() => {
@@ -118,7 +132,7 @@ function ServicesTab() {
       const data = await res.json()
 
       if (data.success) {
-        toast.success(`${action}命令已发送`)
+        toast.success(`${action}命令已发送`, { icon: isRunning ? '🛑' : '🚀' })
         updateServiceStatus(serviceId, {
           ...serviceStatus,
           phase: isRunning ? 'stopping' : 'starting',
@@ -150,7 +164,7 @@ function ServicesTab() {
       const data = await res.json()
 
       if (data.success) {
-        toast.success('重启命令已发送')
+        toast.success('重启命令已发送', { icon: '🔄' })
         updateServiceStatus(serviceId, {
           ...serviceStatus,
           phase: 'restarting',
@@ -167,7 +181,26 @@ function ServicesTab() {
     }
   }, [services, setLoading, updateServiceStatus])
 
-  const handleBatchAction = useCallback(async (action) => {
+  const handleBatchAction = useCallback((action) => {
+    const actionLabels = {
+      start: { label: '启动', icon: '🚀' },
+      stop: { label: '停止', icon: '🛑' },
+      restart: { label: '重启', icon: '🔄' }
+    }
+    
+    setConfirmDialog({
+      isOpen: true,
+      action,
+      title: `确认${actionLabels[action].label}全部服务`,
+      message: `确定要${actionLabels[action].label}所有服务吗？`,
+      icon: actionLabels[action].icon
+    })
+  }, [])
+
+  const confirmBatchAction = useCallback(async () => {
+    const { action } = confirmDialog
+    setConfirmDialog({ isOpen: false, action: '', title: '', message: '' })
+    
     const actionLabels = {
       start: '启动',
       stop: '停止',
@@ -203,9 +236,43 @@ function ServicesTab() {
     if (!connected) {
       setTimeout(fetchServices, action === 'restart' ? 7000 : 5000)
     }
-  }, [connected, fetchServices, catalog, services, updateServiceStatus])
+  }, [confirmDialog, catalog, services, updateServiceStatus, connected, fetchServices])
 
   const runningCount = catalog.filter((service) => services[service.id]?.running).length
+
+  // 渲染骨架屏
+  if (initialLoading) {
+    return (
+      <div className="tab-content">
+        <div className="card">
+          <div className="card-header skeleton-header">
+            <div className="skeleton-title" />
+            <div className="skeleton-actions" />
+          </div>
+          <div className="btn-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ServiceCardSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+        <div className="card log-card skeleton-log">
+          <div className="card-header">
+            <div className="skeleton-log-title" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (catalog.length === 0) {
+    return (
+      <div className="tab-content">
+        <div className="card">
+          <EmptyState type="services" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="tab-content">
@@ -216,19 +283,28 @@ function ServicesTab() {
             <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
           </h2>
           <div className="batch-actions">
-            <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
-              启动全部
-            </button>
-            <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
-              重启全部
-            </button>
-            <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
-              停止全部
-            </button>
+            <Tooltip content="启动所有服务" position="bottom">
+              <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
+                <span className="btn-icon-text">🚀</span>
+                启动全部
+              </button>
+            </Tooltip>
+            <Tooltip content="重启所有服务" position="bottom">
+              <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
+                <span className="btn-icon-text">🔄</span>
+                重启全部
+              </button>
+            </Tooltip>
+            <Tooltip content="停止所有服务" position="bottom">
+              <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
+                <span className="btn-icon-text">🛑</span>
+                停止全部
+              </button>
+            </Tooltip>
           </div>
         </div>
         <div className="btn-grid">
-          {catalog.map((service) => (
+          {catalog.map((service, index) => (
             <ServiceButton
               key={service.id}
               service={service}
@@ -238,6 +314,7 @@ function ServicesTab() {
               onToggle={() => toggleService(service.id)}
               onRestart={(e) => handleRestart(service.id, e)}
               onToggleError={() => toggleErrorExpand(service.id)}
+              animationDelay={index * 50}
             />
           ))}
         </div>
@@ -247,8 +324,20 @@ function ServicesTab() {
         <div className="card-header">
           <h2 className="card-title">服务日志</h2>
         </div>
-        <LogViewer type="service" />
+        <LogViewer type="service" searchInputRef={searchInputRef} />
       </div>
+
+      {/* 确认对话框 */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="确认"
+        cancelText="取消"
+        type={confirmDialog.action === 'stop' ? 'danger' : 'warning'}
+        onConfirm={confirmBatchAction}
+        onCancel={() => setConfirmDialog({ isOpen: false, action: '', title: '', message: '' })}
+      />
     </div>
   )
 }
@@ -299,7 +388,8 @@ function ServiceButton({
   isErrorExpanded,
   onToggle, 
   onRestart,
-  onToggleError 
+  onToggleError,
+  animationDelay
 }) {
   const { phase, running, error, pid } = status
   const isBusy = BUSY_SERVICE_PHASES.has(phase)
@@ -311,7 +401,8 @@ function ServiceButton({
       className={`service-card phase-${phase}`}
       style={{
         backgroundColor: config.bgColor,
-        borderColor: config.borderColor
+        borderColor: config.borderColor,
+        animationDelay: `${animationDelay}ms`
       }}
     >
       <button
@@ -325,9 +416,11 @@ function ServiceButton({
           <div className="service-btn-content">
             <div className="service-main-row">
               <div className="service-info">
-                <span className={`status-icon ${config.spin ? 'spinning' : ''}`} style={{ color: config.color }}>
-                  {config.icon}
-                </span>
+                <Tooltip content={config.text} position="top">
+                  <span className={`status-icon ${config.spin ? 'spinning' : ''}`} style={{ color: config.color }}>
+                    {config.icon}
+                  </span>
+                </Tooltip>
                 <span className="service-name">{service.name}</span>
               </div>
               <span 
@@ -344,7 +437,9 @@ function ServiceButton({
             
             <div className="service-meta-row">
               {pid && (
-                <span className="service-pid">PID: {pid}</span>
+                <Tooltip content={`进程 ID: ${pid}`} position="bottom">
+                  <span className="service-pid">PID: {pid}</span>
+                </Tooltip>
               )}
               {!isBusy && (
                 <span className="service-action-hint">
@@ -359,13 +454,14 @@ function ServiceButton({
       {/* 操作按钮区域 */}
       {phase === 'running' && (
         <div className="service-actions">
-          <button 
-            className="btn-icon btn-restart-small" 
-            onClick={onRestart}
-            title="重启服务"
-          >
-            🔄
-          </button>
+          <Tooltip content="重启服务" position="bottom">
+            <button 
+              className="btn-icon btn-restart-small" 
+              onClick={onRestart}
+            >
+              🔄
+            </button>
+          </Tooltip>
         </div>
       )}
 

@@ -1,3 +1,53 @@
+/* 骨架屏样式 */
+.skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skeleton-title {
+  width: 120px;
+  height: 20px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+.skeleton-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.skeleton-actions::before,
+.skeleton-actions::after {
+  content: '';
+  width: 80px;
+  height: 32px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+.skeleton-log-title {
+  width: 100px;
+  height: 18px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+.skeleton-log {
+  background: #1e1e1e;
+}
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* 批量操作按钮 */
 .batch-actions {
   display: flex;
@@ -5,40 +55,82 @@
 }
 
 .btn-batch {
-  padding: 8px 16px;
+  padding: 8px 14px;
   border: none;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-batch::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.btn-batch:hover::before {
+  left: 100%;
+}
+
+.btn-icon-text {
+  font-size: 14px;
 }
 
 .btn-start {
-  background: #34c759;
+  background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(52, 199, 89, 0.3);
 }
 
 .btn-start:hover {
-  background: #28a745;
+  background: linear-gradient(135deg, #28a745 0%, #34c759 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 199, 89, 0.4);
 }
 
 .btn-restart {
-  background: #007aff;
+  background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
 }
 
 .btn-restart:hover {
-  background: #005ecb;
+  background: linear-gradient(135deg, #005ecb 0%, #007aff 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
 }
 
 .btn-stop {
-  background: #ff3b30;
+  background: linear-gradient(135deg, #ff3b30 0%, #ff6b6b 100%);
   color: white;
+  box-shadow: 0 2px 8px rgba(255, 59, 48, 0.3);
 }
 
 .btn-stop:hover {
-  background: #d32f2f;
+  background: linear-gradient(135deg, #d32f2f 0%, #ff3b30 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.4);
+}
+
+.btn-batch:active {
+  transform: translateY(0);
 }
 
 /* 服务卡片容器 */
@@ -56,13 +148,25 @@
   border: 2px solid;
   border-radius: 12px;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  animation: fadeInUp 0.4s ease-out backwards;
 }
 
 .service-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 主按钮区域 */
@@ -150,6 +254,7 @@
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 /* 元信息行 */
@@ -163,18 +268,29 @@
 }
 
 .service-pid {
-  font-family: monospace;
+  font-family: 'Menlo', 'Monaco', monospace;
   font-size: 11px;
   color: #888;
   background: rgba(0, 0, 0, 0.04);
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.service-pid:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .service-action-hint {
   font-size: 11px;
   color: #888;
   font-style: italic;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.service-card:hover .service-action-hint {
+  opacity: 1;
 }
 
 /* 操作按钮区域 */
@@ -196,22 +312,42 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-icon:hover {
   background: rgba(0, 0, 0, 0.08);
-  transform: scale(1.05);
+  transform: scale(1.1);
+}
+
+.btn-icon:active {
+  transform: scale(0.95);
 }
 
 .btn-restart-small {
   color: #722ed1;
 }
 
+.btn-restart-small:hover {
+  background: rgba(114, 46, 209, 0.1);
+}
+
 /* 错误区域 */
 .error-section {
   border-top: 1px dashed rgba(245, 34, 45, 0.3);
   background: rgba(255, 241, 240, 0.6);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
 }
 
 .error-header {
@@ -223,6 +359,7 @@
   font-size: 12px;
   color: #666;
   transition: background 0.2s;
+  user-select: none;
 }
 
 .error-header:hover {
@@ -246,6 +383,11 @@
   font-size: 11px;
   color: #888;
   font-weight: 500;
+  transition: color 0.2s;
+}
+
+.error-header:hover .error-toggle {
+  color: #cf1322;
 }
 
 .error-content {
@@ -308,13 +450,15 @@
 .btn-retry:hover {
   background: #ff4d4f;
   color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
 }
 
 /* Loading 动画 */
 .loading-spinner {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border: 2px solid rgba(0, 0, 0, 0.1);
   border-left-color: currentColor;
   border-radius: 50%;
@@ -357,5 +501,38 @@
   .btn-batch {
     flex: 1;
     min-width: 80px;
+    justify-content: center;
   }
+  
+  .btn-icon-text {
+    display: none;
+  }
+}
+
+/* 状态颜色过渡 */
+.service-card {
+  transition: border-color 0.3s, background-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+
+.status-badge {
+  transition: all 0.3s;
+}
+
+/* 按钮波纹效果 */
+.service-btn-main::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s, height 0.4s;
+}
+
+.service-btn-main:active::after {
+  width: 200px;
+  height: 200px;
 }

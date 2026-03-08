@@ -9,14 +9,69 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  transition: padding-top 0.3s ease;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .title {
-  margin-bottom: 16px;
   color: white;
   font-size: 28px;
   font-weight: 600;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.title-icon {
+  animation: float 3s ease-in-out infinite;
+  display: inline-block;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.header-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1) rotate(180deg);
+}
+
+.header-btn:active {
+  transform: scale(0.95);
 }
 
 .layout {
@@ -31,6 +86,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* Tab 内容动画 */
@@ -49,6 +105,12 @@
   border-radius: 16px;
   padding: 20px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
 }
 
 .card-header {
@@ -121,13 +183,96 @@
   font-size: 12px;
 }
 
+/* 按钮波纹效果 */
+.btn-ripple {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-ripple::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.btn-ripple:active::after {
+  width: 200%;
+  height: 200%;
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 淡入动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 滑动动画 */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* 响应式 */
 @media (max-width: 768px) {
+  .app {
+    padding: 12px;
+  }
+  
+  .title {
+    font-size: 22px;
+  }
+  
   .layout {
     flex-direction: column;
   }
   
   .btn-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .header-actions {
+    display: none;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .app {
+    padding: 0;
+  }
+  
+  .sidebar,
+  .header-actions,
+  .keyboard-shortcuts-trigger {
+    display: none;
   }
 }

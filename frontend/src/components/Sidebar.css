@@ -22,15 +22,42 @@
   background: transparent;
   color: #1d1d1f;
   text-align: left;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+  animation: slideIn 0.4s ease-out backwards;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.nav-item:hover::before {
+  left: 100%;
 }
 
 .nav-item:hover {
   background: #f5f5f7;
   transform: translateX(4px);
+}
+
+.nav-item:active {
+  transform: translateX(2px);
 }
 
 .nav-item.active {
@@ -39,12 +66,67 @@
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
+.nav-item.active:hover {
+  background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+  transform: translateX(4px);
+}
+
 .nav-icon {
-  font-size: 16px;
+  font-size: 18px;
+  transition: transform 0.2s;
+}
+
+.nav-item:hover .nav-icon {
+  transform: scale(1.1);
+}
+
+.nav-item.active .nav-icon {
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .nav-label {
   flex: 1;
+}
+
+.nav-shortcut {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  color: #8e8e93;
+  font-family: 'Menlo', 'Monaco', monospace;
+  opacity: 0.8;
+  transition: all 0.2s;
+}
+
+.nav-item:hover .nav-shortcut {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.nav-item.active .nav-shortcut {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
 }
 
 @media (max-width: 768px) {
@@ -52,9 +134,65 @@
     width: 100%;
     flex-direction: row;
     overflow-x: auto;
+    padding: 12px;
+    gap: 8px;
   }
   
   .nav-item {
     white-space: nowrap;
+    flex: 1;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out backwards;
+  }
+  
+  .nav-item:hover {
+    transform: translateY(-2px);
+  }
+  
+  .nav-shortcut {
+    display: none;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* 选中指示器动画 */
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 768px) {
+  .nav-item.active::after {
+    top: auto;
+    bottom: 4px;
+    right: 50%;
+    transform: translateX(50%);
   }
 }

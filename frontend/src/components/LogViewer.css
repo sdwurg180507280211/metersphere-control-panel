@@ -6,6 +6,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .log-toolbar {
@@ -35,11 +36,17 @@
   color: #ccc;
   font-size: 12px;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.log-select:hover {
+  border-color: #555;
 }
 
 .log-select:focus {
   outline: none;
   border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
 }
 
 .log-search {
@@ -59,17 +66,32 @@
   background: #333;
   color: #ccc;
   font-size: 12px;
+  transition: all 0.2s;
+}
+
+.log-search-input:hover {
+  border-color: #555;
 }
 
 .log-search-input:focus {
   outline: none;
   border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+.log-search-input::placeholder {
+  color: #666;
 }
 
 .match-count {
   font-size: 11px;
   color: #888;
   white-space: nowrap;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.match-count.no-match {
+  color: #ff6b6b;
 }
 
 .log-actions {
@@ -84,11 +106,29 @@
   background: transparent;
   cursor: pointer;
   font-size: 14px;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  color: #ccc;
 }
 
 .btn-icon:hover {
   background: #3c3c3c;
+  transform: scale(1.1);
+}
+
+.btn-icon:active {
+  transform: scale(0.95);
+}
+
+.btn-icon.copied {
+  background: #34c759;
+  color: white;
+  animation: pulse 0.3s ease-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 .log {
@@ -197,6 +237,7 @@
   user-select: none;
   color: #888;
   font-size: 10px;
+  transition: color 0.2s;
 }
 
 .stacktrace-toggle:hover {
@@ -278,6 +319,52 @@
 
 /* 高亮搜索匹配 */
 .log-line .highlight {
-  background-color: rgba(255, 255, 0, 0.3);
+  background-color: rgba(255, 200, 0, 0.4);
   border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+/* 回到底部按钮 */
+.scroll-to-bottom {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transition: all 0.2s;
+  animation: slideUp 0.3s ease-out;
+  z-index: 10;
+}
+
+.scroll-to-bottom:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+.scroll-to-bottom:active {
+  transform: translateY(0);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

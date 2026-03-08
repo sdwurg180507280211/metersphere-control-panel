@@ -1,5 +1,7 @@
-import { useRef, useEffect, useMemo, useState } from 'react'
+import { useRef, useEffect, useMemo, useState, useCallback } from 'react'
 import { useLogStore } from '../store/useAppStore'
+import EmptyState from './EmptyState'
+import Tooltip from './Tooltip'
 import './LogViewer.css'
 
 const LOG_LINE_HEIGHT = 20
@@ -16,12 +18,14 @@ const LOG_LEVEL_CONFIG = {
   stacktrace: { label: '', color: '#ff4d4f', bgColor: 'transparent', borderColor: 'transparent' }
 }
 
-function LogViewer({ type }) {
+function LogViewer({ type, searchInputRef }) {
   const logRef = useRef(null)
+  const searchInputRefLocal = useRef(null)
   const shouldAutoScroll = useRef(true)
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
+  const [copied, setCopied] = useState(false)
 
   const {
     filters,
@@ -40,6 +44,18 @@ function LogViewer({ type }) {
   const originalLogs = useMemo(() => {
     return originalLines.map(line => typeof line === 'object' ? line.text : line).join('\n')
   }, [originalLines])
+
+  // 监听全局搜索聚焦事件
+  useEffect(() => {
+    const handleFocusSearch = (event) => {
+      if (event.detail === type && searchInputRefLocal.current) {
+        searchInputRefLocal.current.focus()
+        searchInputRefLocal.current.select()
+      }
+    }
+    window.addEventListener('focusSearch', handleFocusSearch)
+    return () => window.removeEventListener('focusSearch', handleFocusSearch)
+  }, [type])
 
   useEffect(() => {
     if (!logRef.current) {
@@ -99,6 +115,16 @@ function LogViewer({ type }) {
     anchor.click()
     URL.revokeObjectURL(url)
   }
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(originalLogs)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('复制失败:', err)
+    }
+  }, [originalLogs])
 
   const toggleStackTrace = (index) => {
     setExpandedStackTraces(prev => {
@@ -180,8 +206,18 @@ function LogViewer({ type }) {
             {levelConfig.label}
           </span>
         )}
-        <span className="log-line-content">{text}</span>
+        <span className="log-line-content">{highlightSearchTerm(text, searchTerm)}</span>
       </div>
+    )
+  }
+
+  // 高亮搜索词
+  const highlightSearchTerm = (text, term) => {
+    if (!term) return text
+    const parts = text.split(new RegExp(`(${term})`, 'gi'))
+    return parts.map((part, i) => 
+      part.toLowerCase() === term.toLowerCase() ? 
+        <mark key={i} className="highlight">{part}</mark> : part
     )
   }
 
@@ -203,23 +239,40 @@ function LogViewer({ type }) {
 
           <div className="log-search">
             <input
+              ref={searchInputRefLocal}
               type="text"
-              placeholder="搜索日志..."
+              placeholder="搜索日志... (快捷键: S)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(type, e.target.value)}
               className="log-search-input"
             />
-            {searchTerm && <span className="match-count">{matchCount} 条匹配</span>}
+            {searchTerm && (
+              <span className={`match-count ${matchCount === 0 ? 'no-match' : ''}`}>
+                {matchCount} 条匹配
+              </span>
+            )}
           </div>
         </div>
 
         <div className="log-actions">
-          <button className="btn-icon" onClick={handleDownload} title="下载日志">
-            💾
-          </button>
-          <button className="btn-icon" onClick={handleClear} title="清空日志">
-            🗑️
-          </button>
+          <Tooltip content={copied ? '已复制!' : '复制全部'} position="bottom">
+            <button 
+              className={`btn-icon ${copied ? 'copied' : ''}`} 
+              onClick={handleCopy}
+            >
+              {copied ? '✓' : '📋'}
+            </button>
+          </Tooltip>
+          <Tooltip content="下载日志" position="bottom">
+            <button className="btn-icon" onClick={handleDownload}>
+              💾
+            </button>
+          </Tooltip>
+          <Tooltip content="清空日志 (快捷键: C)" position="bottom">
+            <button className="btn-icon" onClick={handleClear}>
+              🗑️
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -231,9 +284,27 @@ function LogViewer({ type }) {
             </div>
           </div>
         ) : (
-          <span className="log-placeholder">等待日志输出...</span>
+          <EmptyState 
+            type={searchTerm ? 'search' : 'logs'}
+            action={searchTerm ? { label: '清除搜索', onClick: () => setSearchTerm(type, '') } : null}
+          />
         )}
       </div>
+      
+      {/* 回到底部按钮 */}
+      {!shouldAutoScroll.current && lines.length > 0 && (
+        <button 
+          className="scroll-to-bottom"
+          onClick={() => {
+            if (logRef.current) {
+              logRef.current.scrollTop = logRef.current.scrollHeight
+              shouldAutoScroll.current = true
+            }
+          }}
+        >
+          ↓ 回到底部
+        </button>
+      )}
     </div>
   )
 }

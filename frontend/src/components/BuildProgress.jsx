@@ -1,10 +1,13 @@
 import { useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { useBuildStore } from '../store/useAppStore'
+import ConfirmDialog from './ConfirmDialog'
 import './BuildProgress.css'
+import { useState } from 'react'
 
 function BuildProgress() {
   const { activeBuilds, fetchActiveBuilds, cancelBuild, removeActiveBuild } = useBuildStore()
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, buildId: null, buildName: '' })
 
   useEffect(() => {
     fetchActiveBuilds()
@@ -12,11 +15,14 @@ function BuildProgress() {
     return () => clearInterval(interval)
   }, [fetchActiveBuilds])
 
-  const handleCancel = async (buildId) => {
-    if (!window.confirm('确定要取消这个构建任务吗？')) {
-      return
-    }
+  const handleCancelClick = (buildId, buildName) => {
+    setConfirmDialog({ isOpen: true, buildId, buildName })
+  }
 
+  const handleConfirmCancel = async () => {
+    const { buildId } = confirmDialog
+    setConfirmDialog({ isOpen: false, buildId: null, buildName: '' })
+    
     const success = await cancelBuild(buildId)
     if (success) {
       toast.success('已发送取消请求')
@@ -25,27 +31,46 @@ function BuildProgress() {
     }
   }
 
-  const handleDismiss = (buildId) => {
+  const handleDismiss = (buildId, module, status) => {
     removeActiveBuild(buildId)
+    if (status === 'success') {
+      toast.success(`${module} 构建完成`, { icon: '✅' })
+    } else if (status === 'failed') {
+      toast.error(`${module} 构建失败`, { icon: '❌' })
+    }
   }
 
   if (activeBuilds.length === 0) return null
 
   return (
-    <div className="build-progress-container">
-      {activeBuilds.map((build) => (
-        <BuildItem
-          key={build.id}
-          build={build}
-          onCancel={() => handleCancel(build.id)}
-          onDismiss={() => handleDismiss(build.id)}
-        />
-      ))}
-    </div>
+    <>
+      <div className="build-progress-container">
+        {activeBuilds.map((build, index) => (
+          <BuildItem
+            key={build.id}
+            build={build}
+            index={index}
+            onCancel={() => handleCancelClick(build.id, build.module)}
+            onDismiss={() => handleDismiss(build.id, build.module, build.status)}
+          />
+        ))}
+      </div>
+      
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="确认取消构建"
+        message={`确定要取消 ${confirmDialog.buildName} 的构建任务吗？`}
+        confirmText="确认取消"
+        cancelText="继续构建"
+        type="warning"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setConfirmDialog({ isOpen: false, buildId: null, buildName: '' })}
+      />
+    </>
   )
 }
 
-function BuildItem({ build, onCancel, onDismiss }) {
+function BuildItem({ build, index, onCancel, onDismiss }) {
   const isRunning = build.status === 'running'
   const isFailed = build.status === 'failed'
   const isSuccess = build.status === 'success'
@@ -63,16 +88,30 @@ function BuildItem({ build, onCancel, onDismiss }) {
   const currentStep = build.currentStep || 0
   const totalSteps = build.totalSteps || 5
 
+  const getStatusIcon = () => {
+    if (isRunning) return '⚙️'
+    if (isSuccess) return '✅'
+    if (isFailed) return '❌'
+    return '⏹'
+  }
+
+  const getStatusClass = () => {
+    if (isRunning) return 'running'
+    if (isSuccess) return 'success'
+    if (isFailed) return 'failed'
+    return ''
+  }
+
   return (
-    <div className={`build-item ${build.status}`}>
+    <div 
+      className={`build-item ${getStatusClass()}`}
+      style={{ animationDelay: `${index * 100}ms` }}
+    >
       {/* 左侧：状态图标 */}
       <div className="build-item-status">
-        {isRunning && <span className="status-icon spin">⚙️</span>}
-        {isSuccess && <span className="status-icon success">✓</span>}
-        {isFailed && <span className="status-icon failed">✕</span>}
-        {!isRunning && !isSuccess && !isFailed && (
-          <span className="status-icon">⏹</span>
-        )}
+        <span className={`status-icon ${isRunning ? 'spin' : ''}`}>
+          {getStatusIcon()}
+        </span>
       </div>
 
       {/* 中间：进度信息 */}
@@ -90,7 +129,9 @@ function BuildItem({ build, onCancel, onDismiss }) {
         </div>
         
         <div className="build-item-meta">
-          <span className="step-text">{build.stepName || '准备中'}</span>
+          <span className="step-text" title={build.stepName}>
+            {build.stepName || '准备中'}
+          </span>
           <span className="step-count">{currentStep + 1}/{totalSteps}</span>
           {build.duration && (
             <span className="duration">⏱ {formatDuration(build.duration)}</span>
@@ -107,12 +148,21 @@ function BuildItem({ build, onCancel, onDismiss }) {
       {/* 右侧：操作按钮 */}
       <div className="build-item-actions">
         {isRunning ? (
-          <button className="btn-item-cancel" onClick={onCancel} title="取消">
-            ⏹
+          <button 
+            className="btn-item-cancel" 
+            onClick={onCancel} 
+            title="取消构建"
+          >
+            <span className="cancel-icon">⏹</span>
+            <span className="cancel-text">取消</span>
           </button>
         ) : (
-          <button className="btn-item-dismiss" onClick={onDismiss} title="关闭">
-            ✕
+          <button 
+            className={`btn-item-dismiss ${isSuccess ? 'success' : isFailed ? 'failed' : ''}`}
+            onClick={onDismiss} 
+            title="关闭"
+          >
+            <span className="dismiss-icon">✕</span>
           </button>
         )}
       </div>

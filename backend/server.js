@@ -53,12 +53,12 @@ function checkFrontendBuilt() {
   }
 }
 
-const frontendStatus = checkFrontendBuilt();
+const initialFrontendStatus = checkFrontendBuilt();
 
-if (frontendStatus.built) {
-  app.use(express.static(publicPath));
-} else {
-  console.log(`⚠️  前端未构建: ${frontendStatus.reason}`);
+app.use(express.static(publicPath));
+
+if (!initialFrontendStatus.built) {
+  console.log(`⚠️  前端未构建: ${initialFrontendStatus.reason}`);
   console.log('   运行 "npm run build" 构建前端');
 }
 
@@ -69,6 +69,8 @@ app.get('/api/health', (req, res) => {
 
 // 所有其他请求返回前端应用
 app.get('*', (req, res) => {
+  const frontendStatus = checkFrontendBuilt();
+
   // 检查前端是否已构建
   if (!frontendStatus.built) {
     // 返回友好的提示页面
