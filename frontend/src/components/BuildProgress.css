@@ -1,43 +1,46 @@
-/* ==================== 构建进度 ==================== */
+/* 构建进度容器 */
 .build-progress-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-/* ==================== 构建项 ==================== */
+/* 紧凑的构建项 */
 .build-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: #fff;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 8px;
-  border: 1px solid #e8e8e8;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  animation: slideIn 0.3s ease-out;
+  border-left: 3px solid #007aff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  animation: slideDown 0.3s ease-out backwards;
   transition: all 0.2s;
 }
 
 .build-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #d9d9d9;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateX(4px);
 }
 
 .build-item.running {
-  border-left: 3px solid #1890ff;
+  border-left-color: #007aff;
+  background: linear-gradient(90deg, rgba(0, 122, 255, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
 }
 
 .build-item.success {
-  border-left: 3px solid #52c41a;
+  border-left-color: #34c759;
+  background: linear-gradient(90deg, rgba(52, 199, 89, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
 }
 
 .build-item.failed {
-  border-left: 3px solid #ff4d4f;
+  border-left-color: #ff3b30;
+  background: linear-gradient(90deg, rgba(255, 59, 48, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
 }
 
-@keyframes slideIn {
+@keyframes slideDown {
   from {
     opacity: 0;
     transform: translateY(-10px);
@@ -48,39 +51,33 @@
   }
 }
 
-/* ==================== 状态图标 ==================== */
+/* 状态图标 */
 .build-item-status {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f5;
-  border-radius: 8px;
-}
-
-.build-item.running .build-item-status {
-  background: #e6f7ff;
-}
-
-.build-item.success .build-item-status {
-  background: #f6ffed;
-}
-
-.build-item.failed .build-item-status {
-  background: #fff1f0;
 }
 
 .status-icon {
-  font-size: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+  transition: transform 0.2s;
 }
 
 .status-icon.spin {
   animation: spin 2s linear infinite;
+}
+
+.build-item:hover .status-icon.spin {
+  animation-duration: 1s;
 }
 
 @keyframes spin {
@@ -88,13 +85,13 @@
   to { transform: rotate(360deg); }
 }
 
-/* ==================== 内容区域 ==================== */
+/* 中间内容区 */
 .build-item-content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .build-item-header {
@@ -106,55 +103,56 @@
 
 .build-module {
   font-weight: 600;
-  font-size: 14px;
-  color: #1f1f1f;
+  font-size: 13px;
+  color: #1d1d1f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .build-percent {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #1890ff;
+  color: #007aff;
   flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 .build-item.success .build-percent {
-  color: #52c41a;
+  color: #34c759;
 }
 
 .build-item.failed .build-percent {
-  color: #ff4d4f;
+  color: #ff3b30;
 }
 
-/* ==================== 进度条 ==================== */
+/* 迷你进度条 */
 .build-mini-bar {
-  height: 6px;
-  background: #f0f0f0;
-  border-radius: 3px;
+  height: 4px;
+  background: #e5e5e5;
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .build-mini-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
-  border-radius: 3px;
+  background: linear-gradient(90deg, #007aff, #5856d6);
+  border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .build-mini-fill.animated {
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+  background: linear-gradient(90deg, #007aff 0%, #5856d6 50%, #007aff 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
 .build-item.success .build-mini-fill {
-  background: #52c41a;
+  background: linear-gradient(90deg, #34c759, #30d158);
 }
 
 .build-item.failed .build-mini-fill {
-  background: #ff4d4f;
+  background: linear-gradient(90deg, #ff3b30, #ff6b6b);
 }
 
 @keyframes shimmer {
@@ -162,13 +160,13 @@
   100% { background-position: -200% 0; }
 }
 
-/* ==================== 元信息 ==================== */
+/* 元信息 */
 .build-item-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: #8c8c8c;
+  gap: 8px;
+  font-size: 11px;
+  color: #8e8e93;
 }
 
 .step-text {
@@ -176,37 +174,38 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #666;
 }
 
 .step-count {
   padding: 2px 8px;
-  background: #f5f5f5;
+  background: #f2f2f7;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #666;
 }
 
 .duration {
-  font-size: 11px;
+  font-size: 10px;
   color: #999;
   font-family: 'Menlo', 'Monaco', monospace;
 }
 
-/* ==================== 错误信息 ==================== */
+/* 错误信息 */
 .build-item-error {
-  font-size: 12px;
-  color: #ff4d4f;
+  font-size: 11px;
+  color: #ff3b30;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 6px 10px;
-  background: #fff1f0;
+  padding: 4px 8px;
+  background: rgba(255, 59, 48, 0.08);
   border-radius: 4px;
-  border: 1px solid #ffa39e;
+  margin-top: 4px;
 }
 
-/* ==================== 操作按钮 ==================== */
+/* 操作按钮 */
 .build-item-actions {
   flex-shrink: 0;
   display: flex;
@@ -217,12 +216,11 @@
 .btn-item-dismiss {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  padding: 8px 16px;
-  border: 1px solid;
+  padding: 6px 12px;
+  border: none;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -231,75 +229,78 @@
 .btn-item-cancel {
   background: #fff1f0;
   color: #ff4d4f;
-  border-color: #ffa39e;
+  border: 1px solid #ffccc7;
 }
 
 .btn-item-cancel:hover {
   background: #ff4d4f;
   color: white;
-  border-color: #ff4d4f;
+  transform: scale(1.05);
+}
+
+.cancel-icon {
+  font-size: 10px;
+}
+
+.cancel-text {
+  font-size: 11px;
 }
 
 .btn-item-dismiss {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  background: #f5f5f5;
-  color: #8c8c8c;
-  border-color: #d9d9d9;
+  justify-content: center;
+  background: #f5f5f7;
+  color: #8e8e93;
 }
 
 .btn-item-dismiss:hover {
-  background: #e8e8e8;
+  background: #e5e5e5;
   color: #666;
+  transform: scale(1.1);
 }
 
 .btn-item-dismiss.success {
   background: #f6ffed;
   color: #52c41a;
-  border-color: #b7eb8f;
 }
 
 .btn-item-dismiss.success:hover {
   background: #52c41a;
   color: white;
-  border-color: #52c41a;
 }
 
 .btn-item-dismiss.failed {
   background: #fff1f0;
   color: #ff4d4f;
-  border-color: #ffa39e;
 }
 
 .btn-item-dismiss.failed:hover {
   background: #ff4d4f;
   color: white;
-  border-color: #ff4d4f;
 }
 
-.cancel-text {
-  font-size: 12px;
-}
-
-/* ==================== 响应式 ==================== */
+/* 响应式 */
 @media (max-width: 768px) {
   .build-item {
-    padding: 12px;
-    gap: 12px;
+    padding: 8px 10px;
+    gap: 8px;
   }
   
   .build-item-status {
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
   }
   
   .status-icon {
-    font-size: 14px;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
   }
   
   .build-module {
-    font-size: 13px;
+    font-size: 12px;
   }
   
   .cancel-text {
@@ -307,8 +308,6 @@
   }
   
   .btn-item-cancel {
-    padding: 8px;
-    width: 32px;
-    height: 32px;
+    padding: 6px;
   }
 }
