@@ -171,6 +171,18 @@ class WebSocketService {
     this.broadcast('build:progress', { buildId, ...progress });
   }
 
+  broadcastJobProgress(job) {
+    this.broadcast('job:progress', job);
+  }
+
+  broadcastJobCompleted(job) {
+    this.broadcast('job:completed', job);
+  }
+
+  broadcastJobFailed(job) {
+    this.broadcast('job:failed', job);
+  }
+
   broadcastServiceStatus(status) {
     this.broadcast('service:status', status);
   }

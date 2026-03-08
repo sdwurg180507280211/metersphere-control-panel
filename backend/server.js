@@ -9,12 +9,15 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const cacheService = require('./services/cacheService');
 const websocketService = require('./services/websocketService');
+const { sendError } = require('./utils/errors');
 
 // 导入路由
 const serviceRoutes = require('./routes/services');
 const buildRoutes = require('./routes/build');
 const logRoutes = require('./routes/logs');
 const progressRoutes = require('./routes/progress');
+const jobRoutes = require('./routes/jobs');
+const jobService = require('./services/jobService');
 
 const app = express();
 const server = http.createServer(app);
@@ -27,6 +30,7 @@ app.use('/api/services', serviceRoutes);
 app.use('/api/build', buildRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // 静态文件 - 生产环境提供 React 构建产物
 const publicPath = path.join(__dirname, '../frontend/dist');
@@ -194,11 +198,10 @@ npm run build
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   logger.broadcast(`[错误] ${err.message}`, 'system');
-  res.status(500).json({ 
-    success: false, 
-    error: process.env.NODE_ENV === 'production' 
-      ? '服务器内部错误' 
-      : err.message 
+  sendError(res, err, {
+    statusCode: 500,
+    code: 'INTERNAL_ERROR',
+    message: process.env.NODE_ENV === 'production' ? '服务器内部错误' : err.message
   });
 });
 
@@ -209,6 +212,19 @@ async function initServices() {
   
   // 初始化 WebSocket
   websocketService.init(server);
+
+  const recoveryResult = await jobService.recoverActiveJobs();
+  const recoveredJobs = recoveryResult.recoveredJobs || [];
+  const cleanedLocks = recoveryResult.cleanup?.cleanedLocks || [];
+  const cleanedRates = recoveryResult.cleanup?.cleanedRates || [];
+
+  if (recoveredJobs.length > 0) {
+    console.log(`恢复任务完成: ${recoveredJobs.length} 个`);
+  }
+
+  if (cleanedLocks.length > 0 || cleanedRates.length > 0) {
+    console.log(`恢复扫描清理完成: locks=${cleanedLocks.length}, rates=${cleanedRates.length}`);
+  }
   
   console.log('服务初始化完成');
 }

@@ -396,6 +396,126 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     return process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
   }
 
+  _resolveNpmCommand() {
+    if (process.env.npm_execpath && path.isAbsolute(process.env.npm_execpath)) {
+      return {
+        command: process.execPath,
+        argsPrefix: [process.env.npm_execpath]
+      };
+    }
+
+    return {
+      command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+      argsPrefix: []
+    };
+  }
+
+  _runCommand({ command, args, cwd, logType = 'service', serviceId = null, env = process.env, timeoutMs = 0 }) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(command, args, {
+        cwd,
+        detached: false,
+        env
+      });
+
+      let stderrOutput = '';
+      let settled = false;
+      let killTimer = null;
+
+      const finishResolve = (value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (killTimer) {
+          clearTimeout(killTimer);
+        }
+        resolve(value);
+      };
+
+      const finishReject = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (killTimer) {
+          clearTimeout(killTimer);
+        }
+        reject(error);
+      };
+
+      if (timeoutMs > 0) {
+        killTimer = setTimeout(() => {
+          try {
+            child.kill('SIGTERM');
+          } catch (error) {
+            // ignore kill failure
+          }
+
+          setTimeout(() => {
+            try {
+              child.kill('SIGKILL');
+            } catch (error) {
+              // ignore kill failure
+            }
+          }, 2000).unref?.();
+
+          const timeoutError = new Error(`命令执行超时: ${command} ${args.join(' ')}`);
+          timeoutError.code = 'COMMAND_TIMEOUT';
+          timeoutError.details = { command, args, cwd, timeoutMs };
+          finishReject(timeoutError);
+        }, timeoutMs);
+      }
+
+      child.stdout?.on('data', (raw) => {
+        logger.broadcast(raw.toString(), logType, serviceId);
+      });
+      child.stderr?.on('data', (raw) => {
+        const message = raw.toString();
+        stderrOutput += message;
+        logger.broadcast(message, logType, serviceId);
+      });
+      child.on('error', finishReject);
+      child.on('close', (code) => {
+        if (settled) {
+          return;
+        }
+
+        if (code === 0) {
+          finishResolve({ success: true });
+          return;
+        }
+
+        finishReject(new Error(stderrOutput || `命令执行失败: ${command} ${args.join(' ')}`));
+      });
+    });
+  }
+
+  async compileService(serviceId, serviceConfig, options = {}) {
+    const mavenCommand = this._resolveMavenCommand();
+    const compileArgs = ['-f', serviceConfig.pom, '-DskipTests', 'compile'];
+    logger.broadcast(`
+========== 编译 ${serviceConfig.name} ==========`, 'service', serviceId);
+    logger.broadcast(`执行命令: ${mavenCommand} ${compileArgs.join(' ')}`, 'service', serviceId);
+
+    await this._runCommand({
+      command: mavenCommand,
+      args: compileArgs,
+      cwd: this.projectRoot,
+      logType: 'service',
+      serviceId,
+      env: process.env,
+      timeoutMs: options.timeoutMs || 0
+    });
+
+    return {
+      success: true,
+      command: mavenCommand,
+      args: compileArgs,
+      cwd: this.projectRoot
+    };
+  }
+
   async start(serviceId, serviceConfig, options = {}) {
     const status = await this.getStatus(serviceId);
     if (status.running || this._isTransitionalPhase(status.phase)) {
@@ -758,8 +878,8 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     };
   }
 
-  async initBuild(moduleConfig) {
-    return buildProgressService.startBuild(moduleConfig);
+  async initBuild(moduleConfig, options = {}) {
+    return buildProgressService.startBuild(moduleConfig, options);
   }
 
   _getDependencyStateFile(frontendDir) {
@@ -910,13 +1030,14 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   async buildFrontend(moduleConfig, options = {}) {
-    const buildId = await this.initBuild(moduleConfig);
+    const buildId = await this.initBuild(moduleConfig, { jobId: options.jobId });
     return this.executeBuild(moduleConfig, buildId, options);
   }
 
   _runCommandWithProgress({ command, args, cwd, buildId, stepIndex, stepName, logType, detectMilestones = false }) {
     return new Promise((resolve, reject) => {
-      const child = spawn(command, args, {
+      const npmCommand = command === 'npm' ? this._resolveNpmCommand() : { command, argsPrefix: [] };
+      const child = spawn(npmCommand.command, [...npmCommand.argsPrefix, ...args], {
         cwd,
         detached: process.platform !== 'win32',
         env: process.env

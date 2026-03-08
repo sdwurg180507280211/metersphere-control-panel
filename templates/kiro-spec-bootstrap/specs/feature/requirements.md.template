@@ -1,0 +1,27 @@
+# __SPEC_NAME__ Requirements
+
+## Spec Metadata
+
+- 类型：Feature Spec
+- Workflow：__WORKFLOW__
+- 背景来源：__SOURCE_DOCS__
+
+## 背景
+
+- 用 2-4 句说明当前问题、现状和这次 spec 要解决的目标。
+
+## User Story 1 - __USER_STORY_NAME__
+
+### Requirement 1.1
+WHEN __CONDITION__
+THE SYSTEM SHALL __EXPECTED_BEHAVIOR__.
+
+### Requirement 1.2
+WHEN __CONDITION__
+THE SYSTEM SHALL __EXPECTED_BEHAVIOR__.
+
+## User Story 2 - __USER_STORY_NAME__
+
+### Requirement 2.1
+WHEN __CONDITION__
+THE SYSTEM SHALL __EXPECTED_BEHAVIOR__.

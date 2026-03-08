@@ -20,5 +20,6 @@ router.get('/:id/health', serviceController.healthCheck);
 router.post('/:id/start', serviceController.start);
 router.post('/:id/stop', serviceController.stop);
 router.post('/:id/restart', serviceController.restart);
+router.post('/:id/reload', serviceController.reload);
 
 module.exports = router;

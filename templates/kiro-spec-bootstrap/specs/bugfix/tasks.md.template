@@ -1,0 +1,20 @@
+# __SPEC_NAME__ Tasks
+
+## Phase 1 - Reproduce
+
+- [ ] 1.1 __TASK__
+
+## Phase 2 - Fix
+
+- [ ] 2.1 __TASK__
+- [ ] 2.2 __TASK__
+
+## Phase 3 - Regression Protection
+
+- [ ] 3.1 __TASK__
+- [ ] 3.2 __TASK__
+
+## Validation
+
+- [ ] V1 __VALIDATION_TASK__
+- [ ] V2 __VALIDATION_TASK__

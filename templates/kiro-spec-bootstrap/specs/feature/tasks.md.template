@@ -1,0 +1,30 @@
+# __SPEC_NAME__ Tasks
+
+## 说明
+
+- 本任务清单对应 `requirements.md` 与 `design.md`
+- 优先完成最小可用闭环，再逐步迁移旧能力
+
+## Phase 1 - 最小可用闭环
+
+- [ ] 1.1 __TASK__
+- [ ] 1.2 __TASK__
+- [ ] 1.3 __TASK__
+
+## Phase 2 - 迁移与扩展
+
+- [ ] 2.1 __TASK__
+- [ ] 2.2 __TASK__
+- [ ] 2.3 __TASK__
+
+## Phase 3 - 收敛与完善
+
+- [ ] 3.1 __TASK__
+- [ ] 3.2 __TASK__
+- [ ] 3.3 __TASK__
+
+## Validation
+
+- [ ] V1 __VALIDATION_TASK__
+- [ ] V2 __VALIDATION_TASK__
+- [ ] V3 __VALIDATION_TASK__

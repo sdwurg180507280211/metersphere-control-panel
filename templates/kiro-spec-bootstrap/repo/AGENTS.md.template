@@ -1,0 +1,40 @@
+# Repository Guidelines
+
+## Project Context
+
+- This repo is `__PROJECT_NAME__`.
+- Replace this section with a concise summary of what the repository does, its boundaries, and any sibling repos or systems that must not be changed accidentally.
+
+## Preferred Workflow
+
+- For non-trivial work, follow a lightweight Kiro-style flow: classify the work, clarify requirements or bugfix scope, then design, then implement.
+- For feature work, decide whether the task is `Requirements-First` or `Design-First` before coding.
+- For bugfix work, explicitly capture current incorrect behavior, expected behavior, and unchanged behavior that must continue working.
+- Keep tasks granular and traceable when breaking work into steps or implementation phases.
+- Do not force full spec ceremony for trivial edits, but keep the same reasoning discipline.
+
+## Repo Structure
+
+- Replace this section with the repo's main directories, core entrypoints, and ownership boundaries.
+
+## Conventions
+
+- Replace this section with backend / frontend / service / package / infrastructure conventions as appropriate.
+- Document which interfaces, schemas, event names, config files, or compatibility guarantees should be treated as stable.
+
+## Docs and Planning
+
+- Update user-facing docs when commands, architecture, or configuration change materially.
+- Add or update repository-specific planning docs when the task introduces operational rules, roadmap changes, or implementation plans.
+- Keep documentation concrete and repository-specific rather than generic.
+
+## Validation
+
+- Replace this section with the preferred build, test, lint, and run commands for the repo.
+- Prefer the narrowest useful validation command and avoid fixing unrelated issues.
+
+## Change Boundaries
+
+- Do not add dependencies unless they clearly fit the task and stack.
+- Do not rename stable APIs, config fields, schemas, or event names without a strong reason.
+- Favor root-cause fixes over superficial patches, but keep the patch set tight.

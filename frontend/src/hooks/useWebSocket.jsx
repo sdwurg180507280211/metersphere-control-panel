@@ -19,6 +19,8 @@ export function useWebSocket() {
   const appendServiceLogRef = useRef(useLogStore.getState().appendServiceLog)
   const appendBuildLogRef = useRef(useLogStore.getState().appendBuildLog)
   const updateBuildProgressRef = useRef(useBuildStore.getState().updateBuildProgress)
+  const fetchActiveBuildsRef = useRef(useBuildStore.getState().fetchActiveBuilds)
+  const fetchBuildHistoryRef = useRef(useBuildStore.getState().fetchBuildHistory)
   const updateServiceStatusRef = useRef(useServiceStore.getState().updateServiceStatus)
   const fetchServicesRef = useRef(useServiceStore.getState().fetchServices)
 
@@ -162,6 +164,64 @@ export function useWebSocket() {
     setTimeout(() => fetchServicesRef.current(), 500)
   }, [])
 
+  const handleJobEvent = useCallback((channel, job) => {
+    if (!job) return
+
+    const isServiceJob = typeof job.type === 'string' && job.type.startsWith('service.')
+    const isBuildJob = typeof job.type === 'string' && job.type.startsWith('frontend.build')
+    const isTerminal = channel === 'job:completed' || channel === 'job:failed'
+
+    if (isBuildJob) {
+      const buildId = job.buildId || job.metadata?.buildId || job.result?.buildId || job.jobId
+      if (channel === 'job:progress' && buildId) {
+        updateBuildProgressRef.current(buildId, {
+          jobId: job.jobId,
+          buildId,
+          status: job.status,
+          overallProgress: job.progress,
+          stepName: job.message,
+          stage: job.stage,
+          moduleId: job.targetId,
+          module: job.metadata?.moduleName || job.metadata?.moduleId || job.targetId,
+          error: job.error?.message || null
+        })
+      }
+
+      if (isTerminal) {
+        setTimeout(() => fetchActiveBuildsRef.current(), 300)
+        setTimeout(() => fetchBuildHistoryRef.current(), 300)
+        setTimeout(() => fetchServicesRef.current(), 500)
+      }
+    }
+
+    if (isServiceJob) {
+      if (channel === 'job:progress' && job.targetId) {
+        const phaseMap = {
+          prepare: 'starting',
+          compile: 'starting',
+          stop_old_process: job.type === 'service.stop' ? 'stopping' : 'restarting',
+          start_new_process: job.type === 'service.start' ? 'starting' : 'restarting',
+          health_check: 'checking_health',
+          compensation_start: 'restarting',
+          running_children: 'running_children'
+        }
+        updateServiceStatusRef.current(job.targetId, {
+          phase: phaseMap[job.stage] || 'processing'
+        })
+      }
+
+      if (isTerminal) {
+        setTimeout(() => fetchServicesRef.current(), 300)
+      }
+    }
+
+    if (job.type === 'service.batch.start' || job.type === 'service.batch.stop' || job.type === 'service.batch.restart') {
+      if (isTerminal) {
+        setTimeout(() => fetchServicesRef.current(), 300)
+      }
+    }
+  }, [])
+
   // 重启服务
   const restartService = async (serviceId, serviceName) => {
     try {
@@ -221,7 +281,7 @@ export function useWebSocket() {
 
         socket.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['logs:service', 'logs:build', 'build:progress', 'build:completed', 'build:batchCompleted', '*']
+          channels: ['logs:service', 'logs:build', 'build:progress', 'build:completed', 'build:batchCompleted', 'job:progress', 'job:completed', 'job:failed', '*']
         }))
 
         fetchServicesRef.current()
@@ -267,6 +327,11 @@ export function useWebSocket() {
                   break
                 case 'build:batchCompleted':
                   handleBatchBuildCompleted(data.data)
+                  break
+                case 'job:progress':
+                case 'job:completed':
+                case 'job:failed':
+                  handleJobEvent(data.channel, data.data)
                   break
                 default:
                   break

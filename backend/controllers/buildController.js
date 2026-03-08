@@ -6,43 +6,81 @@ const validator = require('../utils/validator');
 const config = require('../config');
 const logger = require('../utils/logger');
 const websocketService = require('../services/websocketService');
+const jobService = require('../services/jobService');
+const { createAppError, sendError } = require('../utils/errors');
 
 const buildController = {
-  /**
-   * 构建前端模块
-   * 
-   * 优化点：
-   * 1. 构建完成后不再直接重启服务，而是通过 WebSocket 通知前端
-   * 2. 前端收到通知后可以提示用户确认是否重启关联服务
-   * 3. 这样构建和服务管理解耦，用户有更多控制权
-   */
   async build(req, res) {
     try {
       const { module, forceInstall = false, autoRestart = false } = req.body;
 
       if (!validator.isValidModule(module)) {
-        return res.status(400).json({ success: false, error: '未知的模块' });
+        return sendError(res, createAppError(400, 'INVALID_MODULE_ID', '未知的模块', { moduleId: module }));
       }
 
       const moduleConfig = validator.getValidModule(module);
       const service = config.services[moduleConfig.serviceId];
-      const buildId = await processManager.initBuild(moduleConfig);
+      const resourceKey = `module:${moduleConfig.id}`;
 
-      res.json({ 
-        success: true, 
-        message: '构建任务已开始', 
+      await jobService.assertWritableRequestAllowed(resourceKey, {
+        moduleId: moduleConfig.id,
+        serviceId: moduleConfig.serviceId,
+        action: 'build'
+      });
+
+      const job = await jobService.createJob({
+        type: 'frontend.build',
+        targetType: 'module',
+        targetId: moduleConfig.id,
+        stage: 'prepare',
+        message: '准备前端构建任务',
+        metadata: {
+          moduleId: moduleConfig.id,
+          moduleName: moduleConfig.name,
+          serviceId: moduleConfig.serviceId,
+          autoRestart,
+          resourceKey
+        }
+      });
+
+      const lockResult = await jobService.acquireLock(resourceKey, job);
+      if (!lockResult.acquired) {
+        await jobService.deleteJob(job.jobId);
+        return sendError(res, createAppError(409, 'MODULE_BUSY', '模块正在处理中，请稍后再试', {
+          moduleId: moduleConfig.id,
+          lock: lockResult.lock
+        }));
+      }
+
+      await jobService.startJob(job.jobId, {
+        stage: 'prepare',
+        progress: 5,
+        message: '准备构建环境'
+      });
+
+      const buildId = await processManager.initBuild(moduleConfig, { jobId: job.jobId });
+      await jobService.updateJob(job.jobId, {
+        metadata: {
+          buildId
+        },
+        message: '构建任务已开始'
+      });
+
+      res.status(202).json({
+        success: true,
+        message: '构建任务已开始',
+        jobId: job.jobId,
         buildId,
         module: {
           id: moduleConfig.id,
           name: moduleConfig.name,
           serviceId: moduleConfig.serviceId
         },
-        // 返回关联服务信息，方便前端展示
         linkedService: service ? {
           id: moduleConfig.serviceId,
           name: service.name,
           port: service.port,
-          running: false // 将在构建完成后更新
+          running: false
         } : null
       });
 
@@ -51,7 +89,6 @@ const buildController = {
           return;
         }
 
-        // 构建成功后，获取服务最新状态
         let serviceStatus = null;
         if (service) {
           const status = await processManager.getStatus(moduleConfig.serviceId);
@@ -64,9 +101,9 @@ const buildController = {
           };
         }
 
-        // 通过 WebSocket 广播构建完成事件，而不是直接重启服务
         websocketService.broadcast('build:completed', {
           buildId,
+          jobId: job.jobId,
           module: {
             id: moduleConfig.id,
             name: moduleConfig.name,
@@ -74,16 +111,14 @@ const buildController = {
           },
           linkedService: serviceStatus,
           timestamp: new Date().toISOString(),
-          // 如果请求中指定了 autoRestart=true，则自动重启
           autoRestart: autoRestart && service !== undefined
         });
 
-        // 只有在显式指定 autoRestart=true 时才自动重启（向后兼容）
         if (autoRestart && service) {
           logger.broadcast(`\n========== 自动重启 ${service.name} 服务 ==========`, 'build');
           await processManager.restart(moduleConfig.serviceId, service, 2000);
         } else if (service) {
-          logger.broadcast(`\n========== 构建完成，服务待重启 ==========`, 'build');
+          logger.broadcast('\n========== 构建完成，服务待重启 ==========', 'build');
           logger.broadcast(`${moduleConfig.name} 前端构建成功，关联服务 ${service.name} 可以在服务管理页签中重启`, 'build');
         }
       }).catch((error) => {
@@ -91,34 +126,25 @@ const buildController = {
       });
     } catch (error) {
       logger.broadcast(`构建失败: ${error.message}`, 'build');
-      res.status(500).json({ success: false, error: error.message });
+      return sendError(res, error);
     }
   },
 
-  /**
-   * 批量构建多个模块
-   * 
-   * 优化点：
-   * 1. 支持构建完成后批量重启关联服务（可选）
-   * 2. 返回详细的构建结果和服务状态
-   */
   async buildBatch(req, res) {
     try {
       const { modules, forceInstall = false, autoRestart = false } = req.body;
 
       if (!Array.isArray(modules) || modules.length === 0) {
-        return res.status(400).json({ success: false, error: '请提供模块列表' });
+        return sendError(res, createAppError(400, 'INVALID_PARAMETER', '请提供模块列表'));
       }
 
       const invalidModules = modules.filter((item) => !validator.isValidModule(item));
       if (invalidModules.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: `无效的模块: ${invalidModules.join(', ')}`
-        });
+        return sendError(res, createAppError(400, 'INVALID_MODULE_ID', `无效的模块: ${invalidModules.join(', ')}`, {
+          invalidModules
+        }));
       }
 
-      // 收集关联的服务信息
       const linkedServices = modules
         .map((id) => {
           const moduleConfig = validator.getValidModule(id);
@@ -127,9 +153,33 @@ const buildController = {
         })
         .filter(Boolean);
 
-      res.json({ 
-        success: true, 
-        message: '批量构建任务已开始', 
+      const parentJob = await jobService.createJob({
+        type: 'frontend.build.batch',
+        targetType: 'batch',
+        targetId: 'frontend-modules',
+        stage: 'prepare',
+        message: '准备批量构建任务',
+        metadata: {
+          modules,
+          autoRestart
+        },
+        summary: {
+          total: modules.length,
+          succeeded: 0,
+          failed: 0,
+          running: modules.length
+        }
+      });
+      await jobService.startJob(parentJob.jobId, {
+        stage: 'prepare',
+        progress: 5,
+        message: '批量构建任务已开始'
+      });
+
+      res.status(202).json({
+        success: true,
+        message: '批量构建任务已开始',
+        jobId: parentJob.jobId,
         modules,
         linkedServices,
         autoRestart
@@ -137,41 +187,135 @@ const buildController = {
 
       const buildResults = [];
       const servicesToRestart = new Set();
+      const subJobs = [];
 
-      for (const moduleId of modules) {
+      for (let index = 0; index < modules.length; index += 1) {
+        const moduleId = modules[index];
         const moduleConfig = validator.getValidModule(moduleId);
-        const result = await processManager.buildFrontend(moduleConfig, { forceInstall });
-        
-        buildResults.push({
-          moduleId,
-          moduleName: moduleConfig.name,
-          ...result
-        });
-
-        if (result.success && !result.cancelled) {
-          const service = config.services[moduleConfig.serviceId];
-          if (service) {
-            servicesToRestart.add(moduleConfig.serviceId);
+        const resourceKey = `module:${moduleConfig.id}`;
+        const childJob = await jobService.createJob({
+          type: 'frontend.build',
+          targetType: 'module',
+          targetId: moduleConfig.id,
+          parentJobId: parentJob.jobId,
+          stage: 'prepare',
+          message: `准备构建 ${moduleConfig.name}`,
+          metadata: {
+            moduleId: moduleConfig.id,
+            moduleName: moduleConfig.name,
+            serviceId: moduleConfig.serviceId,
+            resourceKey
           }
-        } else if (!result.success && !result.cancelled) {
-          // 构建失败时停止后续构建
-          break;
+        });
+        subJobs.push(childJob.jobId);
+
+        try {
+          await jobService.assertWritableRequestAllowed(resourceKey, {
+            moduleId: moduleConfig.id,
+            serviceId: moduleConfig.serviceId,
+            action: 'build.batch'
+          });
+
+          const childLock = await jobService.acquireLock(resourceKey, childJob);
+          if (!childLock.acquired) {
+            await jobService.failJob(childJob.jobId, createAppError(409, 'MODULE_BUSY', '模块正在处理中，请稍后再试', {
+              moduleId: moduleConfig.id,
+              lock: childLock.lock
+            }), {
+              stage: 'failed'
+            });
+            buildResults.push({
+              moduleId,
+              moduleName: moduleConfig.name,
+              success: false,
+              error: '模块正在处理中，请稍后再试',
+              jobId: childJob.jobId
+            });
+            continue;
+          }
+
+          await jobService.startJob(childJob.jobId, {
+            stage: 'prepare',
+            progress: 5,
+            message: `开始构建 ${moduleConfig.name}`
+          });
+          await jobService.updateJob(parentJob.jobId, {
+            subJobs,
+            progress: Math.round((index / modules.length) * 100),
+            message: `正在构建 ${moduleConfig.name}`
+          });
+
+          const result = await processManager.buildFrontend(moduleConfig, {
+            forceInstall,
+            jobId: childJob.jobId
+          });
+
+          buildResults.push({
+            moduleId,
+            moduleName: moduleConfig.name,
+            ...result,
+            jobId: childJob.jobId
+          });
+
+          if (result.success && !result.cancelled) {
+            const service = config.services[moduleConfig.serviceId];
+            if (service) {
+              servicesToRestart.add(moduleConfig.serviceId);
+            }
+          }
+        } catch (error) {
+          await jobService.failJob(childJob.jobId, error, {
+            stage: 'failed'
+          });
+          buildResults.push({
+            moduleId,
+            moduleName: moduleConfig.name,
+            success: false,
+            error: error.message,
+            code: error.code || 'INTERNAL_ERROR',
+            jobId: childJob.jobId
+          });
         }
+
+        await jobService.updateJob(parentJob.jobId, {
+          summary: {
+            total: modules.length,
+            succeeded: buildResults.filter((item) => item.success && !item.cancelled).length,
+            failed: buildResults.filter((item) => !item.success && !item.cancelled).length,
+            running: Math.max(modules.length - index - 1, 0)
+          },
+          subJobs
+        });
       }
 
-      // 批量构建完成后，通知前端
+      const failedCount = buildResults.filter((item) => !item.success && !item.cancelled).length;
+      const successCount = buildResults.filter((item) => item.success && !item.cancelled).length;
+      const batchStatus = failedCount === 0
+        ? 'all_succeeded'
+        : successCount === 0
+          ? 'all_failed'
+          : 'partial_failed';
+
+      await jobService.completeJob(parentJob.jobId, {
+        results: buildResults,
+        servicesToRestart: Array.from(servicesToRestart)
+      }, {
+        status: batchStatus,
+        stage: 'completed',
+        message: '批量构建任务已完成'
+      });
+
       websocketService.broadcast('build:batchCompleted', {
+        jobId: parentJob.jobId,
         results: buildResults,
         servicesToRestart: Array.from(servicesToRestart),
         timestamp: new Date().toISOString(),
         autoRestart
       });
 
-      // 如果启用了自动重启，按启动顺序重启所有关联服务
       if (autoRestart && servicesToRestart.size > 0) {
-        logger.broadcast(`\n========== 自动重启关联服务 ==========`, 'build');
-        
-        // 按 startOrder 排序
+        logger.broadcast('\n========== 自动重启关联服务 ==========', 'build');
+
         const servicesToRestartSorted = Array.from(servicesToRestart)
           .map((id) => ({ id, ...config.services[id] }))
           .sort((a, b) => a.startOrder - b.startOrder);
@@ -185,12 +329,12 @@ const buildController = {
       logger.broadcast('\n========== 批量构建任务结束 ==========', 'build');
     } catch (error) {
       logger.broadcast(`批量构建失败: ${error.message}`, 'build');
+      if (!res.headersSent) {
+        return sendError(res, error);
+      }
     }
   },
 
-  /**
-   * 获取可构建的模块列表
-   */
   getModules(req, res) {
     res.json({ success: true, data: config.frontendModules });
   }

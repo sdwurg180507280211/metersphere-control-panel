@@ -10,7 +10,8 @@
 - 构建取消：支持真实取消 `npm install` / `npm run build` 子进程
 - 实时同步：以 WebSocket 为主通道推送服务状态、构建进度、构建日志、服务日志
 - 日志链路：前端日志使用行缓冲与虚拟滚动；服务端日志使用流式写盘
-- 缓存策略：默认使用内存缓存，Redis 仅作为显式启用的可选增强
+- 缓存策略：默认使用内存缓存，启用 Redis 后控制任务支持严格持久化、限流和恢复补写
+- 统一任务中心：服务控制与前端构建统一收敛到 `jobId`、`job:*` 事件和结构化错误响应
 
 ## 项目结构
 
@@ -114,14 +115,33 @@ MS_REDIS_PORT=6379
 MS_REDIS_PASSWORD=
 MS_REDIS_DB=0
 MS_CACHE_KEY_PREFIX=ms-panel:
+MS_JOB_REDIS_REQUIRED=true
+MS_JOB_RATE_LIMIT_WINDOW_SECONDS=30
 ```
 
 说明：
 
 - `MS_CACHE_MODE` 默认值为 `memory`
-- 未再内置任何默认敏感密码
-- 如果 Redis 连接失败，会自动降级回内存缓存
+- `MS_JOB_REDIS_REQUIRED` 未显式设置时，会在 `MS_CACHE_MODE=redis` 时默认开启
+- `MS_JOB_RATE_LIMIT_WINDOW_SECONDS` 默认值为 `30`，用于服务/模块级写操作限流窗口
+- Redis 启用且不可用时，新控制任务会直接返回 `503 REDIS_UNAVAILABLE`
+- Redis 在任务执行中短暂抖动时，活动任务状态会先落到内存恢复缓冲，并在 Redis 恢复后自动补写
 - 也支持从 `MS_PROPERTIES_PATH` 指定的 MeterSphere properties 文件读取 Redis 主机 / 端口 / 密码
+
+## 兼容迁移约定
+
+当前控制面板处于统一任务模型与旧前端协议并存阶段：
+
+- 写操作的主模型是 `jobId`、`/api/jobs/*` 与 `job:*` 事件
+- 构建页仍继续使用 `/api/progress/*`、`build:*` 事件与 `buildId` 兼容字段
+- 服务页仍继续使用 `service:status` 事件；同时前端已开始订阅 `job:*` 作为双栈兼容
+- `GET /api/jobs/:jobId`、`GET /api/jobs/active`、`GET /api/jobs/history/recent` 对构建任务会额外返回顶层 `buildId` 与 `compatibility` 信息，明确旧接口、旧事件和迁移模式
+
+推荐迁移顺序：
+
+1. 新能力优先接入 `jobs` 查询接口与 `job:*` 事件
+2. 构建领域在兼容期继续保留 `buildId` 与 `progress` 路由
+3. 旧调用方完成迁移后，再评估是否下线 `build:*` / `service:status` 的强依赖
 
 ## 实时通信机制
 
@@ -148,14 +168,17 @@ WebSocket 路径：`/ws`
 | --- | --- | --- |
 | GET | `/api/services/catalog` | 获取服务目录 |
 | GET | `/api/services/status` | 获取全部服务状态 |
-| POST | `/api/services/start-all` | 批量启动服务 |
-| POST | `/api/services/stop-all` | 批量停止服务 |
-| POST | `/api/services/restart-all` | 批量重启服务 |
+| POST | `/api/services/start-all` | 创建批量启动父任务，返回 `202 + jobId` |
+| POST | `/api/services/stop-all` | 创建批量停止父任务，返回 `202 + jobId` |
+| POST | `/api/services/restart-all` | 创建批量重启父任务，返回 `202 + jobId` |
 | GET | `/api/services/:id/status` | 获取单个服务状态 |
 | GET | `/api/services/:id/health` | 获取单个服务健康状态 |
 | POST | `/api/services/:id/start` | 启动单个服务 |
 | POST | `/api/services/:id/stop` | 停止单个服务 |
 | POST | `/api/services/:id/restart` | 重启单个服务 |
+| POST | `/api/services/:id/reload` | 触发服务 reload 任务 |
+
+批量服务操作现在会创建父任务和子任务：父任务汇总整体结果，子任务保留每个服务的真实执行结果；第一阶段不对已成功的子任务做隐式回滚。
 
 ### 构建管理
 
@@ -164,6 +187,15 @@ WebSocket 路径：`/ws`
 | GET | `/api/build/modules` | 获取可构建模块目录 |
 | POST | `/api/build/frontend` | 构建单个前端模块 |
 | POST | `/api/build/frontend/batch` | 批量构建多个模块 |
+
+### 任务查询
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/jobs/:jobId` | 获取统一任务详情 |
+| GET | `/api/jobs/active` | 获取活动任务列表 |
+| GET | `/api/jobs/history/recent` | 获取最近任务历史 |
+| POST | `/api/jobs/:jobId/cancel` | 取消支持取消的任务 |
 
 ### 构建进度
 

@@ -1,0 +1,25 @@
+# __SPEC_NAME__ Bugfix
+
+## Spec Metadata
+
+- 类型：Bugfix Spec
+- 背景来源：__SOURCE_DOCS__
+
+## Current Behavior
+
+WHEN __CONDITION__
+THEN the system __INCORRECT_BEHAVIOR__.
+
+## Expected Behavior
+
+WHEN __CONDITION__
+THEN the system SHALL __CORRECT_BEHAVIOR__.
+
+## Unchanged Behavior
+
+WHEN __CONDITION__
+THEN the system SHALL CONTINUE TO __PRESERVED_BEHAVIOR__.
+
+## Notes
+
+- 写明复现步骤、影响范围、不能改动的边界。

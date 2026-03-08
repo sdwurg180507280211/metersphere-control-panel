@@ -10,10 +10,45 @@ class BuildProgressService {
     this.activeBuilds = new Map();
   }
 
-  async startBuild(moduleConfig) {
+  _computeOverallProgress(build) {
+    if (build.status === 'success') {
+      return 100;
+    }
+
+    return Math.round((build.currentStep / build.steps.length) * 100 + ((build.steps[build.currentStep]?.progress || 0) / build.steps.length));
+  }
+
+  _resolveJobStage(build, stepIndex) {
+    const stageMap = {
+      0: 'prepare',
+      1: 'install_dependencies',
+      2: 'build_assets',
+      3: 'copy_assets',
+      4: 'finalize'
+    };
+
+    return stageMap[stepIndex] || 'running';
+  }
+
+  async _syncJobProgress(build, log = '') {
+    if (!build.jobId) {
+      return;
+    }
+
+    const jobService = require('./jobService');
+    await jobService.updateJob(build.jobId, {
+      status: build.status === 'running' ? 'running' : build.status,
+      stage: this._resolveJobStage(build, build.currentStep),
+      progress: this._computeOverallProgress(build),
+      message: log || build.steps[build.currentStep]?.name || build.module
+    });
+  }
+
+  async startBuild(moduleConfig, options = {}) {
     const buildId = uuidv4();
     const buildInfo = {
       id: buildId,
+      jobId: options.jobId || null,
       moduleId: moduleConfig.id,
       module: moduleConfig.name,
       serviceId: moduleConfig.serviceId,
@@ -63,11 +98,13 @@ class BuildProgressService {
       totalSteps: build.steps.length,
       stepName: build.steps[stepIndex].name,
       stepProgress: progress,
-      overallProgress: Math.round((stepIndex / build.steps.length) * 100 + (progress / build.steps.length)),
-      log
+      overallProgress: this._computeOverallProgress(build),
+      log,
+      jobId: build.jobId
     });
 
     await cacheService.set(`build:${buildId}`, build, 3600);
+    await this._syncJobProgress(build, log);
   }
 
   async completeBuild(buildId, success, error = null) {
@@ -99,12 +136,14 @@ class BuildProgressService {
       stepName: build.steps[build.currentStep]?.name,
       overallProgress: success ? 100 : Math.round((build.currentStep / build.steps.length) * 100),
       duration: build.duration,
-      error
+      error,
+      jobId: build.jobId
     });
 
     await cacheService.set(`build:${buildId}`, build, 3600);
     await cacheService.pushToList('build:history', {
       id: build.id,
+      jobId: build.jobId,
       moduleId: build.moduleId,
       module: build.module,
       status: build.status,
@@ -113,6 +152,31 @@ class BuildProgressService {
       duration: build.duration,
       error: build.error
     }, 50);
+
+    if (build.jobId) {
+      const jobService = require('./jobService');
+      if (success) {
+        await jobService.completeJob(build.jobId, {
+          buildId: build.id,
+          moduleId: build.moduleId,
+          module: build.module
+        }, {
+          stage: 'completed',
+          message: '前端构建完成'
+        });
+      } else {
+        await jobService.failJob(build.jobId, {
+          code: 'BUILD_FAILED',
+          message: error || '前端构建失败',
+          details: {
+            buildId: build.id,
+            moduleId: build.moduleId
+          }
+        }, {
+          stage: 'failed'
+        });
+      }
+    }
 
     this._scheduleCleanup(buildId);
     return build;
@@ -141,12 +205,14 @@ class BuildProgressService {
       stepName: currentStep?.name,
       overallProgress: Math.round((build.currentStep / build.steps.length) * 100),
       duration: build.duration,
-      error: reason
+      error: reason,
+      jobId: build.jobId
     });
 
     await cacheService.set(`build:${buildId}`, build, 3600);
     await cacheService.pushToList('build:history', {
       id: build.id,
+      jobId: build.jobId,
       moduleId: build.moduleId,
       module: build.module,
       status: build.status,
@@ -155,6 +221,22 @@ class BuildProgressService {
       duration: build.duration,
       error: build.error
     }, 50);
+
+    if (build.jobId) {
+      const jobService = require('./jobService');
+      await jobService.failJob(build.jobId, {
+        code: 'BUILD_CANCELLED',
+        message: reason,
+        details: {
+          buildId,
+          moduleId: build.moduleId
+        }
+      }, {
+        status: 'cancelled',
+        stage: 'cancelled',
+        message: reason
+      });
+    }
 
     this._scheduleCleanup(buildId);
     return true;
@@ -178,6 +260,7 @@ class BuildProgressService {
   getActiveBuilds() {
     return Array.from(this.activeBuilds.values()).map((build) => ({
       id: build.id,
+      jobId: build.jobId,
       module: build.module,
       moduleId: build.moduleId,
       status: build.status,

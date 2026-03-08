@@ -1,0 +1,17 @@
+# __SPEC_NAME__ Design
+
+## 1. Root Cause
+
+- 说明根因假设与代码路径。
+
+## 2. Fix Strategy
+
+- 说明修复方式、范围边界和不改什么。
+
+## 3. Validation Strategy
+
+- 说明如何验证 bug 可复现、修复有效、周边行为不回归。
+
+## 4. Files to Change
+
+- 列出预计修改文件。

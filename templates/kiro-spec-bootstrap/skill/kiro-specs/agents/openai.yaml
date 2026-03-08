@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kiro Specs"
+  short_description: "Kiro specs workflow for features and bugfixes"
+  default_prompt: "Use $kiro-specs to structure this work as a Kiro-style spec."

@@ -2,6 +2,7 @@
  * 健康检查服务
  */
 const http = require('http');
+const net = require('net');
 const config = require('../config');
 
 class HealthChecker {
@@ -40,22 +41,18 @@ class HealthChecker {
   }
 
   _getErrorMessage(statusCode, payload, defaultError) {
-    // 服务返回 500 系列错误，说明服务已启动但内部异常
     if (statusCode >= 500 && statusCode < 600) {
       return `服务内部错误 (HTTP ${statusCode})，请检查服务日志`;
     }
-    
-    // 服务返回 404，可能是健康检查端点配置错误
+
     if (statusCode === 404) {
-      return `健康检查端点不存在 (HTTP 404)，请检查配置`;
+      return '健康检查端点不存在 (HTTP 404)，请检查配置';
     }
-    
-    // 服务返回 401/403，可能是权限问题
+
     if (statusCode === 401 || statusCode === 403) {
       return `健康检查权限不足 (HTTP ${statusCode})`;
     }
-    
-    // 有错误信息从响应体中解析
+
     if (payload && typeof payload === 'object') {
       if (payload.error) {
         return payload.error;
@@ -67,17 +64,83 @@ class HealthChecker {
         return `服务状态: ${payload.status}`;
       }
     }
-    
+
     return defaultError;
+  }
+
+  _classifyFailure(result) {
+    if (result.healthy) {
+      return { retriable: false, failureCode: null, terminal: false };
+    }
+
+    if (result.statusCode === 404) {
+      return { retriable: false, failureCode: 'HEALTH_ENDPOINT_NOT_FOUND', terminal: true };
+    }
+
+    if (result.statusCode === 401 || result.statusCode === 403) {
+      return { retriable: false, failureCode: 'HEALTH_CHECK_UNAUTHORIZED', terminal: true };
+    }
+
+    if (result.statusCode >= 400 && result.statusCode < 500) {
+      return { retriable: false, failureCode: 'HEALTH_CHECK_FAILED', terminal: true };
+    }
+
+    if (result.error === '连接失败' || result.error === '超时') {
+      return { retriable: true, failureCode: 'HEALTH_CHECK_TIMEOUT', terminal: false };
+    }
+
+    if (result.statusCode >= 500 && result.statusCode < 600) {
+      return { retriable: true, failureCode: 'HEALTH_CHECK_FAILED', terminal: false };
+    }
+
+    return { retriable: true, failureCode: 'HEALTH_CHECK_FAILED', terminal: false };
+  }
+
+  _probePort(port, host = 'localhost', timeout = this.timeout) {
+    return new Promise((resolve) => {
+      const socket = new net.Socket();
+      let settled = false;
+
+      const finish = (payload) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        socket.destroy();
+        resolve(payload);
+      };
+
+      socket.setTimeout(timeout);
+      socket.once('connect', () => finish({ healthy: true, mode: 'port', statusCode: 200, details: { port } }));
+      socket.once('timeout', () => finish({ healthy: false, mode: 'port', error: '超时', details: { port } }));
+      socket.once('error', () => finish({ healthy: false, mode: 'port', error: '连接失败', details: { port } }));
+      socket.connect(port, host);
+    });
   }
 
   /**
    * 检查服务健康状态
    */
-  check(serviceId) {
+  async check(serviceId) {
     const service = config.services[serviceId];
     if (!service) {
-      return Promise.resolve({ healthy: false, error: '服务不存在' });
+      return { healthy: false, error: '服务不存在', failureCode: 'SERVICE_NOT_FOUND', terminal: true };
+    }
+
+    const healthPath = service.healthCheck || '/actuator/health';
+    const healthPort = service.healthCheckPort || service.port;
+
+    if (!service.healthCheck) {
+      const portProbe = await this._probePort(healthPort);
+      const classified = this._classifyFailure(portProbe);
+      return {
+        ...portProbe,
+        service: serviceId,
+        failureCode: classified.failureCode,
+        retriable: classified.retriable,
+        terminal: classified.terminal,
+        mode: 'port'
+      };
     }
 
     return new Promise((resolve) => {
@@ -85,8 +148,8 @@ class HealthChecker {
 
       const options = {
         host: 'localhost',
-        port: service.healthCheckPort || service.port,
-        path: service.healthCheck || '/',
+        port: healthPort,
+        path: healthPath,
         timeout: this.timeout
       };
 
@@ -107,17 +170,27 @@ class HealthChecker {
           const payload = this._parseHealthBody(body);
           const healthy = this._isHealthyResponse(res.statusCode, payload);
           const error = healthy ? null : this._getErrorMessage(
-            res.statusCode, 
-            payload, 
+            res.statusCode,
+            payload,
             res.statusCode === 200 ? '服务未就绪' : `HTTP ${res.statusCode}`
           );
-          
-          resolve({
+          const base = {
             healthy,
             statusCode: res.statusCode,
             service: serviceId,
             details: payload,
-            error
+            error,
+            mode: 'http',
+            path: healthPath,
+            port: healthPort
+          };
+          const classified = this._classifyFailure(base);
+
+          resolve({
+            ...base,
+            failureCode: classified.failureCode,
+            retriable: classified.retriable,
+            terminal: classified.terminal
           });
         });
       });
@@ -125,7 +198,21 @@ class HealthChecker {
       req.on('error', () => {
         if (!responded) {
           responded = true;
-          resolve({ healthy: false, error: '连接失败', service: serviceId });
+          const base = {
+            healthy: false,
+            error: '连接失败',
+            service: serviceId,
+            mode: 'http',
+            path: healthPath,
+            port: healthPort
+          };
+          const classified = this._classifyFailure(base);
+          resolve({
+            ...base,
+            failureCode: classified.failureCode,
+            retriable: classified.retriable,
+            terminal: classified.terminal
+          });
         }
       });
 
@@ -133,7 +220,21 @@ class HealthChecker {
         req.destroy();
         if (!responded) {
           responded = true;
-          resolve({ healthy: false, error: '超时', service: serviceId });
+          const base = {
+            healthy: false,
+            error: '超时',
+            service: serviceId,
+            mode: 'http',
+            path: healthPath,
+            port: healthPort
+          };
+          const classified = this._classifyFailure(base);
+          resolve({
+            ...base,
+            failureCode: classified.failureCode,
+            retriable: classified.retriable,
+            terminal: classified.terminal
+          });
         }
       });
     });
@@ -160,14 +261,18 @@ class HealthChecker {
       results[serviceId] = {
         healthy: false,
         service: serviceId,
-        error: entry.reason?.message || '健康检查失败'
+        error: entry.reason?.message || '健康检查失败',
+        failureCode: 'HEALTH_CHECK_FAILED',
+        retriable: true,
+        terminal: false
       };
       return results;
     }, {});
   }
 
   async waitForHealthy(serviceId, options = {}) {
-    const timeout = options.timeout ?? this.waitTimeout;
+    const deadlineAt = options.deadlineAt || (Date.now() + (options.timeout ?? this.waitTimeout));
+    const timeout = Math.max(1, Math.min(options.timeout ?? this.waitTimeout, deadlineAt - Date.now()));
     const interval = options.interval ?? this.waitInterval;
     const initialDelay = options.initialDelay ?? 0;
     const deadline = Date.now() + timeout;
@@ -190,6 +295,17 @@ class HealthChecker {
         };
       }
 
+      if (lastResult.terminal || lastResult.retriable === false) {
+        return {
+          ...lastResult,
+          healthy: false,
+          attempts,
+          durationMs: timeout - Math.max(deadline - Date.now(), 0),
+          timedOut: false,
+          terminal: true
+        };
+      }
+
       if (Date.now() + interval > deadline) {
         break;
       }
@@ -205,7 +321,13 @@ class HealthChecker {
       details: lastResult?.details,
       attempts,
       durationMs: timeout,
-      timedOut: true
+      timedOut: true,
+      terminal: false,
+      failureCode: lastResult?.failureCode || 'HEALTH_CHECK_TIMEOUT',
+      retriable: true,
+      mode: lastResult?.mode,
+      path: lastResult?.path,
+      port: lastResult?.port
     };
   }
 }
