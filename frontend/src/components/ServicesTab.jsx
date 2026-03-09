@@ -4,6 +4,7 @@ import { useServiceStore, useWebSocketStore, useLogStore } from '../store/useApp
 import LogViewer from './LogViewer'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
+import PasswordDialog from './PasswordDialog'
 import Tooltip from './Tooltip'
 import { ServiceCardSkeleton } from './Skeleton'
 import './ServicesTab.css'
@@ -88,6 +89,12 @@ function ServicesTab({ searchInputRef }) {
     action: '', 
     title: '', 
     message: '' 
+  })
+  const [reloadDialog, setReloadDialog] = useState({
+    isOpen: false,
+    password: '',
+    error: '',
+    loading: false
   })
 
   useEffect(() => {
@@ -180,6 +187,67 @@ function ServicesTab({ searchInputRef }) {
       setTimeout(() => setLoading(serviceId, false), 2000)
     }
   }, [services, setLoading, updateServiceStatus])
+
+  const openSystemReloadDialog = useCallback(() => {
+    setReloadDialog({
+      isOpen: true,
+      password: '',
+      error: '',
+      loading: false
+    })
+  }, [])
+
+  const closeSystemReloadDialog = useCallback(() => {
+    setReloadDialog((prev) => (prev.loading ? prev : {
+      isOpen: false,
+      password: '',
+      error: '',
+      loading: false
+    }))
+  }, [])
+
+  const confirmSystemReload = useCallback(async () => {
+    if (!reloadDialog.password) {
+      setReloadDialog((prev) => ({ ...prev, error: '请输入管理员密码' }))
+      return
+    }
+
+    setReloadDialog((prev) => ({ ...prev, loading: true, error: '' }))
+
+    try {
+      const response = await fetch('/api/services/system/reload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: reloadDialog.password })
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success(data.message || 'msctl reload 执行成功', { icon: '⚙️' })
+        setReloadDialog({
+          isOpen: false,
+          password: '',
+          error: '',
+          loading: false
+        })
+
+        if (!connected) {
+          setTimeout(fetchServices, 2000)
+        }
+        return
+      }
+
+      const message = data?.error?.message || 'msctl reload 执行失败'
+      setReloadDialog((prev) => ({ ...prev, loading: false, error: message }))
+      toast.error(message)
+    } catch (error) {
+      const message = `网络错误: ${error.message}`
+      setReloadDialog((prev) => ({ ...prev, loading: false, error: message }))
+      toast.error(message)
+    }
+  }, [connected, fetchServices, reloadDialog.password])
 
   const handleBatchAction = useCallback((action) => {
     const actionLabels = {
@@ -283,6 +351,12 @@ function ServicesTab({ searchInputRef }) {
             <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
           </h2>
           <div className="batch-actions">
+            <Tooltip content="执行 sudo msctl reload" position="bottom">
+              <button className="btn-batch btn-system-reload" onClick={openSystemReloadDialog}>
+                <span className="btn-icon-text">⚙️</span>
+                系统 Reload
+              </button>
+            </Tooltip>
             <Tooltip content="启动所有服务" position="bottom">
               <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
                 <span className="btn-icon-text">🚀</span>
@@ -337,6 +411,18 @@ function ServicesTab({ searchInputRef }) {
         type={confirmDialog.action === 'stop' ? 'danger' : 'warning'}
         onConfirm={confirmBatchAction}
         onCancel={() => setConfirmDialog({ isOpen: false, action: '', title: '', message: '' })}
+      />
+
+      <PasswordDialog
+        isOpen={reloadDialog.isOpen}
+        title="执行系统 Reload"
+        description="请输入管理员密码后执行 sudo msctl reload。"
+        value={reloadDialog.password}
+        error={reloadDialog.error}
+        loading={reloadDialog.loading}
+        onChange={(password) => setReloadDialog((prev) => ({ ...prev, password, error: '' }))}
+        onConfirm={confirmSystemReload}
+        onCancel={closeSystemReloadDialog}
       />
     </div>
   )

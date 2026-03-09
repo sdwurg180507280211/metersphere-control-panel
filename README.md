@@ -5,6 +5,7 @@
 ## 当前能力
 
 - 服务控制：单服务启动、停止、重启，批量启动 / 停止 / 重启
+- 系统命令：服务页支持手动触发 `msctl reload`，并在弹窗中输入管理员密码
 - 批量编排：批量启动按健康检查顺序推进，失败时自动回滚本次已启动的服务
 - 前端构建：支持单模块 / 批量模块构建，构建完成后自动重启对应服务
 - 构建取消：支持真实取消 `npm install` / `npm run build` 子进程
@@ -55,6 +56,8 @@ npm run install:all
 ```bash
 npm run dev
 ```
+
+启动前会自动执行 `node scripts/clean-port.js 3000 5000`，用于清理默认端口占用。
 
 开发模式职责：
 
@@ -171,6 +174,7 @@ WebSocket 路径：`/ws`
 | POST | `/api/services/start-all` | 创建批量启动父任务，返回 `202 + jobId` |
 | POST | `/api/services/stop-all` | 创建批量停止父任务，返回 `202 + jobId` |
 | POST | `/api/services/restart-all` | 创建批量重启父任务，返回 `202 + jobId` |
+| POST | `/api/services/system/reload` | 执行 `sudo msctl reload`，请求体需携带管理员密码 |
 | GET | `/api/services/:id/status` | 获取单个服务状态 |
 | GET | `/api/services/:id/health` | 获取单个服务健康状态 |
 | POST | `/api/services/:id/start` | 启动单个服务 |

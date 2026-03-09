@@ -7,6 +7,7 @@ const validator = require('../utils/validator');
 const logger = require('../utils/logger');
 const config = require('../config');
 const serviceTaskService = require('../services/serviceTaskService');
+const systemCommandService = require('../services/systemCommandService');
 const { createAppError, sendError } = require('../utils/errors');
 
 async function enqueueServiceTask(res, taskFn, actionLabel) {
@@ -110,6 +111,24 @@ const serviceController = {
 
   async restartAll(req, res) {
     return enqueueServiceTask(res, () => serviceTaskService.restartAllServices(), '批量重启服务');
+  },
+
+  async systemReload(req, res) {
+    try {
+      const { password } = req.body || {};
+      if (typeof password !== 'string' || password.length === 0) {
+        return sendError(res, createAppError(400, 'SUDO_PASSWORD_REQUIRED', '请输入管理员密码'));
+      }
+
+      await systemCommandService.reloadMsctl(password);
+      return res.json({
+        success: true,
+        message: 'msctl reload 执行成功'
+      });
+    } catch (error) {
+      logger.broadcast(`系统 reload 失败: ${error.message}`, 'service');
+      return sendError(res, error);
+    }
   }
 };
 

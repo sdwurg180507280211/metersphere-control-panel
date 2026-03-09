@@ -14,6 +14,9 @@ router.post('/start-all', serviceController.startAll);
 router.post('/stop-all', serviceController.stopAll);
 router.post('/restart-all', serviceController.restartAll);
 
+// 系统命令
+router.post('/system/reload', serviceController.systemReload);
+
 // 单个服务操作
 router.get('/:id/status', serviceController.getStatus);
 router.get('/:id/health', serviceController.healthCheck);
