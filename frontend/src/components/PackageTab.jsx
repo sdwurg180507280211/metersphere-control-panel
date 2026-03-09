@@ -51,16 +51,19 @@ function PackageTab({ searchInputRef }) {
       setParallelBuild(source.parallelBuild ?? FALLBACK_DEFAULTS.parallelBuild)
       setMaxJobs(source.maxJobs ?? FALLBACK_DEFAULTS.maxJobs)
     }
-  }, [options?.defaults, currentTask?.jobId])
+  }, [options?.defaults, currentTask?.jobId, currentTask?.metadata])
 
   const defaults = options?.defaults || FALLBACK_DEFAULTS
   const services = options?.services || []
   const isRunning = ['pending', 'running'].includes(currentTask?.status)
   const scriptInfo = options?.script || null
+  const canStart = !isRunning && !optionsLoading && !activeLoading && scriptInfo?.valid !== false
   const selectedServiceNames = useMemo(() => {
     const serviceMap = new Map(services.map((item) => [item.id, item.name]))
     return selectedServices.map((item) => serviceMap.get(item) || item)
   }, [selectedServices, services])
+  const currentStatus = normalizeStatus(currentTask?.status)
+  const currentStatusText = renderStatusText(currentTask?.status)
 
   const handleToggleService = (serviceId) => {
     if (isRunning) {
@@ -100,178 +103,232 @@ function PackageTab({ searchInputRef }) {
 
   return (
     <div className="package-tab">
-      <section className="package-control">
-        <div className="package-control-header">
-          <div>
-            <h3 className="section-title">📦 打包配置</h3>
-            <p className="package-subtitle">执行外部 `metersphere-build.sh`，参数语义保持与人工命令一致。</p>
+      <div className="package-hero">
+        <section className="package-main-card">
+          <div className="package-main-header">
+            <div>
+              <h3 className="section-title">📦 打包配置</h3>
+              <p className="package-subtitle">执行外部 `metersphere-build.sh`，参数语义保持与人工命令一致。</p>
+            </div>
+            <div className="package-header-pills">
+              <span className="package-pill">{services.length} 个服务</span>
+              <span className="package-pill package-pill-accent">默认镜像 {defaults.imageVersion}</span>
+            </div>
           </div>
-          <div className="package-header-actions">
-            {isRunning && (
-              <span className="package-running-indicator">
-                <span className="pulse-dot" /> 运行中
-              </span>
-            )}
+
+          {!scriptInfo?.valid && (
+            <div className="package-warning">
+              <strong>脚本不可用：</strong>
+              <span>{scriptInfo?.error || '未找到打包脚本'}</span>
+            </div>
+          )}
+
+          <div className="package-service-card">
+            <div className="package-block-header">
+              <div>
+                <div className="package-block-title">目标服务</div>
+                <div className="package-block-desc">显式选择脚本位置参数，空选择不会触发全量打包。</div>
+              </div>
+              <span className="package-selection-count">已选 {selectedServices.length}</span>
+            </div>
+
+            <div className="package-selected-chips">
+              {selectedServiceNames.length > 0 ? selectedServiceNames.map((name, index) => (
+                <span key={`${name}-${index}`} className="package-chip">{name}</span>
+              )) : (
+                <span className="package-chip package-chip-muted">请选择至少一个服务</span>
+              )}
+            </div>
+
+            <div className="package-service-list">
+              {services.map((service) => {
+                const checked = selectedServices.includes(service.id)
+                return (
+                  <label key={service.id} className={`package-service-item ${checked ? 'checked' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleService(service.id)}
+                      disabled={isRunning}
+                    />
+                    <span className="package-service-content">
+                      <span className="package-service-name">{service.name}</span>
+                      <span className="package-service-id">{service.id}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="package-params-grid">
+            <div className="package-field">
+              <label className="package-label" htmlFor="package-max-jobs">线程数 (`MAX_JOBS`)</label>
+              <input
+                id="package-max-jobs"
+                className="package-input"
+                type="number"
+                min="1"
+                max="64"
+                value={maxJobs}
+                disabled={isRunning}
+                onChange={(event) => setMaxJobs(event.target.value)}
+              />
+              <p className="package-field-tip">建议按机器性能设置，默认 4。</p>
+            </div>
+
+            <div className="package-field package-field-large">
+              <label className="package-label" htmlFor="package-image-version">镜像版本 (`IMAGE_VERSION`)</label>
+              <input
+                id="package-image-version"
+                className="package-input"
+                type="text"
+                list="package-image-versions"
+                value={imageVersion}
+                disabled={isRunning}
+                onChange={(event) => setImageVersion(event.target.value)}
+                placeholder={defaults.imageVersion}
+              />
+              <datalist id="package-image-versions">
+                {recentImageVersions.map((item) => (
+                  <option key={item} value={item} />
+                ))}
+              </datalist>
+              {recentImageVersions.length > 0 && (
+                <div className="package-recent-list">
+                  {recentImageVersions.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`package-recent-item ${item === imageVersion ? 'active' : ''}`}
+                      onClick={() => setImageVersion(item)}
+                      disabled={isRunning}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="package-field">
+              <label className="package-label">并行构建 (`PARALLEL_BUILD`)</label>
+              <label className={`package-switch ${parallelBuild ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={parallelBuild}
+                  disabled={isRunning}
+                  onChange={(event) => setParallelBuild(event.target.checked)}
+                />
+                <span className="package-switch-text">{parallelBuild ? '已开启' : '已关闭'}</span>
+              </label>
+              <p className="package-field-tip">开启后速度更快，但更占机器资源。</p>
+            </div>
+          </div>
+        </section>
+
+        <aside className="package-side-panel">
+          <section className="package-action-card">
+            <div className="package-block-header compact">
+              <div>
+                <div className="package-block-title">执行面板</div>
+                <div className="package-block-desc">确认参数后发起整体验证打包。</div>
+              </div>
+              {isRunning && (
+                <span className="package-running-indicator">
+                  <span className="pulse-dot" /> 运行中
+                </span>
+              )}
+            </div>
+
             <button
-              className="module-btn btn-ripple"
+              className="package-primary-btn"
               onClick={handleSubmit}
-              disabled={isRunning || optionsLoading || activeLoading}
+              disabled={!canStart}
             >
               {isRunning ? '⏳ 打包中...' : '▶️ 开始打包'}
             </button>
-          </div>
-        </div>
 
-        {!scriptInfo?.valid && (
-          <div className="package-warning">
-            <strong>脚本不可用：</strong>
-            <span>{scriptInfo?.error || '未找到打包脚本'}</span>
-          </div>
-        )}
-
-        <div className="package-form-grid">
-          <div className="package-field package-field-wide">
-            <label className="package-label">目标服务</label>
-            <div className="package-service-panel">
-              <div className="package-selected-summary">
-                {selectedServiceNames.length > 0 ? selectedServiceNames.join('、') : '请选择至少一个服务'}
+            <div className="package-summary-card">
+              <div className="package-summary-item">
+                <span className="package-summary-label">本次服务</span>
+                <strong>{selectedServices.join(', ') || defaults.services.join(', ')}</strong>
               </div>
-              <div className="package-service-list">
-                {services.map((service) => {
-                  const checked = selectedServices.includes(service.id)
-                  return (
-                    <label key={service.id} className={`package-service-item ${checked ? 'checked' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => handleToggleService(service.id)}
-                        disabled={isRunning}
-                      />
-                      <span className="package-service-name">{service.name}</span>
-                      <span className="package-service-id">{service.id}</span>
-                    </label>
-                  )
-                })}
+              <div className="package-summary-item">
+                <span className="package-summary-label">镜像版本</span>
+                <strong>{imageVersion || defaults.imageVersion}</strong>
+              </div>
+              <div className="package-summary-item">
+                <span className="package-summary-label">线程数</span>
+                <strong>{maxJobs}</strong>
+              </div>
+              <div className="package-summary-item">
+                <span className="package-summary-label">构建模式</span>
+                <strong>{parallelBuild ? '并行' : '串行'}</strong>
               </div>
             </div>
-            <p className="package-hint">默认必须显式选择服务；空选择不会触发全量打包。</p>
-          </div>
 
-          <div className="package-field">
-            <label className="package-label" htmlFor="package-max-jobs">线程数 (`MAX_JOBS`)</label>
-            <input
-              id="package-max-jobs"
-              className="package-input"
-              type="number"
-              min="1"
-              max="64"
-              value={maxJobs}
-              disabled={isRunning}
-              onChange={(event) => setMaxJobs(event.target.value)}
-            />
-          </div>
+            <div className="package-inline-note">
+              <span className="package-inline-label">脚本路径</span>
+              <code className="package-inline-code">{scriptInfo?.resolvedPath || '未解析'}</code>
+            </div>
+          </section>
 
-          <div className="package-field">
-            <label className="package-label" htmlFor="package-image-version">镜像版本 (`IMAGE_VERSION`)</label>
-            <input
-              id="package-image-version"
-              className="package-input"
-              type="text"
-              list="package-image-versions"
-              value={imageVersion}
-              disabled={isRunning}
-              onChange={(event) => setImageVersion(event.target.value)}
-              placeholder={defaults.imageVersion}
-            />
-            <datalist id="package-image-versions">
-              {recentImageVersions.map((item) => (
-                <option key={item} value={item} />
-              ))}
-            </datalist>
-            {recentImageVersions.length > 0 && (
-              <div className="package-recent-list">
-                {recentImageVersions.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className="package-recent-item"
-                    onClick={() => setImageVersion(item)}
-                    disabled={isRunning}
-                  >
-                    {item}
-                  </button>
-                ))}
+          <section className="package-status-section">
+            <div className="package-block-header compact">
+              <div>
+                <div className="package-block-title">📡 任务状态</div>
+                <div className="package-block-desc">状态、心跳、退出码都在这里。</div>
+              </div>
+              <span className={`package-status-badge status-${currentStatus}`}>{currentStatusText}</span>
+            </div>
+
+            {currentTask ? (
+              <div className="package-status-card">
+                <div className="package-status-highlight">{currentTask.message || '等待日志输出'}</div>
+                <div className="package-status-meta-grid">
+                  <div className="package-status-meta-item">
+                    <span>服务</span>
+                    <strong>{currentTask.metadata?.services?.join(', ') || '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>镜像版本</span>
+                    <strong>{currentTask.metadata?.imageVersion || '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>线程数</span>
+                    <strong>{currentTask.metadata?.maxJobs ?? '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>最近心跳</span>
+                    <strong>{formatDateTime(currentTask.metadata?.lastHeartbeatAt)}</strong>
+                  </div>
+                  {currentTask.result?.exitCode !== undefined && (
+                    <div className="package-status-meta-item">
+                      <span>退出码</span>
+                      <strong>{currentTask.result.exitCode}</strong>
+                    </div>
+                  )}
+                </div>
+                {currentTask.error?.message && (
+                  <div className="package-status-error">错误：{currentTask.error.message}</div>
+                )}
+              </div>
+            ) : (
+              <div className="package-status-empty compact">
+                <EmptyState type="logs" />
               </div>
             )}
-          </div>
-
-          <div className="package-field">
-            <label className="package-label">并行构建 (`PARALLEL_BUILD`)</label>
-            <label className="package-switch">
-              <input
-                type="checkbox"
-                checked={parallelBuild}
-                disabled={isRunning}
-                onChange={(event) => setParallelBuild(event.target.checked)}
-              />
-              <span>{parallelBuild ? '已开启' : '已关闭'}</span>
-            </label>
-          </div>
-        </div>
-
-        <div className="package-summary-card">
-          <div className="package-summary-item">
-            <span className="package-summary-label">本次服务</span>
-            <strong>{selectedServices.join(', ') || defaults.services.join(', ')}</strong>
-          </div>
-          <div className="package-summary-item">
-            <span className="package-summary-label">镜像版本</span>
-            <strong>{imageVersion || defaults.imageVersion}</strong>
-          </div>
-          <div className="package-summary-item">
-            <span className="package-summary-label">线程数</span>
-            <strong>{maxJobs}</strong>
-          </div>
-          <div className="package-summary-item">
-            <span className="package-summary-label">并行构建</span>
-            <strong>{parallelBuild ? 'true' : 'false'}</strong>
-          </div>
-        </div>
-      </section>
-
-      <section className="package-status-section">
-        <div className="log-header">
-          <h3 className="section-title">📡 任务状态</h3>
-        </div>
-        {currentTask ? (
-          <div className="package-status-card">
-            <div className="package-status-row">
-              <span className={`package-status-badge status-${normalizeStatus(currentTask.status)}`}>
-                {renderStatusText(currentTask.status)}
-              </span>
-              <span className="package-status-message">{currentTask.message || '等待日志输出'}</span>
-            </div>
-            <div className="package-status-meta">
-              <span>任务 ID：{currentTask.jobId}</span>
-              <span>服务：{currentTask.metadata?.services?.join(', ') || '-'}</span>
-              <span>镜像版本：{currentTask.metadata?.imageVersion || '-'}</span>
-              <span>线程数：{currentTask.metadata?.maxJobs ?? '-'}</span>
-              <span>并行构建：{String(currentTask.metadata?.parallelBuild ?? false)}</span>
-              {currentTask.result?.exitCode !== undefined && <span>退出码：{currentTask.result.exitCode}</span>}
-              {currentTask.metadata?.lastHeartbeatAt && <span>最近心跳：{formatDateTime(currentTask.metadata.lastHeartbeatAt)}</span>}
-              {currentTask.error?.message && <span className="package-status-error">错误：{currentTask.error.message}</span>}
-            </div>
-          </div>
-        ) : (
-          <div className="package-status-empty">
-            <EmptyState type="logs" />
-          </div>
-        )}
-      </section>
+          </section>
+        </aside>
+      </div>
 
       <section className="package-log-section">
-        <div className="log-header">
-          <h3 className="section-title">📝 打包日志</h3>
+        <div className="log-header package-log-header">
+          <div>
+            <h3 className="section-title">📝 打包日志</h3>
+            <p className="package-log-subtitle">stdout / stderr 会持续汇总到这里。</p>
+          </div>
         </div>
         <LogViewer type="package" searchInputRef={searchInputRef} />
       </section>
