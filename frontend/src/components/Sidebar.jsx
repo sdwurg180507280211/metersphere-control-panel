@@ -3,7 +3,8 @@ import './Sidebar.css'
 function Sidebar({ activeTab, onTabChange }) {
   const navItems = [
     { id: 'build', label: '前端构建', icon: '🔨', shortcut: '1' },
-    { id: 'services', label: '服务管理', icon: '⚙️', shortcut: '2' }
+    { id: 'services', label: '服务管理', icon: '⚙️', shortcut: '2' },
+    { id: 'package', label: '整体验证打包', icon: '📦', shortcut: '3' }
   ]
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
-import { useWebSocketStore, useLogStore, useBuildStore, useServiceStore } from '../store/useAppStore'
+import { useWebSocketStore, useLogStore, useBuildStore, useServiceStore, usePackageStore } from '../store/useAppStore'
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss' : 'ws'
 const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
@@ -18,11 +18,14 @@ export function useWebSocket() {
 
   const appendServiceLogRef = useRef(useLogStore.getState().appendServiceLog)
   const appendBuildLogRef = useRef(useLogStore.getState().appendBuildLog)
+  const appendPackageLogRef = useRef(useLogStore.getState().appendPackageLog)
   const updateBuildProgressRef = useRef(useBuildStore.getState().updateBuildProgress)
   const fetchActiveBuildsRef = useRef(useBuildStore.getState().fetchActiveBuilds)
   const fetchBuildHistoryRef = useRef(useBuildStore.getState().fetchBuildHistory)
   const updateServiceStatusRef = useRef(useServiceStore.getState().updateServiceStatus)
   const fetchServicesRef = useRef(useServiceStore.getState().fetchServices)
+  const updatePackageTaskRef = useRef(usePackageStore.getState().updateCurrentTask)
+  const fetchPackageActiveTaskRef = useRef(usePackageStore.getState().fetchActiveTask)
 
   const {
     setConnected,
@@ -169,6 +172,7 @@ export function useWebSocket() {
 
     const isServiceJob = typeof job.type === 'string' && job.type.startsWith('service.')
     const isBuildJob = typeof job.type === 'string' && job.type.startsWith('frontend.build')
+    const isPackageJob = job.type === 'package.run'
     const isTerminal = channel === 'job:completed' || channel === 'job:failed'
 
     if (isBuildJob) {
@@ -220,6 +224,39 @@ export function useWebSocket() {
         setTimeout(() => fetchServicesRef.current(), 300)
       }
     }
+
+    if (isPackageJob) {
+      updatePackageTaskRef.current(job)
+
+      if (channel === 'job:completed') {
+        toast.success('打包任务已完成')
+      }
+
+      if (channel === 'job:failed') {
+        toast.error(job.error?.message || '打包任务失败')
+      }
+    }
+  }, [])
+
+  const handlePackageEvent = useCallback((channel, payload) => {
+    if (!payload) return
+
+    const nextTask = {
+      jobId: payload.jobId,
+      status: payload.status || (channel === 'package:failed' ? 'failed' : channel === 'package:completed' ? 'success' : 'running'),
+      message: payload.message,
+      result: payload.result || null,
+      error: payload.error || null,
+      metadata: {
+        services: payload.services,
+        imageVersion: payload.imageVersion,
+        parallelBuild: payload.parallelBuild,
+        maxJobs: payload.maxJobs,
+        heartbeatAt: payload.heartbeatAt
+      }
+    }
+
+    updatePackageTaskRef.current(nextTask)
   }, [])
 
   // 重启服务
@@ -281,10 +318,11 @@ export function useWebSocket() {
 
         socket.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['logs:service', 'logs:build', 'build:progress', 'build:completed', 'build:batchCompleted', 'job:progress', 'job:completed', 'job:failed', '*']
+          channels: ['logs:service', 'logs:build', 'logs:package', 'build:progress', 'build:completed', 'build:batchCompleted', 'package:started', 'package:heartbeat', 'package:completed', 'package:failed', 'job:progress', 'job:completed', 'job:failed', '*']
         }))
 
         fetchServicesRef.current()
+        fetchPackageActiveTaskRef.current()
 
         heartbeatTimerRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
@@ -313,6 +351,9 @@ export function useWebSocket() {
                   // 支持新的增强格式（包含 lines 数组）和旧格式
                   appendBuildLogRef.current(data.data.lines ? data.data : data.data.message)
                   break
+                case 'logs:package':
+                  appendPackageLogRef.current(data.data.lines ? data.data : data.data.message)
+                  break
                 case 'build:progress':
                   updateBuildProgressRef.current(data.data.buildId, data.data)
                   if (data.data.status === 'success' || data.data.status === 'failed' || data.data.status === 'cancelled') {
@@ -332,6 +373,12 @@ export function useWebSocket() {
                 case 'job:completed':
                 case 'job:failed':
                   handleJobEvent(data.channel, data.data)
+                  break
+                case 'package:started':
+                case 'package:heartbeat':
+                case 'package:completed':
+                case 'package:failed':
+                  handlePackageEvent(data.channel, data.data)
                   break
                 default:
                   break

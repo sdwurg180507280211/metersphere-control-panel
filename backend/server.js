@@ -17,6 +17,7 @@ const buildRoutes = require('./routes/build');
 const logRoutes = require('./routes/logs');
 const progressRoutes = require('./routes/progress');
 const jobRoutes = require('./routes/jobs');
+const packageRoutes = require('./routes/package');
 const jobService = require('./services/jobService');
 
 const app = express();
@@ -31,6 +32,7 @@ app.use('/api/build', buildRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/package', packageRoutes);
 
 // 静态文件 - 生产环境提供 React 构建产物
 const publicPath = path.join(__dirname, '../frontend/dist');

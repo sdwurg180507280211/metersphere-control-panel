@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
-import { useServiceStore, useBuildStore, useLogStore } from './store/useAppStore'
+import { useServiceStore, useBuildStore, useLogStore, usePackageStore } from './store/useAppStore'
 import Sidebar from './components/Sidebar'
 import BuildTab from './components/BuildTab'
 import ServicesTab from './components/ServicesTab'
+import PackageTab from './components/PackageTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
@@ -16,7 +17,8 @@ function App() {
   
   const { fetchServices, fetchCatalog } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
-  const { clearServiceLogs, clearBuildLogs } = useLogStore()
+  const { fetchOptions: fetchPackageOptions, fetchActiveTask: fetchActivePackageTask } = usePackageStore()
+  const { clearServiceLogs, clearBuildLogs, clearPackageLogs } = useLogStore()
 
   // 初始化 WebSocket 连接
   useWebSocket()
@@ -25,6 +27,9 @@ function App() {
   useEffect(() => {
     const handleSwitchTab = (event) => {
       if (event.detail && (event.detail === 'build' || event.detail === 'services')) {
+        setActiveTab(event.detail)
+      }
+      if (event.detail === 'package') {
         setActiveTab(event.detail)
       }
     }
@@ -38,16 +43,20 @@ function App() {
     fetchServices()
     fetchModules()
     fetchActiveBuilds()
-  }, [fetchCatalog, fetchServices, fetchModules, fetchActiveBuilds])
+    fetchPackageOptions()
+    fetchActivePackageTask()
+  }, [fetchCatalog, fetchServices, fetchModules, fetchActiveBuilds, fetchPackageOptions, fetchActivePackageTask])
 
   // 清除当前页签的日志
   const handleClearLogs = useCallback(() => {
     if (activeTab === 'build') {
       clearBuildLogs()
+    } else if (activeTab === 'package') {
+      clearPackageLogs()
     } else {
       clearServiceLogs()
     }
-  }, [activeTab, clearBuildLogs, clearServiceLogs])
+  }, [activeTab, clearBuildLogs, clearPackageLogs, clearServiceLogs])
 
   // 聚焦搜索框
   const handleFocusSearch = useCallback(() => {
@@ -111,6 +120,9 @@ function App() {
             </TabTransition>
             <TabTransition activeTab={activeTab} tabId="services">
               <ServicesTab searchInputRef={searchInputRef} />
+            </TabTransition>
+            <TabTransition activeTab={activeTab} tabId="package">
+              <PackageTab searchInputRef={searchInputRef} />
             </TabTransition>
           </main>
         </div>

@@ -187,6 +187,10 @@ class WebSocketService {
     this.broadcast('service:status', status);
   }
 
+  broadcastPackageEvent(event, data) {
+    this.broadcast(`package:${event}`, data);
+  }
+
   getConnectedClients() {
     return this.clients.size;
   }

@@ -97,6 +97,7 @@ function loadConfig() {
       port: config.port || 3000,
       projectRoot,
       maxLogLines: config.maxLogLines || 1000,
+      package: config.package || {},
       services,
       serviceCatalog,
       frontendModules,

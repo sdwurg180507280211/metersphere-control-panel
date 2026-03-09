@@ -8,8 +8,9 @@
 - 系统命令：服务页支持手动触发 `msctl reload`，并在弹窗中输入管理员密码
 - 批量编排：批量启动按健康检查顺序推进，失败时自动回滚本次已启动的服务
 - 前端构建：支持单模块 / 批量模块构建，构建完成后自动重启对应服务
+- 整体验证打包：新增第 3 个“整体验证打包”页签，可触发 `metersphere-build.sh`、查看任务状态与实时日志
 - 构建取消：支持真实取消 `npm install` / `npm run build` 子进程
-- 实时同步：以 WebSocket 为主通道推送服务状态、构建进度、构建日志、服务日志
+- 实时同步：以 WebSocket 为主通道推送服务状态、构建进度、构建日志、服务日志与打包日志/状态
 - 日志链路：前端日志使用行缓冲与虚拟滚动；服务端日志使用流式写盘
 - 缓存策略：默认使用内存缓存，启用 Redis 后控制任务支持严格持久化、限流和恢复补写
 - 统一任务中心：服务控制与前端构建统一收敛到 `jobId`、`job:*` 事件和结构化错误响应
@@ -105,6 +106,12 @@ npm start
 - 默认会自动识别同级 `../metersphere`
 - 启动服务时会优先使用 MeterSphere 根目录下的 `mvnw` / `mvnw.cmd`
 
+### 打包脚本路径
+
+- 打包页默认执行同级 MeterSphere 仓库中的 `打包/metersphere-build.sh`
+- 可通过 `MS_PACKAGE_SCRIPT_PATH` 或 `PACKAGE_SCRIPT_PATH` 显式覆盖脚本路径
+- 若配置了 `config.json.package.scriptPath`，后端也会将其作为候选路径之一
+
 ## 缓存模式
 
 默认使用内存缓存，不依赖 Redis。
@@ -156,8 +163,10 @@ WebSocket 路径：`/ws`
 
 - `logs:service`：服务日志
 - `logs:build`：构建日志
+- `logs:package`：打包日志
 - `build:progress`：构建进度
 - `service:status`：服务状态增量更新
+- `package:started` / `package:heartbeat` / `package:completed` / `package:failed`：打包状态事件
 
 ### 兼容通道：SSE
 
@@ -181,6 +190,14 @@ WebSocket 路径：`/ws`
 | POST | `/api/services/:id/stop` | 停止单个服务 |
 | POST | `/api/services/:id/restart` | 重启单个服务 |
 | POST | `/api/services/:id/reload` | 触发服务 reload 任务 |
+
+### 打包任务
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/package/options` | 获取后端维护的打包服务白名单、默认值、脚本可用性 |
+| GET | `/api/package/active` | 获取当前活动中的打包任务，供页面刷新恢复 |
+| POST | `/api/package/run` | 创建新的打包任务，返回 `202 + jobId` |
 
 批量服务操作现在会创建父任务和子任务：父任务汇总整体结果，子任务保留每个服务的真实执行结果；第一阶段不对已成功的子任务做隐式回滚。
 

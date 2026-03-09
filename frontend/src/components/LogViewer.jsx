@@ -34,7 +34,8 @@ function LogViewer({ type, searchInputRef }) {
     getLogLines,
     getFilteredLogs,
     clearServiceLogs,
-    clearBuildLogs
+    clearBuildLogs,
+    clearPackageLogs
   } = useLogStore()
 
   const { logLevel, searchTerm } = filters[type]
@@ -100,6 +101,8 @@ function LogViewer({ type, searchInputRef }) {
   const handleClear = () => {
     if (type === 'build') {
       clearBuildLogs()
+    } else if (type === 'package') {
+      clearPackageLogs()
     } else {
       clearServiceLogs()
     }
@@ -312,6 +315,8 @@ function LogViewer({ type, searchInputRef }) {
 function getThemeClass(type) {
   switch (type) {
     case 'build':
+      return 'log-theme-build'
+    case 'package':
       return 'log-theme-build'
     case 'service':
     default:

@@ -49,17 +49,21 @@ export const useServiceStore = create((set) => ({
 export const useLogStore = create((set, get) => ({
   serviceLogLines: [],
   buildLogLines: [],
+  packageLogLines: [],
   logTails: {
     service: '',
-    build: ''
+    build: '',
+    package: ''
   },
   filters: {
     service: { logLevel: 'all', searchTerm: '' },
-    build: { logLevel: 'all', searchTerm: '' }
+    build: { logLevel: 'all', searchTerm: '' },
+    package: { logLevel: 'all', searchTerm: '' }
   },
 
   appendServiceLog: (message) => set((state) => appendLogChunk(state, 'service', message)),
   appendBuildLog: (message) => set((state) => appendLogChunk(state, 'build', message)),
+  appendPackageLog: (message) => set((state) => appendLogChunk(state, 'package', message)),
 
   clearServiceLogs: () => set((state) => ({
     serviceLogLines: [],
@@ -68,6 +72,10 @@ export const useLogStore = create((set, get) => ({
   clearBuildLogs: () => set((state) => ({
     buildLogLines: [],
     logTails: { ...state.logTails, build: '' }
+  })),
+  clearPackageLogs: () => set((state) => ({
+    packageLogLines: [],
+    logTails: { ...state.logTails, package: '' }
   })),
 
   setLogLevel: (type, level) => set((state) => ({
@@ -179,6 +187,74 @@ export const useBuildStore = create((set, get) => ({
   }
 }))
 
+export const usePackageStore = create((set, get) => ({
+  options: null,
+  optionsLoading: false,
+  currentTask: null,
+  activeLoading: false,
+
+  setOptions: (options) => set({ options }),
+  updateCurrentTask: (task) => set((state) => ({
+    currentTask: mergePackageTask(state.currentTask, task),
+    activeLoading: false
+  })),
+  clearCurrentTask: () => set({ currentTask: null, activeLoading: false }),
+
+  fetchOptions: async () => {
+    set({ optionsLoading: true })
+    try {
+      const res = await fetch('/api/package/options')
+      const data = await res.json()
+      if (data.success) {
+        set({ options: data.data })
+      }
+    } catch (error) {
+      console.error('获取打包选项失败:', error)
+    } finally {
+      set({ optionsLoading: false })
+    }
+  },
+
+  fetchActiveTask: async () => {
+    set({ activeLoading: true })
+    try {
+      const res = await fetch('/api/package/active')
+      const data = await res.json()
+      if (data.success) {
+        set({ currentTask: normalizePackageTask(data.data), activeLoading: false })
+        return data.data
+      }
+    } catch (error) {
+      console.error('获取活动打包任务失败:', error)
+    }
+
+    set({ activeLoading: false })
+    return null
+  },
+
+  startPackage: async (payload) => {
+    const res = await fetch('/api/package/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await res.json()
+    if (!data.success) {
+      const error = data.error || { message: '启动打包任务失败' }
+      throw new Error(error.message)
+    }
+
+    const nextTask = normalizePackageTask(data.data)
+    set({ currentTask: nextTask })
+    return nextTask
+  },
+
+  isRunning: () => ['pending', 'running'].includes(get().currentTask?.status)
+}))
+
 export const useWebSocketStore = create((set) => ({
   connected: false,
   clientId: null,
@@ -285,7 +361,15 @@ function limitLogLines(existingLines, newLines, maxLines = MAX_LOG_LINES) {
 }
 
 function getLinesKey(type) {
-  return type === 'build' ? 'buildLogLines' : 'serviceLogLines'
+  if (type === 'build') {
+    return 'buildLogLines'
+  }
+
+  if (type === 'package') {
+    return 'packageLogLines'
+  }
+
+  return 'serviceLogLines'
 }
 
 function getLogLinesForType(state, type) {
@@ -402,3 +486,53 @@ function normalizeServiceStatus(serviceId, status, previous = null) {
   }
 }
 
+function normalizePackageTask(task) {
+  if (!task) {
+    return null
+  }
+
+  const metadata = {
+    ...(task.metadata || {}),
+    services: task.metadata?.services || task.services || [],
+    imageVersion: task.metadata?.imageVersion || task.imageVersion || '',
+    parallelBuild: task.metadata?.parallelBuild ?? task.parallelBuild ?? false,
+    maxJobs: task.metadata?.maxJobs ?? task.maxJobs ?? null,
+    buildOnly: task.metadata?.buildOnly ?? task.buildOnly ?? false,
+    packagePath: task.metadata?.packagePath || task.packagePath || null,
+    scriptPath: task.metadata?.scriptPath || task.scriptPath || null
+  }
+
+  return {
+    ...task,
+    jobId: task.jobId || null,
+    type: task.type || 'package.run',
+    status: task.status || 'running',
+    stage: task.stage || 'running',
+    message: task.message || '打包任务已启动',
+    metadata,
+    result: task.result || null,
+    error: task.error || null
+  }
+}
+
+function mergePackageTask(previousTask, incomingTask) {
+  const nextTask = normalizePackageTask(incomingTask)
+  if (!nextTask) {
+    return previousTask
+  }
+
+  if (!previousTask || previousTask.jobId !== nextTask.jobId) {
+    return nextTask
+  }
+
+  return {
+    ...previousTask,
+    ...nextTask,
+    metadata: {
+      ...(previousTask.metadata || {}),
+      ...(nextTask.metadata || {})
+    },
+    result: nextTask.result || previousTask.result,
+    error: nextTask.error || previousTask.error
+  }
+}
