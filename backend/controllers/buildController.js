@@ -3,7 +3,7 @@
  */
 const processManager = require('../services/processManager');
 const validator = require('../utils/validator');
-const config = require('../config');
+const configManager = require('../services/configManager');
 const logger = require('../utils/logger');
 const websocketService = require('../services/websocketService');
 const jobService = require('../services/jobService');
@@ -19,7 +19,7 @@ const buildController = {
       }
 
       const moduleConfig = validator.getValidModule(module);
-      const service = config.services[moduleConfig.serviceId];
+      const service = configManager.getResolvedConfig().services[moduleConfig.serviceId];
       const resourceKey = `module:${moduleConfig.id}`;
 
       await jobService.assertWritableRequestAllowed(resourceKey, {
@@ -148,7 +148,7 @@ const buildController = {
       const linkedServices = modules
         .map((id) => {
           const moduleConfig = validator.getValidModule(id);
-          const service = config.services[moduleConfig.serviceId];
+          const service = configManager.getResolvedConfig().services[moduleConfig.serviceId];
           return service ? { serviceId: moduleConfig.serviceId, serviceName: service.name } : null;
         })
         .filter(Boolean);
@@ -258,7 +258,7 @@ const buildController = {
           });
 
           if (result.success && !result.cancelled) {
-            const service = config.services[moduleConfig.serviceId];
+            const service = configManager.getResolvedConfig().services[moduleConfig.serviceId];
             if (service) {
               servicesToRestart.add(moduleConfig.serviceId);
             }
@@ -317,7 +317,7 @@ const buildController = {
         logger.broadcast('\n========== 自动重启关联服务 ==========', 'build');
 
         const servicesToRestartSorted = Array.from(servicesToRestart)
-          .map((id) => ({ id, ...config.services[id] }))
+          .map((id) => ({ id, ...configManager.getResolvedConfig().services[id] }))
           .sort((a, b) => a.startOrder - b.startOrder);
 
         for (const service of servicesToRestartSorted) {
@@ -336,7 +336,7 @@ const buildController = {
   },
 
   getModules(req, res) {
-    res.json({ success: true, data: config.frontendModules });
+    res.json({ success: true, data: configManager.getResolvedConfig().frontendModules });
   }
 };
 

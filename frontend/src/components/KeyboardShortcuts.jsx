@@ -6,6 +6,7 @@ const SHORTCUTS = [
   { key: '1', description: '切换到构建页面' },
   { key: '2', description: '切换到服务管理页面' },
   { key: '3', description: '切换到打包页面' },
+  { key: '4', description: '切换到配置页面' },
   { key: 'b', description: '开始构建（在构建页面）' },
   { key: 'r', description: '刷新数据' },
   { key: 'c', description: '清除当前日志' },
@@ -41,6 +42,10 @@ function KeyboardShortcuts({ onSwitchTab, onRefresh, onClearLogs, onFocusSearch 
       case '3':
         e.preventDefault()
         onSwitchTab?.('package')
+        break
+      case '4':
+        e.preventDefault()
+        onSwitchTab?.('config')
         break
       case 'r':
       case 'R':

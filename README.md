@@ -9,6 +9,7 @@
 - 批量编排：批量启动按健康检查顺序推进，失败时自动回滚本次已启动的服务
 - 前端构建：支持单模块 / 批量模块构建，构建完成后自动重启对应服务
 - 整体验证打包：新增第 3 个“整体验证打包”页签，可触发 `metersphere-build.sh`、查看任务状态与实时日志
+- 配置管理：新增第 4 个“配置管理”页签，支持 `config.json` 结构化编辑、校验、保存与运行时应用
 - 构建取消：支持真实取消 `npm install` / `npm run build` 子进程
 - 实时同步：以 WebSocket 为主通道推送服务状态、构建进度、构建日志、服务日志与打包日志/状态
 - 日志链路：前端日志使用行缓冲与虚拟滚动；服务端日志使用流式写盘
@@ -112,6 +113,26 @@ npm start
 - 可通过 `MS_PACKAGE_SCRIPT_PATH` 或 `PACKAGE_SCRIPT_PATH` 显式覆盖脚本路径
 - 若配置了 `config.json.package.scriptPath`，后端也会将其作为候选路径之一
 
+### 配置管理页
+
+配置页会同时展示三类信息：
+
+- `editable`：可写回 `config.json` 的持久化字段，例如 `projectRoot`、`services`、`package`
+- `runtime`：环境变量和运行时派生出的只读字段，例如 Redis、缓存模式、任务超时
+- `resolved`：后端解析后的最终快照，例如绝对 `projectRoot`、服务目录、前端模块、打包脚本候选路径
+
+页面支持以下操作：
+
+- `GET /api/config`：加载当前配置页快照
+- `POST /api/config/validate`：校验草稿但不写盘
+- `PUT /api/config`：保存到 `config.json`
+- `POST /api/config/apply`：将最新保存配置应用到支持热更新的运行时消费者
+- `GET /api/config/diagnostics`：重新执行配置诊断
+
+当前明确需要重启控制面板才能生效的字段：
+
+- `port`
+
 ## 缓存模式
 
 默认使用内存缓存，不依赖 Redis。
@@ -190,6 +211,16 @@ WebSocket 路径：`/ws`
 | POST | `/api/services/:id/stop` | 停止单个服务 |
 | POST | `/api/services/:id/restart` | 重启单个服务 |
 | POST | `/api/services/:id/reload` | 触发服务 reload 任务 |
+
+### 配置管理
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/config` | 获取配置管理页完整快照（editable/runtime/resolved/diagnostics/meta） |
+| POST | `/api/config/validate` | 校验草稿并返回结构化错误、警告和应用影响 |
+| PUT | `/api/config` | 保存配置到 `config.json`，不自动应用到运行时 |
+| POST | `/api/config/apply` | 应用最新已保存配置到支持热更新的消费者 |
+| GET | `/api/config/diagnostics` | 重新执行配置诊断，不改动磁盘配置 |
 
 ### 打包任务
 

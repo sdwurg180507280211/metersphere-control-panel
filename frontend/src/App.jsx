@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
-import { useServiceStore, useBuildStore, useLogStore, usePackageStore } from './store/useAppStore'
+import { useServiceStore, useBuildStore, useLogStore, usePackageStore, useConfigStore } from './store/useAppStore'
 import Sidebar from './components/Sidebar'
 import BuildTab from './components/BuildTab'
 import ServicesTab from './components/ServicesTab'
 import PackageTab from './components/PackageTab'
+import ConfigTab from './components/ConfigTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
@@ -19,6 +20,7 @@ function App() {
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
   const { fetchOptions: fetchPackageOptions, fetchActiveTask: fetchActivePackageTask } = usePackageStore()
   const { clearServiceLogs, clearBuildLogs, clearPackageLogs } = useLogStore()
+  const { fetchConfig } = useConfigStore()
 
   // 初始化 WebSocket 连接
   useWebSocket()
@@ -26,10 +28,7 @@ function App() {
   // 监听切换页签事件（从 WebSocket 处理器触发）
   useEffect(() => {
     const handleSwitchTab = (event) => {
-      if (event.detail && (event.detail === 'build' || event.detail === 'services')) {
-        setActiveTab(event.detail)
-      }
-      if (event.detail === 'package') {
+      if (event.detail && ['build', 'services', 'package', 'config'].includes(event.detail)) {
         setActiveTab(event.detail)
       }
     }
@@ -45,7 +44,8 @@ function App() {
     fetchActiveBuilds()
     fetchPackageOptions()
     fetchActivePackageTask()
-  }, [fetchCatalog, fetchServices, fetchModules, fetchActiveBuilds, fetchPackageOptions, fetchActivePackageTask])
+    fetchConfig()
+  }, [fetchCatalog, fetchServices, fetchModules, fetchActiveBuilds, fetchPackageOptions, fetchActivePackageTask, fetchConfig])
 
   // 清除当前页签的日志
   const handleClearLogs = useCallback(() => {
@@ -123,6 +123,9 @@ function App() {
             </TabTransition>
             <TabTransition activeTab={activeTab} tabId="package">
               <PackageTab searchInputRef={searchInputRef} />
+            </TabTransition>
+            <TabTransition activeTab={activeTab} tabId="config">
+              <ConfigTab />
             </TabTransition>
           </main>
         </div>

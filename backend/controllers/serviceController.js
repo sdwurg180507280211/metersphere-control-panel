@@ -5,7 +5,7 @@ const processManager = require('../services/processManager');
 const healthChecker = require('../services/healthChecker');
 const validator = require('../utils/validator');
 const logger = require('../utils/logger');
-const config = require('../config');
+const configManager = require('../services/configManager');
 const serviceTaskService = require('../services/serviceTaskService');
 const systemCommandService = require('../services/systemCommandService');
 const { createAppError, sendError } = require('../utils/errors');
@@ -27,7 +27,7 @@ async function enqueueServiceTask(res, taskFn, actionLabel) {
 
 const serviceController = {
   getCatalog(req, res) {
-    res.json({ success: true, data: config.serviceCatalog });
+    res.json({ success: true, data: configManager.getResolvedConfig().serviceCatalog });
   },
 
   async getAllStatus(req, res) {

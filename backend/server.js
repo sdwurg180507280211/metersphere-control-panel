@@ -5,7 +5,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const config = require('./config');
+const configManager = require('./services/configManager');
 const logger = require('./utils/logger');
 const cacheService = require('./services/cacheService');
 const websocketService = require('./services/websocketService');
@@ -18,6 +18,7 @@ const logRoutes = require('./routes/logs');
 const progressRoutes = require('./routes/progress');
 const jobRoutes = require('./routes/jobs');
 const packageRoutes = require('./routes/package');
+const configRoutes = require('./routes/config');
 const jobService = require('./services/jobService');
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/logs', logRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/package', packageRoutes);
+app.use('/api/config', configRoutes);
 
 // 静态文件 - 生产环境提供 React 构建产物
 const publicPath = path.join(__dirname, '../frontend/dist');
@@ -277,9 +279,12 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // 启动服务器
-server.listen(config.port, async () => {
-  console.log(`控制面板运行在 http://localhost:${config.port}`);
-  console.log(`项目根目录: ${config.projectRoot}`);
+const startupConfig = configManager.getResolvedConfig();
+logger.updateOptions({ maxLogLines: startupConfig.maxLogLines });
+
+server.listen(startupConfig.port, async () => {
+  console.log(`控制面板运行在 http://localhost:${startupConfig.port}`);
+  console.log(`项目根目录: ${startupConfig.projectRoot}`);
   
   // 初始化服务
   await initServices();

@@ -1,4 +1,5 @@
 const packageConfig = require('../config/package');
+const configManager = require('./configManager');
 const packageService = require('./packageService');
 const jobService = require('./jobService');
 const websocketService = require('./websocketService');
@@ -12,7 +13,7 @@ class PackageTaskService {
     try {
       script = {
         valid: true,
-        resolvedPath: packageService.resolvePackageScriptPath()
+        resolvedPath: packageService.resolvePackageScriptPath(null, configManager.getResolvedConfig())
       };
     } catch (error) {
       script = {
@@ -23,8 +24,8 @@ class PackageTaskService {
     }
 
     return {
-      services: packageConfig.PACKAGE_SERVICE_OPTIONS,
-      defaults: packageConfig.PACKAGE_DEFAULTS,
+      services: packageConfig.getPackageServiceOptions(configManager.getResolvedConfig()),
+      defaults: packageConfig.getPackageDefaults(configManager.getResolvedConfig().package || {}),
       capabilities: packageConfig.PACKAGE_CAPABILITIES,
       script
     };

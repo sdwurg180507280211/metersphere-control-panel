@@ -73,6 +73,15 @@ class Logger {
     };
   }
 
+  updateOptions(options = {}) {
+    if (options.maxLogLines !== undefined) {
+      const parsed = Number.parseInt(options.maxLogLines, 10);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        this.maxLogLines = parsed;
+      }
+    }
+  }
+
   /**
    * 解析日志行的级别
    * @param {string} line - 日志行

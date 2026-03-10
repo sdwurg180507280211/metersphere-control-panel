@@ -1,0 +1,388 @@
+.config-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.config-tab-loading {
+  align-items: center;
+  justify-content: center;
+}
+
+.config-loading-card {
+  padding: 32px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+  color: #475569;
+}
+
+.config-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 16px;
+  padding-bottom: 88px;
+}
+
+.config-main,
+.config-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+  padding: 20px;
+}
+
+.config-panel-card {
+  position: static;
+}
+
+.config-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.config-section-desc {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.config-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.config-field,
+.config-service-cell,
+.config-service-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-field span,
+.config-service-cell span,
+.config-service-identity span {
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.config-field input,
+.config-service-cell input,
+.config-service-identity input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #dbe4f0;
+  background: #fff;
+  color: #0f172a;
+}
+
+.config-field-wide,
+.config-service-cell-wide {
+  grid-column: span 2;
+}
+
+.config-hint,
+.config-empty-text {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.config-field-error,
+.config-field-warning {
+  display: block;
+  font-size: 12px;
+}
+
+.config-field-error {
+  color: #dc2626;
+}
+
+.config-field-warning {
+  color: #d97706;
+}
+
+.config-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.config-meta-item,
+.config-panel-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.config-meta-item span,
+.config-panel-item span {
+  color: #64748b;
+}
+
+.config-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.config-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.config-candidate-list,
+.config-panel-group,
+.config-diagnostic-block {
+  margin-top: 16px;
+}
+
+.config-subtitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.config-candidate-item,
+.config-diagnostic-inline,
+.config-issue-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.config-candidate-item em,
+.config-diagnostic-inline em {
+  color: #64748b;
+  font-style: normal;
+}
+
+.config-services-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-services-head,
+.config-services-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.6fr 0.8fr 0.8fr 1.2fr 0.6fr 0.8fr 70px;
+  gap: 10px;
+  align-items: start;
+}
+
+.config-services-head {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 700;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.config-services-row {
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.config-service-identity strong {
+  color: #0f172a;
+}
+
+.config-service-toggle {
+  padding-top: 10px;
+}
+
+.config-diagnostic-summary {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.config-status-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.config-status-pill.success,
+.config-diagnostic-title .success {
+  color: #16a34a;
+}
+
+.config-status-pill.error,
+.config-diagnostic-title .error {
+  color: #dc2626;
+}
+
+.config-status-pill.warning {
+  color: #d97706;
+}
+
+.config-diagnostic-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.config-issue-item.error {
+  border-left: 3px solid #dc2626;
+}
+
+.config-issue-item.warning {
+  border-left: 3px solid #d97706;
+}
+
+.config-save-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.config-save-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.config-save-status span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.config-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.config-primary-btn,
+.config-secondary-btn,
+.config-danger-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.config-primary-btn:disabled,
+.config-secondary-btn:disabled,
+.config-danger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.config-primary-btn:hover,
+.config-secondary-btn:hover,
+.config-danger-btn:hover {
+  transform: translateY(-1px);
+}
+
+.config-primary-btn {
+  background: #6366f1;
+  color: #fff;
+}
+
+.config-primary-btn.accent {
+  background: #0ea5e9;
+}
+
+.config-secondary-btn {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.config-danger-btn {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+@media (max-width: 1280px) {
+  .config-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .config-panel-card {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .config-form-grid,
+  .config-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .config-field-wide,
+  .config-service-cell-wide {
+    grid-column: span 1;
+  }
+
+  .config-services-head {
+    display: none;
+  }
+
+  .config-services-row {
+    grid-template-columns: 1fr;
+  }
+
+  .config-save-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .config-save-actions {
+    width: 100%;
+  }
+
+  .config-primary-btn,
+  .config-secondary-btn,
+  .config-danger-btn {
+    width: 100%;
+  }
+}

@@ -268,6 +268,279 @@ export const useWebSocketStore = create((set) => ({
   resetReconnect: () => set({ reconnectAttempts: 0 })
 }))
 
+export const useConfigStore = create((set, get) => ({
+  snapshot: null,
+  draft: null,
+  resolved: null,
+  snapshotResolved: null,
+  runtime: null,
+  diagnostics: null,
+  snapshotDiagnostics: null,
+  validation: {
+    valid: true,
+    errors: [],
+    warnings: []
+  },
+  snapshotValidation: {
+    valid: true,
+    errors: [],
+    warnings: []
+  },
+  meta: null,
+  applyImpact: {
+    changedPaths: [],
+    hotApply: [],
+    requiresRestart: []
+  },
+  snapshotApplyImpact: {
+    changedPaths: [],
+    hotApply: [],
+    requiresRestart: []
+  },
+  dirtyFields: [],
+  loading: false,
+  validating: false,
+  saving: false,
+  applying: false,
+  diagnosticsLoading: false,
+
+  fetchConfig: async () => {
+    set({ loading: true })
+    try {
+      const res = await fetch('/api/config')
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || '加载配置失败')
+      }
+
+      set({
+        snapshot: cloneValue(data.data.editable),
+        draft: cloneValue(data.data.editable),
+        resolved: data.data.resolved,
+        snapshotResolved: cloneValue(data.data.resolved),
+        runtime: data.data.runtime,
+        diagnostics: data.data.diagnostics,
+        snapshotDiagnostics: cloneValue(data.data.diagnostics),
+        validation: data.data.validation || { valid: true, errors: [], warnings: [] },
+        snapshotValidation: cloneValue(data.data.validation || { valid: true, errors: [], warnings: [] }),
+        meta: data.data.meta,
+        applyImpact: data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
+        snapshotApplyImpact: cloneValue(data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
+        dirtyFields: []
+      })
+
+      return data.data
+    } finally {
+      set({ loading: false })
+    }
+  },
+
+  updateDraft: (fieldPath, value) => set((state) => {
+    const currentDraft = cloneValue(state.draft || state.snapshot || {})
+    setByPath(currentDraft, fieldPath, value)
+    return {
+      draft: currentDraft,
+      dirtyFields: collectDirtyPaths(state.snapshot || {}, currentDraft)
+    }
+  }),
+
+  addService: (serviceId) => set((state) => {
+    const nextDraft = cloneValue(state.draft || state.snapshot || {})
+    const services = nextDraft.services || {}
+    const nextServiceId = serviceId || createServiceId(services)
+    services[nextServiceId] = {
+      name: '',
+      pom: '',
+      port: '',
+      healthCheckPort: '',
+      healthCheck: '/actuator/health',
+      startOrder: 99,
+      enabled: true
+    }
+    nextDraft.services = services
+
+    return {
+      draft: nextDraft,
+      dirtyFields: collectDirtyPaths(state.snapshot || {}, nextDraft)
+    }
+  }),
+
+  updateService: (serviceId, patch) => set((state) => {
+    const nextDraft = cloneValue(state.draft || state.snapshot || {})
+    nextDraft.services = nextDraft.services || {}
+    nextDraft.services[serviceId] = {
+      ...(nextDraft.services[serviceId] || {}),
+      ...patch
+    }
+
+    return {
+      draft: nextDraft,
+      dirtyFields: collectDirtyPaths(state.snapshot || {}, nextDraft)
+    }
+  }),
+
+  removeService: (serviceId) => set((state) => {
+    const nextDraft = cloneValue(state.draft || state.snapshot || {})
+    if (nextDraft.services) {
+      delete nextDraft.services[serviceId]
+    }
+    return {
+      draft: nextDraft,
+      dirtyFields: collectDirtyPaths(state.snapshot || {}, nextDraft)
+    }
+  }),
+
+  validateDraft: async () => {
+    const draft = get().draft || get().snapshot || {}
+    set({ validating: true })
+    try {
+      const res = await fetch('/api/config/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft })
+      })
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || '校验配置失败')
+      }
+
+      set({
+        draft: cloneValue(data.data.normalizedDraft || draft),
+        resolved: cloneValue(data.data.resolved || get().resolved),
+        diagnostics: data.data.diagnostics,
+        validation: {
+          valid: data.data.valid,
+          errors: data.data.errors || [],
+          warnings: data.data.warnings || []
+        },
+        applyImpact: data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
+        dirtyFields: collectDirtyPaths(get().snapshot || {}, data.data.normalizedDraft || draft)
+      })
+
+      return data.data
+    } finally {
+      set({ validating: false })
+    }
+  },
+
+  saveConfig: async () => {
+    const draft = get().draft || get().snapshot || {}
+    set({ saving: true })
+    try {
+      const res = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft })
+      })
+      const data = await res.json()
+      if (!data.success) {
+        const error = new Error(data.error?.message || '保存配置失败')
+        error.details = data.error?.details || {}
+        throw error
+      }
+
+      set({
+        snapshot: cloneValue(data.data.editable),
+        draft: cloneValue(data.data.editable),
+        resolved: data.data.resolved,
+        snapshotResolved: cloneValue(data.data.resolved),
+        runtime: data.data.runtime,
+        diagnostics: data.data.diagnostics,
+        snapshotDiagnostics: cloneValue(data.data.diagnostics),
+        validation: data.data.validation || { valid: true, errors: [], warnings: [] },
+        snapshotValidation: cloneValue(data.data.validation || { valid: true, errors: [], warnings: [] }),
+        meta: data.data.meta,
+        applyImpact: data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
+        snapshotApplyImpact: cloneValue(data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
+        dirtyFields: []
+      })
+
+      return data.data
+    } catch (error) {
+      if (error.details) {
+        set({
+          resolved: cloneValue(error.details.resolved || get().resolved),
+          diagnostics: error.details.diagnostics || get().diagnostics,
+          validation: {
+            valid: false,
+            errors: error.details.errors || [],
+            warnings: error.details.warnings || []
+          },
+          applyImpact: error.details.applyImpact || get().applyImpact
+        })
+      }
+      throw error
+    } finally {
+      set({ saving: false })
+    }
+  },
+
+  applyConfig: async () => {
+    set({ applying: true })
+    try {
+      const res = await fetch('/api/config/apply', {
+        method: 'POST'
+      })
+      const data = await res.json()
+      if (!data.success) {
+        const error = new Error(data.error?.message || '应用配置失败')
+        error.details = data.error?.details || {}
+        throw error
+      }
+
+      set((state) => ({
+        meta: {
+          ...(state.meta || {}),
+          ...(data.data.meta || {})
+        },
+        applyImpact: {
+          ...state.applyImpact,
+          requiresRestart: data.data.requiresRestart || []
+        }
+      }))
+
+      return data.data
+    } finally {
+      set({ applying: false })
+    }
+  },
+
+  resetDraft: () => set((state) => ({
+    draft: cloneValue(state.snapshot),
+    resolved: cloneValue(state.snapshotResolved),
+    diagnostics: cloneValue(state.snapshotDiagnostics),
+    validation: cloneValue(state.snapshotValidation || { valid: true, errors: [], warnings: [] }),
+    applyImpact: cloneValue(state.snapshotApplyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
+    dirtyFields: []
+  })),
+
+  refreshDiagnostics: async () => {
+    set({ diagnosticsLoading: true })
+    try {
+      const res = await fetch('/api/config/diagnostics')
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || '刷新诊断失败')
+      }
+
+      set((state) => ({
+        resolved: cloneValue(data.data.resolved || state.resolved),
+        diagnostics: data.data.diagnostics,
+        validation: data.data.validation || state.validation,
+        applyImpact: data.data.applyImpact || state.applyImpact,
+        meta: {
+          ...(state.meta || {}),
+          ...(data.data.meta || {})
+        }
+      }))
+
+      return data.data
+    } finally {
+      set({ diagnosticsLoading: false })
+    }
+  }
+}))
+
 function appendLogChunk(state, type, logData) {
   const linesKey = getLinesKey(type)
   const existingLines = state[linesKey]
@@ -535,4 +808,59 @@ function mergePackageTask(previousTask, incomingTask) {
     result: nextTask.result || previousTask.result,
     error: nextTask.error || previousTask.error
   }
+}
+
+function cloneValue(value) {
+  if (value === undefined || value === null) {
+    return value
+  }
+
+  return JSON.parse(JSON.stringify(value))
+}
+
+function setByPath(target, fieldPath, value) {
+  const segments = Array.isArray(fieldPath) ? fieldPath : String(fieldPath).split('.')
+  let cursor = target
+
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    const key = segments[index]
+    if (!cursor[key] || typeof cursor[key] !== 'object') {
+      cursor[key] = {}
+    }
+    cursor = cursor[key]
+  }
+
+  cursor[segments[segments.length - 1]] = value
+}
+
+function collectDirtyPaths(snapshot, draft, currentPath = '') {
+  if (JSON.stringify(snapshot) === JSON.stringify(draft)) {
+    return []
+  }
+
+  const snapshotIsObject = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+  const draftIsObject = draft && typeof draft === 'object' && !Array.isArray(draft)
+
+  if (!snapshotIsObject || !draftIsObject) {
+    return currentPath ? [currentPath] : []
+  }
+
+  const keys = new Set([...Object.keys(snapshot || {}), ...Object.keys(draft || {})])
+  const dirty = []
+
+  keys.forEach((key) => {
+    dirty.push(...collectDirtyPaths(snapshot?.[key], draft?.[key], currentPath ? `${currentPath}.${key}` : key))
+  })
+
+  return [...new Set(dirty)]
+}
+
+function createServiceId(services = {}) {
+  let index = Object.keys(services).length + 1
+  let candidate = `custom-service-${index}`
+  while (services[candidate]) {
+    index += 1
+    candidate = `custom-service-${index}`
+  }
+  return candidate
 }

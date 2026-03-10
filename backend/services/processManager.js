@@ -7,7 +7,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
-const config = require('../config');
+const configManager = require('./configManager');
 const logger = require('../utils/logger');
 const buildProgressService = require('./buildProgressService');
 const healthChecker = require('./healthChecker');
@@ -28,14 +28,30 @@ const TRANSITIONAL_SERVICE_PHASES = new Set(['starting', 'checking_health', 'sto
 class ProcessManager {
   constructor() {
     this.pidDir = PID_DIR;
-    this.projectRoot = config.projectRoot;
     this.serviceHealthMonitors = new Map();
   }
 
-  _getBaseServiceStatus(serviceId, serviceConfig = config.services[serviceId]) {
+  _getRuntimeConfig() {
+    return configManager.getResolvedConfig();
+  }
+
+  _getProjectRoot() {
+    return this._getRuntimeConfig().projectRoot;
+  }
+
+  _getServiceConfig(serviceId) {
+    return this._getRuntimeConfig().services[serviceId];
+  }
+
+  _getServiceCatalog() {
+    return this._getRuntimeConfig().serviceCatalog;
+  }
+
+  _getBaseServiceStatus(serviceId, serviceConfig = null) {
+    const effectiveServiceConfig = serviceConfig || this._getServiceConfig(serviceId);
     return {
       serviceId,
-      name: serviceConfig?.name || serviceId,
+      name: effectiveServiceConfig?.name || serviceId,
       phase: 'stopped',
       running: false,
       pid: null,
@@ -44,12 +60,12 @@ class ProcessManager {
     };
   }
 
-  _getCurrentServiceStatus(serviceId, serviceConfig = config.services[serviceId]) {
+  _getCurrentServiceStatus(serviceId, serviceConfig = null) {
     return serviceStatuses.get(serviceId) || this._getBaseServiceStatus(serviceId, serviceConfig);
   }
 
   _setServiceStatus(serviceId, updates = {}, options = {}) {
-    const serviceConfig = options.serviceConfig || config.services[serviceId];
+    const serviceConfig = options.serviceConfig || this._getServiceConfig(serviceId);
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const next = {
       ...current,
@@ -387,7 +403,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
   _resolveMavenCommand() {
     const wrapperName = process.platform === 'win32' ? 'mvnw.cmd' : 'mvnw';
-    const wrapperPath = path.join(this.projectRoot, wrapperName);
+    const wrapperPath = path.join(this._getProjectRoot(), wrapperName);
 
     if (fs.existsSync(wrapperPath)) {
       return wrapperPath;
@@ -501,7 +517,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     await this._runCommand({
       command: mavenCommand,
       args: compileArgs,
-      cwd: this.projectRoot,
+      cwd: this._getProjectRoot(),
       logType: 'service',
       serviceId,
       env: process.env,
@@ -512,7 +528,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       success: true,
       command: mavenCommand,
       args: compileArgs,
-      cwd: this.projectRoot
+      cwd: this._getProjectRoot()
     };
   }
 
@@ -547,7 +563,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     // 使用 JAVA_TOOL_OPTIONS 环境变量确保 JVM 参数生效
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
-      cwd: this.projectRoot,
+      cwd: this._getProjectRoot(),
       detached: process.platform !== 'win32',
       env: {
         ...process.env,
@@ -631,7 +647,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
   async getAllStatus() {
     const entries = await Promise.all(
-      Object.keys(config.services).map(async (serviceId) => {
+      Object.keys(this._getRuntimeConfig().services).map(async (serviceId) => {
         const status = await this.getStatus(serviceId);
         return [serviceId, status];
       })
@@ -686,7 +702,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   async getStatus(serviceId) {
-    const serviceConfig = config.services[serviceId];
+    const serviceConfig = this._getServiceConfig(serviceId);
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const trackedPid = this._getPid(serviceId);
 
@@ -757,7 +773,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     for (const item of [...startedServices].reverse()) {
       logger.broadcast(`回滚服务启动: ${item.name}`, 'service', item.id);
-      const result = await this.stop(item.id, config.services[item.id]);
+      const result = await this.stop(item.id, this._getServiceConfig(item.id));
       rollbackResults.push({ serviceId: item.id, ...result, rollback: true });
     }
 
@@ -778,7 +794,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         logger.broadcast(`${item.name} 已在运行，等待健康检查通过...`, 'service', item.id);
         startResult = { pid: status.pid, alreadyRunning: true };
       } else {
-        startResult = await this.start(item.id, config.services[item.id], { monitorHealth: false, phase: 'starting' });
+        startResult = await this.start(item.id, this._getServiceConfig(item.id), { monitorHealth: false, phase: 'starting' });
         startedServices.push(item);
       }
 
@@ -786,7 +802,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         phase: 'checking_health',
         running: startResult.alreadyRunning,
         pid: startResult.pid || status.pid || null
-      }, { serviceConfig: config.services[item.id] });
+      }, { serviceConfig: this._getServiceConfig(item.id) });
 
       const healthResult = await healthChecker.waitForHealthy(item.id, {
         timeout: BATCH_START_HEALTH_TIMEOUT,
@@ -801,7 +817,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
           running: true,
           pid: startResult.pid || status.pid || this._getPid(item.id) || null,
           error: null
-        }, { serviceConfig: config.services[item.id] });
+        }, { serviceConfig: this._getServiceConfig(item.id) });
         results.push({ serviceId: item.id, ...startResult, health: healthResult, healthy: true });
         continue;
       }
@@ -813,7 +829,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         running: Boolean(this._getPid(item.id)),
         pid: this._getPid(item.id) || null,
         error: failureMessage
-      }, { serviceConfig: config.services[item.id] });
+      }, { serviceConfig: this._getServiceConfig(item.id) });
       results.push({
         serviceId: item.id,
         ...startResult,
@@ -846,7 +862,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const ignoreNotRunning = options.ignoreNotRunning !== false;
 
     for (const item of services) {
-      const result = await this.stop(item.id, config.services[item.id]);
+      const result = await this.stop(item.id, this._getServiceConfig(item.id));
       if (ignoreNotRunning || result.success) {
         results.push({ serviceId: item.id, ...result });
       } else {
@@ -858,12 +874,12 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   async stopAll(options = {}) {
-    const services = [...config.serviceCatalog].sort((a, b) => b.startOrder - a.startOrder);
+    const services = [...this._getServiceCatalog()].sort((a, b) => b.startOrder - a.startOrder);
     return this._stopServicesBatch(services, options);
   }
 
   async startAll(options = {}) {
-    const services = [...config.serviceCatalog];
+    const services = [...this._getServiceCatalog()];
     return this._startServicesBatch(services, options);
   }
 
@@ -960,8 +976,8 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   async executeBuild(moduleConfig, buildId, options = {}) {
-    const frontendDir = path.join(this.projectRoot, moduleConfig.frontendPath);
-    const targetDir = path.join(this.projectRoot, moduleConfig.targetPath);
+    const frontendDir = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
+    const targetDir = path.join(this._getProjectRoot(), moduleConfig.targetPath);
 
     logger.broadcast(`\n========== 构建 ${moduleConfig.name} 前端 ==========`, 'build');
     logger.broadcast(`构建ID: ${buildId}`, 'build');

@@ -23,6 +23,9 @@ THE SYSTEM SHALL [expected behavior]
   - expected correct behavior
   - unchanged behavior that must continue working
 - Keep implementation tasks granular, executable, and traceable to requirements or bugfix analysis.
+- When drafting or upgrading a feature spec, default to adding a glossary if repo-specific terms repeat, and add concise user stories for major feature sections in addition to EARS requirements.
+- In `design.md`, default to adding an architecture diagram for multi-component work, sequence diagrams for key stateful flows, and 3-6 correctness properties for validation/save/apply or other state transition logic.
+- In `tasks.md`, require `_Requirements: ..._` traceability on every task and add explicit phase checkpoints with concrete verification outcomes.
 - When upstream requirements or design change, keep downstream design and tasks synchronized.
 - Suggest property-based testing when the requirement describes a general rule over many inputs, especially for regression prevention.
 - For trivial or clearly bounded edits, do not force full ceremony; apply the same thinking in lightweight form.

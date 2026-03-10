@@ -1,6 +1,6 @@
 const validator = require('../utils/validator');
 const logger = require('../utils/logger');
-const config = require('../config');
+const configManager = require('./configManager');
 const processManager = require('./processManager');
 const healthChecker = require('./healthChecker');
 const jobService = require('./jobService');
@@ -590,7 +590,7 @@ class ServiceTaskService {
 
   async startAllServices() {
     logger.broadcast('\n========== 启动所有服务 ==========', 'service');
-    const services = [...config.serviceCatalog];
+    const services = [...configManager.getResolvedConfig().serviceCatalog];
     return this._executeBatchAction({
       type: 'service.batch.start',
       targetId: 'all-services',
@@ -606,7 +606,7 @@ class ServiceTaskService {
 
   async stopAllServices() {
     logger.broadcast('\n========== 停止所有服务 ==========', 'service');
-    const services = [...config.serviceCatalog].sort((a, b) => b.startOrder - a.startOrder);
+    const services = [...configManager.getResolvedConfig().serviceCatalog].sort((a, b) => b.startOrder - a.startOrder);
     return this._executeBatchAction({
       type: 'service.batch.stop',
       targetId: 'all-services',
@@ -622,7 +622,7 @@ class ServiceTaskService {
 
   async restartAllServices() {
     logger.broadcast('\n========== 重启所有服务 ==========', 'service');
-    const services = [...config.serviceCatalog];
+    const services = [...configManager.getResolvedConfig().serviceCatalog];
     return this._executeBatchAction({
       type: 'service.batch.restart',
       targetId: 'all-services',

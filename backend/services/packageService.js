@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const packageConfig = require('../config/package');
+const configManager = require('./configManager');
 const { createAppError } = require('../utils/errors');
 
 function normalizeBoolean(value, fallback) {
@@ -26,8 +27,12 @@ function normalizeBoolean(value, fallback) {
   return Boolean(value);
 }
 
-function resolvePackageScriptPath(explicitPath = null) {
-  const candidates = [...new Set(packageConfig.getPackageScriptCandidates(explicitPath).map((item) => path.resolve(item)))];
+function getResolvedConfig() {
+  return configManager.getResolvedConfig();
+}
+
+function resolvePackageScriptPath(explicitPath = null, resolvedConfig = getResolvedConfig()) {
+  const candidates = [...new Set(packageConfig.getPackageScriptCandidates({ resolvedConfig, explicitPath }).map((item) => path.resolve(item)))];
   const existingPath = candidates.find((candidate) => fs.existsSync(candidate));
 
   if (!existingPath) {
@@ -54,7 +59,7 @@ function resolvePackageScriptPath(explicitPath = null) {
   return existingPath;
 }
 
-function validateServices(rawServices) {
+function validateServices(rawServices, resolvedConfig = getResolvedConfig()) {
   if (!Array.isArray(rawServices)) {
     throw createAppError(400, 'INVALID_PACKAGE_SERVICES', '服务列表必须为数组');
   }
@@ -65,11 +70,12 @@ function validateServices(rawServices) {
     throw createAppError(400, 'PACKAGE_SERVICES_REQUIRED', '请至少选择一个打包服务');
   }
 
-  const invalidServices = services.filter((service) => !packageConfig.PACKAGE_SERVICE_IDS.includes(service));
+  const allowedServices = packageConfig.getPackageServiceOptions(resolvedConfig).map((item) => item.id);
+  const invalidServices = services.filter((service) => !allowedServices.includes(service));
   if (invalidServices.length > 0) {
     throw createAppError(400, 'INVALID_PACKAGE_SERVICES', '包含未支持的打包服务', {
       invalidServices,
-      allowedServices: packageConfig.PACKAGE_SERVICE_IDS
+      allowedServices
     });
   }
 
@@ -110,15 +116,15 @@ function validatePackagePath(rawPackagePath) {
   return packagePath;
 }
 
-function preparePackageRunOptions(payload = {}) {
-  const defaults = packageConfig.PACKAGE_DEFAULTS;
-  const services = validateServices(payload.services ?? defaults.services);
+function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConfig()) {
+  const defaults = packageConfig.getPackageDefaults(resolvedConfig.package || {});
+  const services = validateServices(payload.services ?? defaults.services, resolvedConfig);
   const imageVersion = validateImageVersion(payload.imageVersion ?? defaults.imageVersion);
   const parallelBuild = normalizeBoolean(payload.parallelBuild, defaults.parallelBuild);
   const maxJobs = validateMaxJobs(payload.maxJobs ?? defaults.maxJobs);
   const buildOnly = normalizeBoolean(payload.buildOnly, defaults.buildOnly);
   const packagePath = validatePackagePath(payload.packagePath ?? defaults.packagePath);
-  const scriptPath = resolvePackageScriptPath(payload.scriptPath || null);
+  const scriptPath = resolvePackageScriptPath(payload.scriptPath || null, resolvedConfig);
 
   return {
     services,

@@ -3,7 +3,7 @@
  */
 const http = require('http');
 const net = require('net');
-const config = require('../config');
+const configManager = require('./configManager');
 
 class HealthChecker {
   constructor() {
@@ -122,7 +122,7 @@ class HealthChecker {
    * 检查服务健康状态
    */
   async check(serviceId) {
-    const service = config.services[serviceId];
+    const service = configManager.getResolvedConfig().services[serviceId];
     if (!service) {
       return { healthy: false, error: '服务不存在', failureCode: 'SERVICE_NOT_FOUND', terminal: true };
     }
@@ -244,7 +244,7 @@ class HealthChecker {
    * 批量检查所有服务
    */
   async checkAll() {
-    const serviceIds = Object.keys(config.services);
+    const serviceIds = Object.keys(configManager.getResolvedConfig().services);
     const entries = await Promise.allSettled(
       serviceIds.map(async (serviceId) => [serviceId, await this.check(serviceId)])
     );
