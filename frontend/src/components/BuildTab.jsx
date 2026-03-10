@@ -132,7 +132,6 @@ function BuildTab({ searchInputRef }) {
                   </span>
                 )}
               </h3>
-              <p className="build-section-desc">模块操作区铺满主工作区，日志与历史沉到右侧和底部。</p>
             </div>
             <span className="module-count">{modules.length} 个模块</span>
           </div>
@@ -162,17 +161,14 @@ function BuildTab({ searchInputRef }) {
             </div>
           )}
         </section>
-      </div>
 
-      <section className="build-log-section">
-        <div className="log-header">
-          <div>
-            <h3 className="section-title">构建日志</h3>
-            <p className="build-section-desc">stdout / stderr 会在这个全宽日志区域持续刷新。</p>
+        <aside className="build-log-panel">
+          <div className="card-header">
+            <h2 className="card-title">构建日志</h2>
           </div>
-        </div>
-        <LogViewer type="build" searchInputRef={searchInputRef} />
-      </section>
+          <LogViewer type="build" searchInputRef={searchInputRef} />
+        </aside>
+      </div>
 
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

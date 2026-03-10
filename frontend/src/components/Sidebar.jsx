@@ -11,14 +11,6 @@ function Sidebar({ activeTab, onTabChange, items = [] }) {
         </div>
       </div>
 
-      <div className="sidebar-overview">
-        <span className="sidebar-overview-label">Workspace Shell</span>
-        <strong className="sidebar-overview-title">整屏工作台</strong>
-        <p className="sidebar-overview-description">
-          统一进入构建、服务、打包与配置四个高频操作区域。
-        </p>
-      </div>
-
       <div className="sidebar-section">
         <div className="sidebar-section-label">Workspaces</div>
         <div className="sidebar-nav">
@@ -44,11 +36,6 @@ function Sidebar({ activeTab, onTabChange, items = [] }) {
             )
           })}
         </div>
-      </div>
-
-      <div className="sidebar-footer">
-        <span className="sidebar-footer-label">Quick Tips</span>
-        <p className="sidebar-footer-text">按 1-4 快速切换工作区，按 R 触发全局刷新。</p>
       </div>
     </nav>
   )

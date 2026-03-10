@@ -162,14 +162,7 @@ function App() {
 
         <div className="app-main">
           <header className="shell-header">
-            <div className="shell-header-top">
-              <div className="shell-breadcrumbs" aria-label="当前工作区路径">
-                <span className="shell-breadcrumb-item">MeterSphere Control Panel</span>
-                <span className="shell-breadcrumb-separator">/</span>
-                <span className="shell-breadcrumb-item active">{activeTabMeta.label}</span>
-              </div>
-
-              <div className="header-actions">
+            <div className="header-actions">
                 <button
                   type="button"
                   className="header-btn primary"
@@ -180,7 +173,6 @@ function App() {
                   刷新数据
                 </button>
               </div>
-            </div>
           </header>
 
           <main className="app-workspace">
