@@ -111,17 +111,6 @@
   gap: 14px;
 }
 
-/*.config-field-card {*/
-/*  padding: 14px;*/
-/*  border-radius: 14px;*/
-/*  background: rgba(8, 16, 33, 0.42);*/
-/*  border: 1px solid rgba(148, 163, 184, 0.1);*/
-/*}*/
-
-/*.config-field-card-wide {*/
-/*  grid-column: span 2;*/
-/*}*/
-
 .config-field,
 .config-service-cell,
 .config-service-identity {

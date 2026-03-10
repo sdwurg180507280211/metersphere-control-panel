@@ -12,41 +12,51 @@ function ConfigPackageSection({ packageConfig, resolved, fieldErrors, fieldWarni
       </div>
 
       <div className="config-form-grid">
-        <label className="config-field config-field-wide">
-          <span>打包脚本路径</span>
-          <input
-            value={packageConfig.scriptPath ?? ''}
-            onChange={(e) => onChange('package.scriptPath', e.target.value)}
-            placeholder="可选，留空则按候选路径自动探测"
-          />
-          <FieldMessages path="package.scriptPath" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>打包脚本路径</span>
+            <input
+              value={packageConfig.scriptPath ?? ''}
+              onChange={(e) => onChange('package.scriptPath', e.target.value)}
+              placeholder="可选，留空则按候选路径自动探测"
+            />
+            <FieldMessages path="package.scriptPath" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
 
-        <label className="config-field config-field-wide">
-          <span>默认服务列表</span>
-          <input
-            value={defaultServices}
-            onChange={(e) => onChange('package.defaultServices', splitCsv(e.target.value))}
-            placeholder="例如 api-test, test-track"
-          />
-          <FieldMessages path="package.defaultServices" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>默认服务列表</span>
+            <input
+              value={defaultServices}
+              onChange={(e) => onChange('package.defaultServices', splitCsv(e.target.value))}
+              placeholder="例如 api-test, test-track"
+            />
+            <FieldMessages path="package.defaultServices" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
 
-        <label className="config-field">
-          <span>默认镜像版本</span>
-          <input value={packageConfig.imageVersion ?? ''} onChange={(e) => onChange('package.imageVersion', e.target.value)} />
-        </label>
+        <div className="config-field-card">
+          <label className="config-field">
+            <span>默认镜像版本</span>
+            <input value={packageConfig.imageVersion ?? ''} onChange={(e) => onChange('package.imageVersion', e.target.value)} />
+          </label>
+        </div>
 
-        <label className="config-field">
-          <span>最大线程数</span>
-          <input value={packageConfig.maxJobs ?? ''} onChange={(e) => onChange('package.maxJobs', e.target.value)} />
-          <FieldMessages path="package.maxJobs" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card">
+          <label className="config-field">
+            <span>最大线程数</span>
+            <input value={packageConfig.maxJobs ?? ''} onChange={(e) => onChange('package.maxJobs', e.target.value)} />
+            <FieldMessages path="package.maxJobs" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
 
-        <label className="config-field config-field-wide">
-          <span>输出目录</span>
-          <input value={packageConfig.packagePath ?? ''} onChange={(e) => onChange('package.packagePath', e.target.value)} />
-        </label>
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>输出目录</span>
+            <input value={packageConfig.packagePath ?? ''} onChange={(e) => onChange('package.packagePath', e.target.value)} />
+          </label>
+        </div>
       </div>
 
       <div className="config-toggle-row">
