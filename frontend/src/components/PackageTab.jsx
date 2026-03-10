@@ -64,6 +64,12 @@ function PackageTab({ searchInputRef }) {
   }, [selectedServices, services])
   const currentStatus = normalizeStatus(currentTask?.status)
   const currentStatusText = renderStatusText(currentTask?.status)
+  const summaryCards = [
+    { label: '已选服务', value: selectedServices.length },
+    { label: '任务状态', value: currentStatusText },
+    { label: '最近镜像', value: recentImageVersions[0] || defaults.imageVersion },
+    { label: '并行模式', value: parallelBuild ? '并行' : '串行' }
+  ]
 
   const handleToggleService = (serviceId) => {
     if (isRunning) {
@@ -107,7 +113,7 @@ function PackageTab({ searchInputRef }) {
         <section className="package-main-card">
           <div className="package-main-header">
             <div>
-              <h3 className="section-title">📦 打包配置</h3>
+              <h3 className="section-title">打包配置</h3>
               <p className="package-subtitle">执行外部 `metersphere-build.sh`，参数语义保持与人工命令一致。</p>
             </div>
             <div className="package-header-pills">
@@ -274,16 +280,16 @@ function PackageTab({ searchInputRef }) {
             </div>
           </section>
 
-          <section className="package-status-section">
-            <div className="package-block-header compact">
-              <div>
-                <div className="package-block-title">📡 任务状态</div>
-                <div className="package-block-desc">状态、心跳、退出码都在这里。</div>
+          {currentTask && (
+            <section className="package-status-section">
+              <div className="package-block-header compact">
+                <div>
+                  <div className="package-block-title">任务状态</div>
+                  <div className="package-block-desc">状态、心跳、退出码都在这里。</div>
+                </div>
+                <span className={`package-status-badge status-${currentStatus}`}>{currentStatusText}</span>
               </div>
-              <span className={`package-status-badge status-${currentStatus}`}>{currentStatusText}</span>
-            </div>
 
-            {currentTask ? (
               <div className="package-status-card">
                 <div className="package-status-highlight">{currentTask.message || '等待日志输出'}</div>
                 <div className="package-status-meta-grid">
@@ -314,19 +320,15 @@ function PackageTab({ searchInputRef }) {
                   <div className="package-status-error">错误：{currentTask.error.message}</div>
                 )}
               </div>
-            ) : (
-              <div className="package-status-empty compact">
-                <EmptyState type="logs" />
-              </div>
-            )}
-          </section>
+            </section>
+          )}
         </aside>
       </div>
 
       <section className="package-log-section">
         <div className="log-header package-log-header">
           <div>
-            <h3 className="section-title">📝 打包日志</h3>
+            <h3 className="section-title">打包日志</h3>
             <p className="package-log-subtitle">stdout / stderr 会持续汇总到这里。</p>
           </div>
         </div>

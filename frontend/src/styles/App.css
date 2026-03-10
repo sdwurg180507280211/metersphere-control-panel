@@ -101,14 +101,13 @@
 
 .shell-header-body {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 24px;
 }
 
 .shell-header-copy {
   min-width: 0;
-  max-width: 680px;
+  flex: 1;
 }
 
 .shell-overline {
@@ -168,6 +167,7 @@
   flex: 1;
   min-height: 0;
   display: flex;
+  overflow: hidden;
 }
 
 .workspace-surface {
@@ -190,16 +190,15 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .tab-content {
-  animation: fadeIn 0.24s ease-out;
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
   gap: 20px;
+  flex: 1;
 }
 
 .card {

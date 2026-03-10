@@ -13,61 +13,61 @@ const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 
 
 // 状态配置
 const STATE_CONFIG = {
-  starting: { 
-    icon: '⏳', 
-    color: '#faad14', 
-    bgColor: '#fffbe6',
-    borderColor: '#ffe58f',
+  starting: {
+    icon: '◌',
+    color: '#fbbf24',
+    bgColor: '#2b2110',
+    borderColor: '#7c5b13',
     text: '启动中',
-    spin: true 
+    spin: true
   },
-  checking_health: { 
-    icon: '🔍', 
-    color: '#1890ff', 
-    bgColor: '#e6f7ff',
-    borderColor: '#91d5ff',
+  checking_health: {
+    icon: '◎',
+    color: '#60a5fa',
+    bgColor: '#0f2342',
+    borderColor: '#28589a',
     text: '健康检查中',
-    spin: true 
+    spin: true
   },
-  running: { 
-    icon: '✓', 
-    color: '#52c41a', 
-    bgColor: '#f6ffed',
-    borderColor: '#b7eb8f',
+  running: {
+    icon: '●',
+    color: '#4ade80',
+    bgColor: '#102617',
+    borderColor: '#24653b',
     text: '运行中',
-    spin: false 
+    spin: false
   },
-  stopping: { 
-    icon: '🛑', 
-    color: '#fa8c16', 
-    bgColor: '#fff7e6',
-    borderColor: '#ffd591',
+  stopping: {
+    icon: '◍',
+    color: '#fb923c',
+    bgColor: '#2d1d10',
+    borderColor: '#8a4b1f',
     text: '停止中',
-    spin: true 
+    spin: true
   },
-  stopped: { 
-    icon: '○', 
-    color: '#8c8c8c', 
-    bgColor: '#f5f5f5',
-    borderColor: '#d9d9d9',
+  stopped: {
+    icon: '○',
+    color: '#94a3b8',
+    bgColor: '#182237',
+    borderColor: '#334155',
     text: '已停止',
-    spin: false 
+    spin: false
   },
-  failed: { 
-    icon: '✗', 
-    color: '#f5222d', 
-    bgColor: '#fff1f0',
-    borderColor: '#ffa39e',
+  failed: {
+    icon: '✕',
+    color: '#f87171',
+    bgColor: '#311818',
+    borderColor: '#8f3434',
     text: '启动失败',
-    spin: false 
+    spin: false
   },
-  restarting: { 
-    icon: '🔄', 
-    color: '#722ed1', 
-    bgColor: '#f9f0ff',
-    borderColor: '#d3adf7',
+  restarting: {
+    icon: '↻',
+    color: '#c084fc',
+    bgColor: '#23163a',
+    borderColor: '#6f42b6',
     text: '重启中',
-    spin: true 
+    spin: true
   }
 }
 
@@ -307,11 +307,13 @@ function ServicesTab({ searchInputRef }) {
   }, [confirmDialog, catalog, services, updateServiceStatus, connected, fetchServices])
 
   const runningCount = catalog.filter((service) => services[service.id]?.running).length
+  const busyCount = catalog.filter((service) => BUSY_SERVICE_PHASES.has(services[service.id]?.phase)).length
+  const failedCount = catalog.filter((service) => services[service.id]?.phase === 'failed').length
 
   // 渲染骨架屏
   if (initialLoading) {
     return (
-      <div className="tab-content">
+      <div className="tab-content services-tab">
         <div className="card">
           <div className="card-header skeleton-header">
             <div className="skeleton-title" />
@@ -334,7 +336,7 @@ function ServicesTab({ searchInputRef }) {
 
   if (catalog.length === 0) {
     return (
-      <div className="tab-content">
+      <div className="tab-content services-tab">
         <div className="card">
           <EmptyState type="services" />
         </div>
@@ -343,62 +345,64 @@ function ServicesTab({ searchInputRef }) {
   }
 
   return (
-    <div className="tab-content">
-      <div className="card">
-        <div className="card-header">
-          <h2 className="card-title">
-            服务管理
-            <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
-          </h2>
-          <div className="batch-actions">
-            <Tooltip content="执行 sudo msctl reload" position="bottom">
-              <button className="btn-batch btn-system-reload" onClick={openSystemReloadDialog}>
-                <span className="btn-icon-text">⚙️</span>
-                系统 Reload
-              </button>
-            </Tooltip>
-            <Tooltip content="启动所有服务" position="bottom">
-              <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
-                <span className="btn-icon-text">🚀</span>
-                启动全部
-              </button>
-            </Tooltip>
-            <Tooltip content="重启所有服务" position="bottom">
-              <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
-                <span className="btn-icon-text">🔄</span>
-                重启全部
-              </button>
-            </Tooltip>
-            <Tooltip content="停止所有服务" position="bottom">
-              <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
-                <span className="btn-icon-text">🛑</span>
-                停止全部
-              </button>
-            </Tooltip>
+    <div className="tab-content services-tab">
+      <div className="services-workspace">
+        <section className="card services-control-panel">
+          <div className="card-header">
+            <h2 className="card-title">
+              服务管理
+              <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
+            </h2>
+            <div className="batch-actions">
+              <Tooltip content="执行 sudo msctl reload" position="bottom">
+                <button className="btn-batch btn-system-reload" onClick={openSystemReloadDialog}>
+                  <span className="btn-icon-text">SYS</span>
+                  系统 Reload
+                </button>
+              </Tooltip>
+              <Tooltip content="启动所有服务" position="bottom">
+                <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
+                  <span className="btn-icon-text">ON</span>
+                  启动全部
+                </button>
+              </Tooltip>
+              <Tooltip content="重启所有服务" position="bottom">
+                <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
+                  <span className="btn-icon-text">RS</span>
+                  重启全部
+                </button>
+              </Tooltip>
+              <Tooltip content="停止所有服务" position="bottom">
+                <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
+                  <span className="btn-icon-text">OFF</span>
+                  停止全部
+                </button>
+              </Tooltip>
+            </div>
           </div>
-        </div>
-        <div className="btn-grid">
-          {catalog.map((service, index) => (
-            <ServiceButton
-              key={service.id}
-              service={service}
-              status={services[service.id] || { running: false, phase: 'stopped', error: null }}
-              isLoading={loading[service.id]}
-              isErrorExpanded={expandedErrors.has(service.id)}
-              onToggle={() => toggleService(service.id)}
-              onRestart={(e) => handleRestart(service.id, e)}
-              onToggleError={() => toggleErrorExpand(service.id)}
-              animationDelay={index * 50}
-            />
-          ))}
-        </div>
-      </div>
+          <div className="btn-grid">
+            {catalog.map((service, index) => (
+              <ServiceButton
+                key={service.id}
+                service={service}
+                status={services[service.id] || { running: false, phase: 'stopped', error: null }}
+                isLoading={loading[service.id]}
+                isErrorExpanded={expandedErrors.has(service.id)}
+                onToggle={() => toggleService(service.id)}
+                onRestart={(e) => handleRestart(service.id, e)}
+                onToggleError={() => toggleErrorExpand(service.id)}
+                animationDelay={index * 50}
+              />
+            ))}
+          </div>
+        </section>
 
-      <div className="card log-card">
-        <div className="card-header">
-          <h2 className="card-title">服务日志</h2>
-        </div>
-        <LogViewer type="service" searchInputRef={searchInputRef} />
+        <aside className="card log-card services-log-panel">
+          <div className="card-header">
+            <h2 className="card-title">服务日志</h2>
+          </div>
+          <LogViewer type="service" searchInputRef={searchInputRef} />
+        </aside>
       </div>
 
       {/* 确认对话框 */}
