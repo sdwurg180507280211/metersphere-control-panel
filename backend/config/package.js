@@ -1,4 +1,5 @@
 const path = require('path');
+const { DEFAULT_PROJECT_ROOT } = require('../config');
 
 const CONTROL_PANEL_ROOT = path.resolve(__dirname, '../..');
 
@@ -56,15 +57,14 @@ function getPackageServiceOptions(resolvedConfig = {}) {
 
 function getDetailedPackageScriptCandidates({ resolvedConfig = {}, explicitPath = null } = {}) {
   const configuredPath = resolvedConfig.package?.scriptPath || null;
-  const projectRoot = resolvedConfig.projectRoot || path.resolve(CONTROL_PANEL_ROOT, '../metersphere');
+  const projectRoot = resolvedConfig.projectRoot || path.resolve(CONTROL_PANEL_ROOT, DEFAULT_PROJECT_ROOT);
 
   return [
     explicitPath ? { source: 'request', path: explicitPath } : null,
     process.env.MS_PACKAGE_SCRIPT_PATH ? { source: 'env:MS_PACKAGE_SCRIPT_PATH', path: process.env.MS_PACKAGE_SCRIPT_PATH } : null,
     process.env.PACKAGE_SCRIPT_PATH ? { source: 'env:PACKAGE_SCRIPT_PATH', path: process.env.PACKAGE_SCRIPT_PATH } : null,
     configuredPath ? { source: 'config:package.scriptPath', path: configuredPath } : null,
-    { source: 'projectRoot:default', path: path.resolve(projectRoot, '打包/metersphere-build.sh') },
-    { source: 'fallback:../metersphere', path: path.resolve(CONTROL_PANEL_ROOT, '../metersphere/打包/metersphere-build.sh') }
+    { source: 'projectRoot:default', path: path.resolve(projectRoot, '打包/metersphere-build.sh') }
   ].filter(Boolean);
 }
 

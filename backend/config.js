@@ -5,11 +5,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_PATH = path.join(__dirname, '../config.json');
+const CONFIG_PATH = process.env.MS_CONFIG_PATH || path.join(__dirname, '../config.json');
 const CONTROL_PANEL_ROOT = path.resolve(__dirname, '..');
 
 const DEFAULT_PORT = 3000;
-const DEFAULT_PROJECT_ROOT = '..';
+const DEFAULT_PROJECT_ROOT = '/Users/edy/ideaProjects/metersphere';
 const DEFAULT_MAX_LOG_LINES = 1000;
 const DEFAULT_SERVICE_START_ORDER = 99;
 const DEFAULT_HEALTH_CHECK = '/actuator/health';
@@ -220,11 +220,7 @@ function resolveProjectRoot(projectRootConfig, services = {}, options = {}) {
     return configuredCandidate;
   }
 
-  const candidates = [
-    configuredCandidate,
-    path.resolve(CONTROL_PANEL_ROOT, '../metersphere'),
-    path.resolve(CONTROL_PANEL_ROOT, '..')
-  ];
+  const candidates = [configuredCandidate];
 
   const uniqueCandidates = [...new Set(candidates)];
   const detected = uniqueCandidates.find((candidate) => isValidProjectRoot(candidate, services));
