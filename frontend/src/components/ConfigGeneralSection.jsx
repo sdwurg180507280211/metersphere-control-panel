@@ -40,14 +40,6 @@ function ConfigGeneralSection({ draft, resolved, meta, fieldErrors, fieldWarning
       </div>
 
       <div className="config-form-grid">
-        <div className="config-field-card">
-          <label className="config-field">
-            <span>控制面板端口</span>
-            <input value={draft.port ?? ''} onChange={(e) => onChange('port', e.target.value)} />
-            <FieldMessages path="port" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-          </label>
-        </div>
-
         <div className="config-field-card config-field-card-wide">
           <label className="config-field">
             <span>MeterSphere 项目根目录</span>
@@ -110,10 +102,10 @@ function ConfigGeneralSection({ draft, resolved, meta, fieldErrors, fieldWarning
         <div className="config-field-card">
           <button
             type="button"
-            className="config-secondary-btn"
+            className="config-primary-btn"
             onClick={handleTestRedis}
             disabled={testingRedis || draft.redis?.mode !== 'redis'}
-            style={{ marginTop: '20px' }}
+            style={{ marginTop: '20px', width: '100%' }}
           >
             {testingRedis ? '测试中...' : '测试 Redis 连接'}
           </button>

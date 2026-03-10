@@ -3,17 +3,9 @@ const { DEFAULT_PROJECT_ROOT } = require('../config');
 
 const CONTROL_PANEL_ROOT = path.resolve(__dirname, '../..');
 
-const PACKAGE_SERVICE_IDS = [
-  'gateway',
-  'eureka',
-  'test-track',
-  'api-test',
-  'performance-test',
-  'project-management',
-  'report-stat',
-  'system-setting',
-  'workstation'
-];
+function getPackageServiceIds(services = {}) {
+  return Object.keys(services);
+}
 
 const PACKAGE_CAPABILITIES = {
   buildOnly: true,
@@ -47,7 +39,7 @@ function getPackageDefaults(packageConfig = {}) {
 function getPackageServiceOptions(resolvedConfig = {}) {
   const services = resolvedConfig.services || {};
 
-  return PACKAGE_SERVICE_IDS.map((id) => ({
+  return getPackageServiceIds(services).map((id) => ({
     id,
     name: services[id]?.name || id,
     description: services[id]?.pom || null,
@@ -74,7 +66,7 @@ function getPackageScriptCandidates(options = {}) {
 
 module.exports = {
   CONTROL_PANEL_ROOT,
-  PACKAGE_SERVICE_IDS,
+  getPackageServiceIds,
   PACKAGE_CAPABILITIES,
   PACKAGE_RESOURCE_KEY: 'package:run',
   PACKAGE_HEARTBEAT_INTERVAL_MS: 15000,

@@ -1,5 +1,5 @@
 {
-  "port": 3002,
+  "port": 3000,
   "projectRoot": "/Users/edy/ideaProjects/metersphere",
   "maxLogLines": 1000,
   "redis": {
@@ -19,7 +19,7 @@
       "startOrder": 1
     },
     "gateway": {
-      "name": "Gateway",
+      "name": "网关",
       "pom": "framework/gateway/pom.xml",
       "port": 8000,
       "healthCheckPort": 7421,

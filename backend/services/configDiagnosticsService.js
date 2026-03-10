@@ -71,7 +71,7 @@ class ConfigDiagnosticsService {
 
     const defaultServices = editableConfig.package?.defaultServices;
     if (Array.isArray(defaultServices)) {
-      const allowedServices = packageConfig.PACKAGE_SERVICE_IDS;
+      const allowedServices = packageConfig.getPackageServiceIds(editableConfig.services || {});
       const invalidServices = defaultServices.filter((item) => !allowedServices.includes(item));
       if (invalidServices.length > 0) {
         errors.push(this._createIssue('error', 'package.defaultServices', '默认打包服务包含无效项', { invalidServices, allowedServices }));

@@ -206,15 +206,16 @@ class ConfigManager {
   }
 
   getRuntimeConfig() {
+    const appliedRedis = this.appliedEditableConfig?.redis || {};
     return this._clone({
       cache: {
-        configuredMode: process.env.MS_CACHE_MODE || 'memory',
+        configuredMode: process.env.MS_CACHE_MODE || appliedRedis.mode || 'memory',
         keyPrefix: process.env.MS_CACHE_KEY_PREFIX || 'ms-panel:'
       },
       redis: {
-        host: process.env.MS_REDIS_HOST || null,
-        port: process.env.MS_REDIS_PORT || null,
-        db: process.env.MS_REDIS_DB || '0',
+        host: process.env.MS_REDIS_HOST || appliedRedis.host || null,
+        port: process.env.MS_REDIS_PORT || appliedRedis.port || null,
+        db: process.env.MS_REDIS_DB || appliedRedis.db || '0',
         propertiesPath: process.env.MS_PROPERTIES_PATH || '/opt/metersphere/conf/metersphere.properties'
       },
       job: {
