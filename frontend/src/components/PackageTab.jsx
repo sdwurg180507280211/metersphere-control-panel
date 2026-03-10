@@ -21,6 +21,7 @@ function PackageTab({ searchInputRef }) {
   const [parallelBuild, setParallelBuild] = useState(FALLBACK_DEFAULTS.parallelBuild)
   const [maxJobs, setMaxJobs] = useState(FALLBACK_DEFAULTS.maxJobs)
   const [recentImageVersions, setRecentImageVersions] = useState(() => loadRecentImageVersions())
+  const [showLogModal, setShowLogModal] = useState(false)
 
   const { clearPackageLogs } = useLogStore()
   const {
@@ -255,6 +256,13 @@ function PackageTab({ searchInputRef }) {
               {isRunning ? '⏳ 打包中...' : '▶️ 开始打包'}
             </button>
 
+            <button
+              className="package-secondary-btn"
+              onClick={() => setShowLogModal(true)}
+            >
+              📋 查看日志
+            </button>
+
             <div className="package-summary-card">
               <div className="package-summary-item">
                 <span className="package-summary-label">本次服务</span>
@@ -325,15 +333,19 @@ function PackageTab({ searchInputRef }) {
         </aside>
       </div>
 
-      <section className="package-log-section">
-        <div className="log-header package-log-header">
-          <div>
-            <h3 className="section-title">打包日志</h3>
-            <p className="package-log-subtitle">stdout / stderr 会持续汇总到这里。</p>
+      {showLogModal && (
+        <div className="log-modal-overlay" onClick={() => setShowLogModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>打包日志</h3>
+              <button className="log-modal-close" onClick={() => setShowLogModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <LogViewer type="package" searchInputRef={searchInputRef} />
+            </div>
           </div>
         </div>
-        <LogViewer type="package" searchInputRef={searchInputRef} />
-      </section>
+      )}
     </div>
   )
 }
