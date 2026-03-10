@@ -148,21 +148,30 @@ function PackageTab({ searchInputRef }) {
             </div>
 
             <div className="package-service-list">
-              {services.map((service) => {
+              {services.map((service, index) => {
                 const checked = selectedServices.includes(service.id)
                 return (
-                  <label key={service.id} className={`package-service-item ${checked ? 'checked' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => handleToggleService(service.id)}
+                  <div
+                    key={service.id}
+                    className={`package-service-card ${checked ? 'selected' : ''}`}
+                    style={{ animationDelay: `${index * 30}ms` }}
+                  >
+                    <button
+                      className="package-service-btn"
+                      onClick={() => handleToggleService(service.id)}
                       disabled={isRunning}
-                    />
-                    <span className="package-service-content">
-                      <span className="package-service-name">{service.name}</span>
-                      <span className="package-service-id">{service.id}</span>
-                    </span>
-                  </label>
+                    >
+                      <div className="package-service-content">
+                        <div className="package-service-main">
+                          <span className={`package-service-icon ${checked ? 'checked' : ''}`}>
+                            {checked ? '✓' : '○'}
+                          </span>
+                          <span className="package-service-name">{service.name}</span>
+                        </div>
+                        <span className="package-service-id">{service.id}</span>
+                      </div>
+                    </button>
+                  </div>
                 )
               })}
             </div>

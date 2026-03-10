@@ -149,49 +149,79 @@
 
 .package-service-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
   overflow: auto;
   min-height: 0;
 }
 
-.package-service-item {
+.package-service-card {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.45);
-  cursor: pointer;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, transform 0.16s ease;
+  flex-direction: column;
+  border: 1px solid;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  box-shadow: 0 8px 16px rgba(2, 6, 23, 0.12);
+  animation: fadeInUp 0.3s ease-out backwards;
 }
 
-.package-service-item:hover {
-  border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: 0 10px 20px rgba(2, 6, 23, 0.14);
+.package-service-card:not(.selected) {
+  background: rgba(15, 23, 42, 0.6);
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+.package-service-card.selected {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(96, 165, 250, 0.42);
+}
+
+.package-service-card:hover {
+  box-shadow: 0 12px 20px rgba(2, 6, 23, 0.18);
   transform: translateY(-1px);
 }
 
-.package-service-item.checked {
-  border-color: rgba(96, 165, 250, 0.42);
-  background: rgba(37, 99, 235, 0.18);
+.package-service-btn {
+  flex: 1;
+  padding: 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
 }
 
-.package-service-item input {
-  width: 18px;
-  height: 18px;
-  accent-color: #2563eb;
-  flex-shrink: 0;
+.package-service-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .package-service-content {
-  min-width: 0;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.package-service-main {
+  display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+}
+
+.package-service-icon {
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.package-service-icon.checked {
+  color: #60a5fa;
 }
 
 .package-service-name {
