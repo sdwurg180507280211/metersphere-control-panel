@@ -2,6 +2,13 @@
   "port": 3000,
   "projectRoot": "..",
   "maxLogLines": 1000,
+  "redis": {
+    "mode": "redis",
+    "host": "localhost",
+    "port": 6379,
+    "password": "Password123@redis",
+    "db": 0
+  },
   "services": {
     "eureka": {
       "name": "Eureka",

@@ -162,6 +162,7 @@ function normalizeEditableConfig(rawConfig = {}) {
     port: normalizeNumericField(config.port, DEFAULT_PORT),
     projectRoot: normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT),
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
+    redis: config.redis || {},
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
   };

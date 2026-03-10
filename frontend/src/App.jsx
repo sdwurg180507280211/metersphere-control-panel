@@ -48,7 +48,10 @@ const TAB_ITEMS = [
 ]
 
 function App() {
-  const [activeTab, setActiveTab] = useState('build')
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem('activeTab')
+    return saved && TAB_ITEMS.some(item => item.id === saved) ? saved : 'build'
+  })
   const searchInputRef = useRef(null)
 
   const { fetchServices, fetchCatalog } = useServiceStore()
@@ -60,6 +63,10 @@ function App() {
   const activeTabMeta = TAB_ITEMS.find((item) => item.id === activeTab) || TAB_ITEMS[0]
 
   useWebSocket()
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab)
+  }, [activeTab])
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {

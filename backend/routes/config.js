@@ -8,5 +8,6 @@ router.post('/validate', configController.validate);
 router.put('/', configController.save);
 router.post('/apply', configController.apply);
 router.get('/diagnostics', configController.refreshDiagnostics);
+router.post('/test-redis', configController.testRedis);
 
 module.exports = router;

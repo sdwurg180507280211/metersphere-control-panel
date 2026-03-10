@@ -1,10 +1,35 @@
+import { useState, useEffect, useRef } from 'react'
 import { useWebSocketStore } from '../store/useAppStore'
 import './ConnectionStatus.css'
 
 function ConnectionStatus() {
   const { connected, reconnectAttempts } = useWebSocketStore()
+  const [showBanner, setShowBanner] = useState(false)
+  const timerRef = useRef(null)
 
-  if (connected) return null
+  useEffect(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+
+    if (connected) {
+      setShowBanner(false)
+    } else {
+      timerRef.current = setTimeout(() => {
+        setShowBanner(true)
+      }, 1500)
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+    }
+  }, [connected])
+
+  if (!showBanner) return null
 
   return (
     <div className="connection-status-banner">

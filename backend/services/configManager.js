@@ -68,6 +68,7 @@ class ConfigManager {
       port: editableDraft.port,
       projectRoot: editableDraft.projectRoot,
       maxLogLines: editableDraft.maxLogLines,
+      redis: editableDraft.redis || currentRaw.redis,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 

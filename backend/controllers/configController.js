@@ -44,6 +44,27 @@ const configController = {
     } catch (error) {
       sendError(res, error);
     }
+  },
+
+  async testRedis(req, res) {
+    try {
+      const { host, port, password, db } = req.body;
+      const redis = require('redis');
+
+      const client = redis.createClient({
+        socket: { host, port: parseInt(port) },
+        password: password || undefined,
+        database: parseInt(db) || 0
+      });
+
+      await client.connect();
+      await client.ping();
+      await client.quit();
+
+      res.json({ success: true, message: 'Redis连接成功' });
+    } catch (error) {
+      res.json({ success: false, message: error.message || 'Redis连接失败' });
+    }
   }
 };
 
