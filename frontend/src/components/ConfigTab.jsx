@@ -11,6 +11,9 @@ import './ConfigTab.css'
 
 function ConfigTab() {
   const [showServicesModal, setShowServicesModal] = useState(false)
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
+  const [showRuntimeModal, setShowRuntimeModal] = useState(false)
+  const [showPackageModal, setShowPackageModal] = useState(false)
 
   const {
     snapshot,
@@ -133,33 +136,26 @@ function ConfigTab() {
             fieldWarnings={fieldWarnings}
             onChange={updateDraft}
           />
-          <ConfigPackageSection
-            packageConfig={draft.package || {}}
-            resolved={resolved}
-            fieldErrors={fieldErrors}
-            fieldWarnings={fieldWarnings}
-            onChange={updateDraft}
-          />
+          <section className="config-card">
+            <button className="config-primary-btn" onClick={() => setShowPackageModal(true)} style={{ width: '100%' }}>
+              📦 构建与打包
+            </button>
+          </section>
           <section className="config-card">
             <button className="config-primary-btn" onClick={() => setShowServicesModal(true)} style={{ width: '100%' }}>
               📋 服务配置
             </button>
           </section>
-        </div>
-
-        <div className="config-side">
-          <ConfigRuntimePanel
-            runtime={runtime}
-            resolved={resolved}
-            meta={meta}
-            applyImpact={applyImpact}
-          />
-          <ConfigDiagnosticsPanel
-            diagnostics={diagnostics}
-            validation={validation}
-            loading={diagnosticsLoading}
-            onRefresh={handleRefreshDiagnostics}
-          />
+          <section className="config-card">
+            <button className="config-primary-btn" onClick={() => setShowDiagnosticsModal(true)} style={{ width: '100%' }}>
+              🔍 配置诊断
+            </button>
+          </section>
+          <section className="config-card">
+            <button className="config-primary-btn" onClick={() => setShowRuntimeModal(true)} style={{ width: '100%' }}>
+              ⚙️ 运行时信息
+            </button>
+          </section>
         </div>
       </div>
 
@@ -191,6 +187,64 @@ function ConfigTab() {
                 onAddService={addService}
                 onUpdateService={updateService}
                 onRemoveService={removeService}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDiagnosticsModal && (
+        <div className="log-modal-overlay" onClick={() => setShowDiagnosticsModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>配置诊断</h3>
+              <button className="log-modal-close" onClick={() => setShowDiagnosticsModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigDiagnosticsPanel
+                diagnostics={diagnostics}
+                validation={validation}
+                loading={diagnosticsLoading}
+                onRefresh={handleRefreshDiagnostics}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRuntimeModal && (
+        <div className="log-modal-overlay" onClick={() => setShowRuntimeModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>运行时信息</h3>
+              <button className="log-modal-close" onClick={() => setShowRuntimeModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigRuntimePanel
+                runtime={runtime}
+                resolved={resolved}
+                meta={meta}
+                applyImpact={applyImpact}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPackageModal && (
+        <div className="log-modal-overlay" onClick={() => setShowPackageModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>构建与打包</h3>
+              <button className="log-modal-close" onClick={() => setShowPackageModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigPackageSection
+                packageConfig={draft.package || {}}
+                resolved={resolved}
+                fieldErrors={fieldErrors}
+                fieldWarnings={fieldWarnings}
+                onChange={updateDraft}
               />
             </div>
           </div>

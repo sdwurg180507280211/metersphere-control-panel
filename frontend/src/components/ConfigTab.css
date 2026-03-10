@@ -3,6 +3,7 @@
   flex-direction: column;
   gap: 18px;
   min-height: 100%;
+  position: relative;
 }
 
 .config-tab-loading {
@@ -225,6 +226,77 @@
   margin-top: 16px;
 }
 
+.config-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.config-diagnostic-wide {
+  grid-column: span 2;
+}
+
+.config-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.config-panel-group {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(8, 16, 33, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  min-height: 200px;
+}
+
+.config-panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-port-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.config-port-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  font-size: 12px;
+}
+
+.config-port-card strong {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.config-port-card span {
+  color: var(--text-secondary);
+}
+
+.config-port-card em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-size: 11px;
+}
+
+.config-diagnostic-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(8, 16, 33, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  min-height: 200px;
+}
+
 .config-subtitle {
   font-size: 13px;
   font-weight: 700;
@@ -340,7 +412,7 @@
 }
 
 .config-save-bar {
-  position: fixed;
+  position: absolute;
   top: 24px;
   right: 24px;
   display: grid;
@@ -353,7 +425,7 @@
   border: 1px solid rgba(148, 163, 184, 0.16);
   backdrop-filter: blur(12px);
   z-index: 100;
-  width: 240px;
+  width: 280px;
 }
 
 .config-save-status {

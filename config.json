@@ -91,5 +91,10 @@
       "healthCheck": "/actuator/health",
       "startOrder": 3
     }
+  },
+  "package": {
+    "parallelBuild": true,
+    "buildOnly": false,
+    "maxJobs": 4
   }
 }

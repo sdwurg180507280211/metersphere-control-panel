@@ -26,6 +26,7 @@ function LogViewer({ type, searchInputRef }) {
   const [scrollTop, setScrollTop] = useState(0)
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
   const [copied, setCopied] = useState(false)
+  const [copiedSelection, setCopiedSelection] = useState(false)
 
   const {
     filters,
@@ -128,6 +129,20 @@ function LogViewer({ type, searchInputRef }) {
       console.error('复制失败:', err)
     }
   }, [originalLogs])
+
+  const handleTextSelect = useCallback(async () => {
+    const selection = window.getSelection()
+    const selectedText = selection?.toString()
+    if (selectedText && selectedText.trim()) {
+      try {
+        await navigator.clipboard.writeText(selectedText)
+        setCopiedSelection(true)
+        setTimeout(() => setCopiedSelection(false), 1500)
+      } catch (err) {
+        console.error('复制选中文本失败:', err)
+      }
+    }
+  }, [])
 
   const toggleStackTrace = (index) => {
     setExpandedStackTraces(prev => {
@@ -279,7 +294,7 @@ function LogViewer({ type, searchInputRef }) {
         </div>
       </div>
 
-      <div ref={logRef} className="log" onScroll={handleScroll}>
+      <div ref={logRef} className="log" onScroll={handleScroll} onMouseUp={handleTextSelect}>
         {lines.length > 0 ? (
           <div className="log-viewport" style={{ height: `${totalHeight}px` }}>
             <div className="log-visible" style={{ transform: `translateY(${startIndex * LOG_LINE_HEIGHT}px)` }}>
@@ -296,7 +311,7 @@ function LogViewer({ type, searchInputRef }) {
       
       {/* 回到底部按钮 */}
       {!shouldAutoScroll.current && lines.length > 0 && (
-        <button 
+        <button
           className="scroll-to-bottom"
           onClick={() => {
             if (logRef.current) {
@@ -307,6 +322,13 @@ function LogViewer({ type, searchInputRef }) {
         >
           ↓ 回到底部
         </button>
+      )}
+
+      {/* 选中复制提示 */}
+      {copiedSelection && (
+        <div className="copy-toast">
+          ✓ 已复制选中内容
+        </div>
       )}
     </div>
   )

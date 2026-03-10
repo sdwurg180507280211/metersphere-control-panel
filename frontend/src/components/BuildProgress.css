@@ -1,49 +1,44 @@
-/* 构建进度容器 */
 .build-progress-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 10px;
 }
 
-/* 紧凑的构建项 */
 .build-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 8px;
-  border-left: 3px solid #007aff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 12px 14px;
+  background: rgba(15, 26, 58, 0.86);
+  border-radius: 16px;
+  border-left: 3px solid #3b82f6;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.18);
   animation: slideDown 0.3s ease-out backwards;
   transition: all 0.2s;
 }
 
 .build-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  transform: translateX(4px);
+  box-shadow: 0 16px 28px rgba(2, 6, 23, 0.24);
+  transform: translateY(-1px);
 }
 
 .build-item.running {
-  border-left-color: #007aff;
-  background: linear-gradient(90deg, rgba(0, 122, 255, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+  border-left-color: #60a5fa;
 }
 
 .build-item.success {
-  border-left-color: #34c759;
-  background: linear-gradient(90deg, rgba(52, 199, 89, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+  border-left-color: #22c55e;
 }
 
 .build-item.failed {
-  border-left-color: #ff3b30;
-  background: linear-gradient(90deg, rgba(255, 59, 48, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+  border-left-color: #ef4444;
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
@@ -51,7 +46,6 @@
   }
 }
 
-/* 状态图标 */
 .build-item-status {
   flex-shrink: 0;
   width: 28px;
@@ -69,15 +63,10 @@
   height: 24px;
   border-radius: 50%;
   font-size: 14px;
-  transition: transform 0.2s;
 }
 
 .status-icon.spin {
   animation: spin 2s linear infinite;
-}
-
-.build-item:hover .status-icon.spin {
-  animation-duration: 1s;
 }
 
 @keyframes spin {
@@ -85,13 +74,12 @@
   to { transform: rotate(360deg); }
 }
 
-/* 中间内容区 */
 .build-item-content {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .build-item-header {
@@ -102,9 +90,9 @@
 }
 
 .build-module {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 13px;
-  color: #1d1d1f;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -112,47 +100,45 @@
 
 .build-percent {
   font-size: 12px;
-  font-weight: 600;
-  color: #007aff;
+  font-weight: 700;
+  color: #60a5fa;
   flex-shrink: 0;
-  transition: all 0.2s;
 }
 
 .build-item.success .build-percent {
-  color: #34c759;
+  color: #4ade80;
 }
 
 .build-item.failed .build-percent {
-  color: #ff3b30;
+  color: #f87171;
 }
 
-/* 迷你进度条 */
 .build-mini-bar {
   height: 4px;
-  background: #e5e5e5;
-  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
   overflow: hidden;
 }
 
 .build-mini-fill {
   height: 100%;
-  background: linear-gradient(90deg, #007aff, #5856d6);
-  border-radius: 2px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 999px;
   transition: width 0.3s ease;
 }
 
 .build-mini-fill.animated {
-  background: linear-gradient(90deg, #007aff 0%, #5856d6 50%, #007aff 100%);
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #3b82f6 100%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
 
 .build-item.success .build-mini-fill {
-  background: linear-gradient(90deg, #34c759, #30d158);
+  background: linear-gradient(90deg, #22c55e, #4ade80);
 }
 
 .build-item.failed .build-mini-fill {
-  background: linear-gradient(90deg, #ff3b30, #ff6b6b);
+  background: linear-gradient(90deg, #ef4444, #f87171);
 }
 
 @keyframes shimmer {
@@ -160,13 +146,12 @@
   100% { background-position: -200% 0; }
 }
 
-/* 元信息 */
 .build-item-meta {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: #8e8e93;
+  color: var(--text-muted);
 }
 
 .step-text {
@@ -174,38 +159,36 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .step-count {
   padding: 2px 8px;
-  background: #f2f2f7;
-  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 999px;
   font-size: 10px;
-  font-weight: 500;
-  color: #666;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .duration {
   font-size: 10px;
-  color: #999;
+  color: var(--text-muted);
   font-family: 'Menlo', 'Monaco', monospace;
 }
 
-/* 错误信息 */
 .build-item-error {
   font-size: 11px;
-  color: #ff3b30;
+  color: #fecaca;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 4px 8px;
-  background: rgba(255, 59, 48, 0.08);
-  border-radius: 4px;
-  margin-top: 4px;
+  padding: 6px 8px;
+  background: rgba(127, 29, 29, 0.35);
+  border-radius: 8px;
+  margin-top: 2px;
 }
 
-/* 操作按钮 */
 .build-item-actions {
   flex-shrink: 0;
   display: flex;
@@ -218,24 +201,21 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-item-cancel {
-  background: #fff1f0;
-  color: #ff4d4f;
-  border: 1px solid #ffccc7;
+  border: 1px solid rgba(248, 113, 113, 0.36);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
 }
 
 .btn-item-cancel:hover {
-  background: #ff4d4f;
-  color: white;
-  transform: scale(1.05);
+  background: rgba(220, 38, 38, 0.36);
 }
 
 .cancel-icon {
@@ -247,67 +227,15 @@
 }
 
 .btn-item-dismiss {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   justify-content: center;
-  background: #f5f5f7;
-  color: #8e8e93;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text-secondary);
 }
 
 .btn-item-dismiss:hover {
-  background: #e5e5e5;
-  color: #666;
-  transform: scale(1.1);
-}
-
-.btn-item-dismiss.success {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.btn-item-dismiss.success:hover {
-  background: #52c41a;
-  color: white;
-}
-
-.btn-item-dismiss.failed {
-  background: #fff1f0;
-  color: #ff4d4f;
-}
-
-.btn-item-dismiss.failed:hover {
-  background: #ff4d4f;
-  color: white;
-}
-
-/* 响应式 */
-@media (max-width: 768px) {
-  .build-item {
-    padding: 8px 10px;
-    gap: 8px;
-  }
-  
-  .build-item-status {
-    width: 24px;
-    height: 24px;
-  }
-  
-  .status-icon {
-    width: 20px;
-    height: 20px;
-    font-size: 12px;
-  }
-  
-  .build-module {
-    font-size: 12px;
-  }
-  
-  .cancel-text {
-    display: none;
-  }
-  
-  .btn-item-cancel {
-    padding: 6px;
-  }
+  background: rgba(148, 163, 184, 0.16);
 }
