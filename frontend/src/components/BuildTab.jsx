@@ -140,24 +140,41 @@ function BuildTab({ searchInputRef }) {
             <EmptyState type="modules" />
           ) : (
             <div className="module-list">
-              {modules.map((module, index) => (
-                <Tooltip
-                  key={module.id}
-                  content={isBuilding ? '等待当前构建完成' : `构建 ${module.name}`}
-                  position="top"
-                >
-                  <button
-                    className={`module-btn ${isBuilding ? 'disabled' : ''}`}
-                    onClick={() => handleBuildClick(module.id)}
-                    disabled={isBuilding}
+              {modules.map((module, index) => {
+                const isBuildingThis = activeBuilds.some(b => b.moduleId === module.id && b.status === 'running')
+                return (
+                  <div
+                    key={module.id}
+                    className={`module-card ${isBuildingThis ? 'building' : 'idle'}`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <span className="module-icon">BLD</span>
-                    <span className="module-name">{module.name}</span>
-                    {isBuilding && <span className="module-spinner" />}
-                  </button>
-                </Tooltip>
-              ))}
+                    <button
+                      className="module-btn-main"
+                      onClick={() => handleBuildClick(module.id)}
+                      disabled={isBuilding}
+                    >
+                      <div className="module-btn-content">
+                        <div className="module-main-row">
+                          <div className="module-info">
+                            <span className={`module-status-icon ${isBuildingThis ? 'spinning' : ''}`}>
+                              {isBuildingThis ? '⚙️' : '○'}
+                            </span>
+                            <span className="module-name">{module.name}</span>
+                          </div>
+                          <span className={`module-status-badge ${isBuildingThis ? 'building' : 'idle'}`}>
+                            {isBuildingThis ? '构建中' : '空闲'}
+                          </span>
+                        </div>
+                        <div className="module-meta-row">
+                          {!isBuilding && (
+                            <span className="module-action-hint">点击构建</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>

@@ -99,69 +99,131 @@
   gap: 12px;
 }
 
-.module-btn {
+.module-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid;
+  border-radius: 18px;
+  overflow: hidden;
+  transition: all 0.25s ease;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.16);
+  animation: fadeInUp 0.35s ease-out backwards;
+}
+
+.module-card.idle {
+  background: linear-gradient(180deg, rgba(19, 32, 74, 0.96) 0%, rgba(15, 26, 58, 0.98) 100%);
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+.module-card.building {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.module-card:hover {
+  box-shadow: 0 18px 28px rgba(2, 6, 23, 0.22);
+  transform: translateY(-1px);
+}
+
+.module-btn-main {
+  flex: 1;
+  padding: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: stretch;
+  min-height: 92px;
+  transition: all 0.2s;
+}
+
+.module-btn-main:disabled {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
+.module-btn-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.module-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.module-info {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
-  background: linear-gradient(180deg, rgba(19, 32, 74, 0.96) 0%, rgba(15, 26, 58, 0.98) 100%);
-  color: var(--text-primary);
-  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.18);
-  position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.3s ease-out backwards;
+  flex: 1;
+  min-width: 0;
 }
 
-.module-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: 0 18px 30px rgba(37, 99, 235, 0.16);
-}
-
-.module-btn:disabled,
-.module-btn.disabled {
-  background: rgba(30, 41, 59, 0.7);
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.72;
-  box-shadow: none;
-}
-
-.module-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
+.module-status-icon {
+  font-size: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.28) 0%, rgba(37, 99, 235, 0.28) 100%);
-  border: 1px solid rgba(96, 165, 250, 0.2);
-  color: #dbeafe;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.module-status-icon.spinning {
+  animation: spin 1.5s linear infinite;
 }
 
 .module-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.module-spinner {
-  margin-left: auto;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.module-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.module-status-badge.idle {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-secondary);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.module-status-badge.building {
+  background: rgba(96, 165, 250, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.module-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.module-action-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .build-side-panel {
