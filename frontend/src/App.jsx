@@ -125,17 +125,6 @@ function App() {
     window.dispatchEvent(new CustomEvent('focusSearch', { detail: activeTab }))
   }, [activeTab])
 
-  const shellStatusItems = [
-    { label: '当前工作区', value: activeTabMeta.label },
-    { label: '快捷键', value: activeTabMeta.shortcut },
-    {
-      label: activeTab === 'config' ? '配置状态' : '页面状态',
-      value: activeTab === 'config'
-        ? (hasUnsavedConfigChanges ? '未保存变更' : '已同步')
-        : 'Ready'
-    }
-  ]
-
   return (
     <div className="app">
       <Toaster
@@ -181,30 +170,6 @@ function App() {
               </div>
 
               <div className="header-actions">
-                {activeTab !== 'config' && (
-                  <button
-                    type="button"
-                    className="header-btn secondary"
-                    onClick={handleFocusSearch}
-                    title="聚焦日志搜索"
-                    aria-label="聚焦日志搜索"
-                  >
-                    搜索日志
-                  </button>
-                )}
-
-                {activeTab !== 'config' && (
-                  <button
-                    type="button"
-                    className="header-btn secondary"
-                    onClick={handleClearLogs}
-                    title="清除当前页日志"
-                    aria-label="清除当前页日志"
-                  >
-                    清空日志
-                  </button>
-                )}
-
                 <button
                   type="button"
                   className="header-btn primary"
@@ -214,23 +179,6 @@ function App() {
                 >
                   刷新数据
                 </button>
-              </div>
-            </div>
-
-            <div className="shell-header-body">
-              <div className="shell-header-copy">
-                <p className="shell-overline">Full Workspace Layout</p>
-                <h1 className="shell-title">{activeTabMeta.title}</h1>
-                <p className="shell-description">{activeTabMeta.description}</p>
-              </div>
-
-              <div className="shell-status-grid" aria-label="当前工作区摘要">
-                {shellStatusItems.map((item) => (
-                  <div key={item.label} className="shell-status-card">
-                    <span className="shell-status-label">{item.label}</span>
-                    <strong className="shell-status-value">{item.value}</strong>
-                  </div>
-                ))}
               </div>
             </div>
           </header>

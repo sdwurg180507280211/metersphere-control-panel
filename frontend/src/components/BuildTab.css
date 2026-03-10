@@ -9,8 +9,8 @@
 .build-workspace {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  display: flex;
+  flex-direction: column;
   gap: 18px;
 }
 

@@ -2,8 +2,6 @@ import { useEffect, useCallback, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { useBuildStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
-import BuildProgress from './BuildProgress'
-import BuildHistory from './BuildHistory'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
 import Tooltip from './Tooltip'
@@ -101,11 +99,6 @@ function BuildTab({ searchInputRef }) {
               ))}
             </div>
           </div>
-
-          <aside className="build-side-panel">
-            <div className="build-side-empty build-side-skeleton" />
-            <div className="build-side-empty build-side-skeleton" />
-          </aside>
         </div>
 
         <div className="build-log-section skeleton-wrapper">
@@ -169,17 +162,6 @@ function BuildTab({ searchInputRef }) {
             </div>
           )}
         </section>
-
-        <aside className="build-side-panel">
-          {buildCount > 0 && (
-            <div className="build-side-slot">
-              <BuildProgress />
-            </div>
-          )}
-          <div className="build-side-slot">
-            <BuildHistory />
-          </div>
-        </aside>
       </div>
 
       <section className="build-log-section">
