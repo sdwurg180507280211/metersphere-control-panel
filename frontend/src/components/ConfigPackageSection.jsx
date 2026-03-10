@@ -8,7 +8,6 @@ function ConfigPackageSection({ packageConfig, resolved, fieldErrors, fieldWarni
       <div className="config-card-header">
         <div>
           <h3 className="section-title">构建与打包</h3>
-          <p className="config-section-desc">管理脚本路径与默认打包参数。</p>
         </div>
       </div>
 

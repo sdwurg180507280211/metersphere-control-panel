@@ -4,29 +4,34 @@ function ConfigGeneralSection({ draft, resolved, meta, fieldErrors, fieldWarning
       <div className="config-card-header">
         <div>
           <h3 className="section-title">基础设置</h3>
-          <p className="config-section-desc">编辑控制面板端口、项目根目录和日志容量。</p>
         </div>
       </div>
 
       <div className="config-form-grid">
-        <label className="config-field">
-          <span>控制面板端口</span>
-          <input value={draft.port ?? ''} onChange={(e) => onChange('port', e.target.value)} />
-          <FieldMessages path="port" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card">
+          <label className="config-field">
+            <span>控制面板端口</span>
+            <input value={draft.port ?? ''} onChange={(e) => onChange('port', e.target.value)} />
+            <FieldMessages path="port" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
 
-        <label className="config-field config-field-wide">
-          <span>MeterSphere 项目根目录</span>
-          <input value={draft.projectRoot ?? ''} onChange={(e) => onChange('projectRoot', e.target.value)} />
-          <small className="config-hint">解析后路径：{resolved?.projectRoot || '-'}</small>
-          <FieldMessages path="projectRoot" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>MeterSphere 项目根目录</span>
+            <input value={draft.projectRoot ?? ''} onChange={(e) => onChange('projectRoot', e.target.value)} />
+            <small className="config-hint">解析后路径：{resolved?.projectRoot || '-'}</small>
+            <FieldMessages path="projectRoot" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
 
-        <label className="config-field">
-          <span>日志最大行数</span>
-          <input value={draft.maxLogLines ?? ''} onChange={(e) => onChange('maxLogLines', e.target.value)} />
-          <FieldMessages path="maxLogLines" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
-        </label>
+        <div className="config-field-card">
+          <label className="config-field">
+            <span>日志最大行数</span>
+            <input value={draft.maxLogLines ?? ''} onChange={(e) => onChange('maxLogLines', e.target.value)} />
+            <FieldMessages path="maxLogLines" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
       </div>
 
       <div className="config-meta-grid">

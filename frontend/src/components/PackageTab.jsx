@@ -115,7 +115,6 @@ function PackageTab({ searchInputRef }) {
           <div className="package-main-header">
             <div>
               <h3 className="section-title">打包配置</h3>
-              <p className="package-subtitle">执行外部 `metersphere-build.sh`，参数语义保持与人工命令一致。</p>
             </div>
             <div className="package-header-pills">
               <span className="package-pill">{services.length} 个服务</span>
@@ -134,7 +133,6 @@ function PackageTab({ searchInputRef }) {
             <div className="package-block-header">
               <div>
                 <div className="package-block-title">目标服务</div>
-                <div className="package-block-desc">显式选择脚本位置参数，空选择不会触发全量打包。</div>
               </div>
               <span className="package-selection-count">已选 {selectedServices.length}</span>
             </div>
@@ -179,7 +177,7 @@ function PackageTab({ searchInputRef }) {
 
           <div className="package-params-grid">
             <div className="package-field">
-              <label className="package-label" htmlFor="package-max-jobs">线程数 (`MAX_JOBS`)</label>
+              <label className="package-label" htmlFor="package-max-jobs">线程数</label>
               <input
                 id="package-max-jobs"
                 className="package-input"
@@ -190,11 +188,10 @@ function PackageTab({ searchInputRef }) {
                 disabled={isRunning}
                 onChange={(event) => setMaxJobs(event.target.value)}
               />
-              <p className="package-field-tip">建议按机器性能设置，默认 4。</p>
             </div>
 
             <div className="package-field package-field-large">
-              <label className="package-label" htmlFor="package-image-version">镜像版本 (`IMAGE_VERSION`)</label>
+              <label className="package-label" htmlFor="package-image-version">镜像版本</label>
               <input
                 id="package-image-version"
                 className="package-input"
@@ -228,7 +225,7 @@ function PackageTab({ searchInputRef }) {
             </div>
 
             <div className="package-field">
-              <label className="package-label">并行构建 (`PARALLEL_BUILD`)</label>
+              <label className="package-label">并行构建</label>
               <label className={`package-switch ${parallelBuild ? 'active' : ''}`}>
                 <input
                   type="checkbox"
@@ -238,17 +235,57 @@ function PackageTab({ searchInputRef }) {
                 />
                 <span className="package-switch-text">{parallelBuild ? '已开启' : '已关闭'}</span>
               </label>
-              <p className="package-field-tip">开启后速度更快，但更占机器资源。</p>
             </div>
           </div>
         </section>
 
         <aside className="package-side-panel">
+          {currentTask && (
+            <section className="package-status-section">
+              <div className="package-block-header compact">
+                <div>
+                  <div className="package-block-title">任务状态</div>
+                </div>
+                <span className={`package-status-badge status-${currentStatus}`}>{currentStatusText}</span>
+              </div>
+
+              <div className="package-status-card">
+                <div className="package-status-highlight">{currentTask.message || '等待日志输出'}</div>
+                <div className="package-status-meta-grid">
+                  <div className="package-status-meta-item">
+                    <span>服务</span>
+                    <strong>{currentTask.metadata?.services?.join(', ') || '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>镜像版本</span>
+                    <strong>{currentTask.metadata?.imageVersion || '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>线程数</span>
+                    <strong>{currentTask.metadata?.maxJobs ?? '-'}</strong>
+                  </div>
+                  <div className="package-status-meta-item">
+                    <span>最近心跳</span>
+                    <strong>{formatDateTime(currentTask.metadata?.lastHeartbeatAt)}</strong>
+                  </div>
+                  {currentTask.result?.exitCode !== undefined && (
+                    <div className="package-status-meta-item">
+                      <span>退出码</span>
+                      <strong>{currentTask.result.exitCode}</strong>
+                    </div>
+                  )}
+                </div>
+                {currentTask.error?.message && (
+                  <div className="package-status-error">错误：{currentTask.error.message}</div>
+                )}
+              </div>
+            </section>
+          )}
+
           <section className="package-action-card">
             <div className="package-block-header compact">
               <div>
                 <div className="package-block-title">执行面板</div>
-                <div className="package-block-desc">确认参数后发起整体验证打包。</div>
               </div>
               {isRunning && (
                 <span className="package-running-indicator">
@@ -290,55 +327,7 @@ function PackageTab({ searchInputRef }) {
                 <strong>{parallelBuild ? '并行' : '串行'}</strong>
               </div>
             </div>
-
-            <div className="package-inline-note">
-              <span className="package-inline-label">脚本路径</span>
-              <code className="package-inline-code">{scriptInfo?.resolvedPath || '未解析'}</code>
-            </div>
           </section>
-
-          {currentTask && (
-            <section className="package-status-section">
-              <div className="package-block-header compact">
-                <div>
-                  <div className="package-block-title">任务状态</div>
-                  <div className="package-block-desc">状态、心跳、退出码都在这里。</div>
-                </div>
-                <span className={`package-status-badge status-${currentStatus}`}>{currentStatusText}</span>
-              </div>
-
-              <div className="package-status-card">
-                <div className="package-status-highlight">{currentTask.message || '等待日志输出'}</div>
-                <div className="package-status-meta-grid">
-                  <div className="package-status-meta-item">
-                    <span>服务</span>
-                    <strong>{currentTask.metadata?.services?.join(', ') || '-'}</strong>
-                  </div>
-                  <div className="package-status-meta-item">
-                    <span>镜像版本</span>
-                    <strong>{currentTask.metadata?.imageVersion || '-'}</strong>
-                  </div>
-                  <div className="package-status-meta-item">
-                    <span>线程数</span>
-                    <strong>{currentTask.metadata?.maxJobs ?? '-'}</strong>
-                  </div>
-                  <div className="package-status-meta-item">
-                    <span>最近心跳</span>
-                    <strong>{formatDateTime(currentTask.metadata?.lastHeartbeatAt)}</strong>
-                  </div>
-                  {currentTask.result?.exitCode !== undefined && (
-                    <div className="package-status-meta-item">
-                      <span>退出码</span>
-                      <strong>{currentTask.result.exitCode}</strong>
-                    </div>
-                  )}
-                </div>
-                {currentTask.error?.message && (
-                  <div className="package-status-error">错误：{currentTask.error.message}</div>
-                )}
-              </div>
-            </section>
-          )}
         </aside>
       </div>
 

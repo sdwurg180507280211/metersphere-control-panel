@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useBuildStore, useConfigStore, usePackageStore, useServiceStore } from '../store/useAppStore'
 import ConfigGeneralSection from './ConfigGeneralSection'
@@ -10,6 +10,8 @@ import ConfigSaveBar from './ConfigSaveBar'
 import './ConfigTab.css'
 
 function ConfigTab() {
+  const [showServicesModal, setShowServicesModal] = useState(false)
+
   const {
     snapshot,
     draft,
@@ -49,6 +51,9 @@ function ConfigTab() {
 
   const fieldErrors = useMemo(() => buildFieldMap(validation?.errors || []), [validation?.errors])
   const fieldWarnings = useMemo(() => buildFieldMap(validation?.warnings || []), [validation?.warnings])
+  const validationErrorCount = validation?.errors?.length || 0
+  const validationWarningCount = validation?.warnings?.length || 0
+  const diagnosticsIssueCount = (diagnostics?.errors?.length || 0) + (diagnostics?.warnings?.length || 0)
 
   const handleValidate = async () => {
     try {
@@ -135,14 +140,11 @@ function ConfigTab() {
             fieldWarnings={fieldWarnings}
             onChange={updateDraft}
           />
-          <ConfigServicesSection
-            services={draft.services || {}}
-            fieldErrors={fieldErrors}
-            fieldWarnings={fieldWarnings}
-            onAddService={addService}
-            onUpdateService={updateService}
-            onRemoveService={removeService}
-          />
+          <section className="config-card">
+            <button className="config-primary-btn" onClick={() => setShowServicesModal(true)} style={{ width: '100%' }}>
+              📋 服务配置
+            </button>
+          </section>
         </div>
 
         <div className="config-side">
@@ -173,6 +175,27 @@ function ConfigTab() {
         onApply={handleApply}
         onReset={resetDraft}
       />
+
+      {showServicesModal && (
+        <div className="log-modal-overlay" onClick={() => setShowServicesModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>服务配置</h3>
+              <button className="log-modal-close" onClick={() => setShowServicesModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigServicesSection
+                services={draft.services || {}}
+                fieldErrors={fieldErrors}
+                fieldWarnings={fieldWarnings}
+                onAddService={addService}
+                onUpdateService={updateService}
+                onRemoveService={removeService}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
