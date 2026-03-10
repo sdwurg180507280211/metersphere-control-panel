@@ -161,20 +161,6 @@ function App() {
         <Sidebar items={TAB_ITEMS} activeTab={activeTab} onTabChange={handleTabChange} />
 
         <div className="app-main">
-          <header className="shell-header">
-            <div className="header-actions">
-                <button
-                  type="button"
-                  className="header-btn primary"
-                  onClick={handleRefresh}
-                  title="刷新数据 (R)"
-                  aria-label="刷新数据"
-                >
-                  刷新数据
-                </button>
-              </div>
-          </header>
-
           <main className="app-workspace">
             <section className="workspace-surface" aria-label={`${activeTabMeta.label} 工作区`}>
               <div className="content">
