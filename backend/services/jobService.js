@@ -657,6 +657,13 @@ class JobService {
       result: job.result
     }, JOB_HISTORY_LIMIT], { allowBufferedWrite });
   }
+
+  destroy() {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+      this.flushTimer = null;
+    }
+  }
 }
 
 module.exports = new JobService();

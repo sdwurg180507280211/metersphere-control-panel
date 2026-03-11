@@ -319,11 +319,11 @@ class Logger {
     const dir = level === 'error' ? this.errorLogDir : this.warnLogDir;
     const logFile = path.join(dir, `${serviceId}-${date}.log`);
     
-    try {
-      fs.appendFileSync(logFile, content);
-    } catch (error) {
-      console.error(`写入${level}日志失败 (${serviceId}):`, error.message);
-    }
+    fs.appendFile(logFile, content, (err) => {
+      if (err) {
+        console.error(`写入${level}日志失败 (${serviceId}):`, err.message);
+      }
+    });
   }
 
   getLogStream(type, date = new Date().toISOString().split('T')[0]) {

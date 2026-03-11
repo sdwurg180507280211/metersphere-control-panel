@@ -241,6 +241,16 @@ async function gracefulShutdown(signal) {
     // 停止所有服务
     const processManager = require('./services/processManager');
     await processManager.stopAll();
+
+    // 清理 jobService 定时器
+    jobService.destroy();
+
+    // 关闭所有 WebSocket 客户端
+    if (websocketService.wss) {
+      for (const client of websocketService.wss.clients) {
+        client.close(1001, 'Server shutting down');
+      }
+    }
     
     // 关闭 Redis 连接
     await cacheService.disconnect();

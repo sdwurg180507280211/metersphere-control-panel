@@ -41,6 +41,17 @@ class ConfigManager {
     return JSON.parse(JSON.stringify(value));
   }
 
+  _deepFreeze(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    const frozen = Array.isArray(obj) ? [...obj] : { ...obj };
+    for (const key of Object.keys(frozen)) {
+      if (typeof frozen[key] === 'object' && frozen[key] !== null) {
+        frozen[key] = this._deepFreeze(frozen[key]);
+      }
+    }
+    return Object.freeze(frozen);
+  }
+
   _readSnapshotFromDisk() {
     const raw = loadConfigFromFile(this.configPath);
     const snapshot = buildConfigSnapshot(raw);
@@ -198,7 +209,7 @@ class ConfigManager {
   }
 
   getRawConfig() {
-    return this._clone(this.currentRawConfig);
+    return this._deepFreeze(this.currentRawConfig);
   }
 
   getEditableConfig() {
@@ -244,15 +255,15 @@ class ConfigManager {
   }
 
   getResolvedPreviewConfig() {
-    return this._clone(this.currentResolvedConfig);
+    return this._deepFreeze(this.currentResolvedConfig);
   }
 
   getResolvedConfig() {
-    return this._clone(this.appliedResolvedConfig);
+    return this._deepFreeze(this.appliedResolvedConfig);
   }
 
   getMeta() {
-    return this._clone(this._getMeta());
+    return this._deepFreeze(this._getMeta());
   }
 
   getConfigPageData() {

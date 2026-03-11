@@ -306,11 +306,17 @@ class HealthChecker {
         };
       }
 
-      if (Date.now() + interval > deadline) {
+      // 自适应间隔：前 3 次 1s，4-6 次 2s，7-10 次 3s，之后使用配置间隔
+      const adaptiveInterval = attempts <= 3 ? 1000
+        : attempts <= 6 ? 2000
+        : attempts <= 10 ? Math.min(interval, 3000)
+        : interval;
+
+      if (Date.now() + adaptiveInterval > deadline) {
         break;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, interval));
+      await new Promise((resolve) => setTimeout(resolve, adaptiveInterval));
     }
 
     return {
