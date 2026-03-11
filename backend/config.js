@@ -13,6 +13,8 @@ const DEFAULT_PROJECT_ROOT = '/Users/edy/ideaProjects/metersphere';
 const DEFAULT_MAX_LOG_LINES = 1000;
 const DEFAULT_SERVICE_START_ORDER = 99;
 const DEFAULT_HEALTH_CHECK = '/actuator/health';
+const DEFAULT_PROPERTIES_METERSPHERE = '/opt/metersphere/conf/metersphere.properties';
+const DEFAULT_PROPERTIES_REDISSON = '/opt/metersphere/conf/redisson.yml';
 
 const FRONTEND_SERVICE_IDS = [
   'system-setting',
@@ -163,6 +165,10 @@ function normalizeEditableConfig(rawConfig = {}) {
     projectRoot: normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT),
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
     redis: config.redis || {},
+    properties: {
+      metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE),
+      redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON)
+    },
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
   };
@@ -242,6 +248,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     projectRoot,
     projectRootInput: editable.projectRoot,
     maxLogLines: editable.maxLogLines,
+    properties: editable.properties,
     package: editable.package,
     services: editable.services,
     serviceCatalog,
@@ -273,6 +280,8 @@ module.exports = {
   DEFAULT_MAX_LOG_LINES,
   DEFAULT_SERVICE_START_ORDER,
   DEFAULT_HEALTH_CHECK,
+  DEFAULT_PROPERTIES_METERSPHERE,
+  DEFAULT_PROPERTIES_REDISSON,
   FRONTEND_SERVICE_IDS,
   EXTRA_FRONTEND_MODULES,
   loadConfigFromFile,

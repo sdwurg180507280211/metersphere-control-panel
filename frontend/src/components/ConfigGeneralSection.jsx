@@ -57,6 +57,30 @@ function ConfigGeneralSection({ draft, resolved, meta, fieldErrors, fieldWarning
           </label>
         </div>
 
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>metersphere.properties 路径</span>
+            <input 
+              value={draft.properties?.metersphere ?? ''} 
+              onChange={(e) => onChange('properties.metersphere', e.target.value)} 
+              placeholder="/opt/metersphere/conf/metersphere.properties" 
+            />
+            <FieldMessages path="properties.metersphere" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
+
+        <div className="config-field-card config-field-card-wide">
+          <label className="config-field">
+            <span>redisson.yml 路径</span>
+            <input 
+              value={draft.properties?.redisson ?? ''} 
+              onChange={(e) => onChange('properties.redisson', e.target.value)} 
+              placeholder="/opt/metersphere/conf/redisson.yml" 
+            />
+            <FieldMessages path="properties.redisson" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+          </label>
+        </div>
+
         <div className="config-field-card">
           <div className="config-field">
             <span>缓存模式</span>

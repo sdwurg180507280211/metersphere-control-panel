@@ -7,6 +7,7 @@ import ConfigPackageSection from './ConfigPackageSection'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
 import ConfigSaveBar from './ConfigSaveBar'
+import PropertiesDialog from './PropertiesDialog'
 import './ConfigTab.css'
 
 function ConfigTab() {
@@ -14,6 +15,7 @@ function ConfigTab() {
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
   const [showRuntimeModal, setShowRuntimeModal] = useState(false)
   const [showPackageModal, setShowPackageModal] = useState(false)
+  const [showPropertiesModal, setShowPropertiesModal] = useState(false)
 
   const {
     snapshot,
@@ -142,6 +144,10 @@ function ConfigTab() {
                 <span className="config-action-icon">📦</span>
                 <span className="config-action-label">构建与打包</span>
               </button>
+              <button className="config-action-btn" onClick={() => setShowPropertiesModal(true)}>
+                <span className="config-action-icon">📄</span>
+                <span className="config-action-label">MeterSphere 配置文件</span>
+              </button>
               <button className="config-action-btn" onClick={() => setShowServicesModal(true)}>
                 <span className="config-action-icon">📋</span>
                 <span className="config-action-label">服务配置</span>
@@ -249,6 +255,10 @@ function ConfigTab() {
             </div>
           </div>
         </div>
+      )}
+
+      {showPropertiesModal && (
+        <PropertiesDialog onClose={() => setShowPropertiesModal(false)} />
       )}
     </div>
   )

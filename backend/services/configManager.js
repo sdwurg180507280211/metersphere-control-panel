@@ -80,6 +80,7 @@ class ConfigManager {
       projectRoot: editableDraft.projectRoot,
       maxLogLines: editableDraft.maxLogLines,
       redis: editableDraft.redis || currentRaw.redis,
+      properties: editableDraft.properties || currentRaw.properties,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 
@@ -157,7 +158,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties']
     };
   }
 
@@ -432,6 +433,34 @@ class ConfigManager {
       applyImpact: diagnosticsResult.applyImpact,
       meta: this.getMeta()
     };
+  }
+
+  getPropertiesFile(filename) {
+    if (!['metersphere.properties', 'redisson.yml'].includes(filename)) {
+      throw createAppError(400, 'INVALID_FILENAME', '不支持的配置文件');
+    }
+    const propKey = filename === 'metersphere.properties' ? 'metersphere' : 'redisson';
+    const filePath = this.currentEditableConfig?.properties?.[propKey] || `/opt/metersphere/conf/${filename}`;
+    
+    if (!fs.existsSync(filePath)) {
+      throw createAppError(404, 'FILE_NOT_FOUND', `配置文件不存在，请检查路径: ${filePath}`);
+    }
+    return fs.readFileSync(filePath, 'utf8');
+  }
+
+  savePropertiesFile(filename, content) {
+    if (!['metersphere.properties', 'redisson.yml'].includes(filename)) {
+      throw createAppError(400, 'INVALID_FILENAME', '不支持的配置文件');
+    }
+    const propKey = filename === 'metersphere.properties' ? 'metersphere' : 'redisson';
+    const filePath = this.currentEditableConfig?.properties?.[propKey] || `/opt/metersphere/conf/${filename}`;
+    const dir = path.dirname(filePath);
+    
+    if (!fs.existsSync(dir)) {
+      throw createAppError(404, 'DIR_NOT_FOUND', `配置目录不存在，无法保存: ${dir}`);
+    }
+    
+    fs.writeFileSync(filePath, content || '', 'utf8');
   }
 }
 

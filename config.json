@@ -103,5 +103,9 @@
     "parallelBuild": true,
     "buildOnly": false,
     "maxJobs": 4
+  },
+  "properties": {
+    "metersphere": "/opt/metersphere/conf/metersphere.properties",
+    "redisson": "/opt/metersphere/conf/redisson.yml"
   }
 }

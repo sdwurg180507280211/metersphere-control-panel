@@ -65,6 +65,27 @@ const configController = {
     } catch (error) {
       res.json({ success: false, message: error.message || 'Redis连接失败' });
     }
+  },
+
+  getProperties(req, res) {
+    try {
+      const { filename } = req.params;
+      const content = configManager.getPropertiesFile(filename);
+      res.json({ success: true, data: { content } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
+  saveProperties(req, res) {
+    try {
+      const { filename } = req.params;
+      const { content } = req.body;
+      configManager.savePropertiesFile(filename, content);
+      res.json({ success: true, message: '保存成功' });
+    } catch (error) {
+      sendError(res, error);
+    }
   }
 };
 
