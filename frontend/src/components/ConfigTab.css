@@ -428,40 +428,6 @@
   border-left: 3px solid #fbbf24;
 }
 
-.config-save-bar {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  padding: 12px;
-  background: rgba(8, 16, 33, 0.96);
-  border-radius: 16px;
-  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.32);
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  backdrop-filter: blur(12px);
-  z-index: 100;
-  width: 280px;
-}
-
-.config-save-status {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.config-save-status span {
-  color: rgba(255, 255, 255, 0.72);
-}
-
-.config-save-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .config-primary-btn,
 .config-secondary-btn,
 .config-danger-btn {
@@ -541,18 +507,69 @@
     grid-template-columns: 1fr;
   }
 
-  .config-save-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .config-save-actions {
-    width: 100%;
-  }
-
   .config-primary-btn,
   .config-secondary-btn,
   .config-danger-btn {
     width: 100%;
+  }
+}
+
+/* 新增：配置页操作按钮网格 */
+.config-action-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+}
+
+.config-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-md);
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.config-action-btn:hover {
+  background: rgba(30, 41, 59, 0.8);
+  border-color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.config-action-btn:active {
+  transform: translateY(0);
+}
+
+.config-action-icon {
+  font-size: 24px;
+}
+
+.config-action-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.config-action-btn:hover .config-action-label {
+  color: var(--text-primary);
+}
+
+@media (max-width: 1024px) {
+  .config-action-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .config-action-grid {
+    grid-template-columns: 1fr;
   }
 }

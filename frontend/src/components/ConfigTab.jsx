@@ -137,24 +137,24 @@ function ConfigTab() {
             onChange={updateDraft}
           />
           <section className="config-card">
-            <button className="config-primary-btn" onClick={() => setShowPackageModal(true)} style={{ width: '100%' }}>
-              📦 构建与打包
-            </button>
-          </section>
-          <section className="config-card">
-            <button className="config-primary-btn" onClick={() => setShowServicesModal(true)} style={{ width: '100%' }}>
-              📋 服务配置
-            </button>
-          </section>
-          <section className="config-card">
-            <button className="config-primary-btn" onClick={() => setShowDiagnosticsModal(true)} style={{ width: '100%' }}>
-              🔍 配置诊断
-            </button>
-          </section>
-          <section className="config-card">
-            <button className="config-primary-btn" onClick={() => setShowRuntimeModal(true)} style={{ width: '100%' }}>
-              ⚙️ 运行时信息
-            </button>
+            <div className="config-action-grid">
+              <button className="config-action-btn" onClick={() => setShowPackageModal(true)}>
+                <span className="config-action-icon">📦</span>
+                <span className="config-action-label">构建与打包</span>
+              </button>
+              <button className="config-action-btn" onClick={() => setShowServicesModal(true)}>
+                <span className="config-action-icon">📋</span>
+                <span className="config-action-label">服务配置</span>
+              </button>
+              <button className="config-action-btn" onClick={() => setShowDiagnosticsModal(true)}>
+                <span className="config-action-icon">🔍</span>
+                <span className="config-action-label">配置诊断</span>
+              </button>
+              <button className="config-action-btn" onClick={() => setShowRuntimeModal(true)}>
+                <span className="config-action-icon">⚙️</span>
+                <span className="config-action-label">运行时信息</span>
+              </button>
+            </div>
           </section>
         </div>
       </div>

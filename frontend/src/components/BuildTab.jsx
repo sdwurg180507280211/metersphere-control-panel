@@ -121,21 +121,6 @@ function BuildTab({ searchInputRef }) {
     <div className="tab-content build-tab">
       <div className="build-workspace">
         <section className="build-control">
-          <div className="build-control-header">
-            <div>
-              <h3 className="section-title">
-                构建模块
-                {isBuilding && (
-                  <span className="building-indicator">
-                    <span className="pulse-dot" />
-                    构建中
-                  </span>
-                )}
-              </h3>
-            </div>
-            <span className="module-count">{modules.length} 个模块</span>
-          </div>
-
           {modules.length === 0 ? (
             <EmptyState type="modules" />
           ) : (

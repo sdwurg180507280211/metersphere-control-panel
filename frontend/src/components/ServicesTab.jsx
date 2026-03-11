@@ -362,10 +362,6 @@ function ServicesTab({ searchInputRef }) {
       <div className="services-workspace">
         <section className="card services-control-panel">
           <div className="card-header">
-            <h2 className="card-title">
-              服务管理
-              <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
-            </h2>
             <div className="batch-actions">
               <Tooltip content="建立 SSH 反向隧道到 8.152.216.176" position="bottom">
                 <button className="btn-batch btn-tunnel" onClick={() => setTunnelDialogOpen(true)}>

@@ -112,16 +112,6 @@ function PackageTab({ searchInputRef }) {
     <div className="package-tab">
       <div className="package-hero">
         <section className="package-main-card">
-          <div className="package-main-header">
-            <div>
-              <h3 className="section-title">打包配置</h3>
-            </div>
-            <div className="package-header-pills">
-              <span className="package-pill">{services.length} 个服务</span>
-              <span className="package-pill package-pill-accent">默认镜像 {defaults.imageVersion}</span>
-            </div>
-          </div>
-
           {!scriptInfo?.valid && (
             <div className="package-warning">
               <strong>脚本不可用：</strong>

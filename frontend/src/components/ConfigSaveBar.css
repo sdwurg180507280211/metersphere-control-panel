@@ -1,0 +1,132 @@
+.config-save-bar-fixed {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 8px 12px 8px 16px;
+  background: rgba(11, 23, 57, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(0);
+}
+
+.config-save-bar-fixed.is-dirty {
+  border-color: rgba(124, 58, 237, 0.42);
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.2);
+}
+
+.save-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.save-bar-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.is-dirty .save-bar-count {
+  color: var(--warning);
+}
+
+.save-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+}
+
+.bar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+}
+
+.bar-btn.ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.bar-btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.bar-btn.primary {
+  background: rgba(124, 58, 237, 0.16);
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #c4b5fd;
+}
+
+.bar-btn.primary:hover:not(:disabled) {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.bar-btn.accent {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
+}
+
+.bar-btn.accent:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.35);
+}
+
+.bar-btn-icon {
+  font-size: 14px;
+}
+
+.bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+/* 窄屏适配 */
+@media (max-width: 768px) {
+  .config-save-bar-fixed {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    justify-content: space-between;
+    border-radius: 16px;
+  }
+  
+  .save-bar-info {
+    display: none;
+  }
+  
+  .save-bar-actions {
+    width: 100%;
+    justify-content: space-around;
+  }
+}

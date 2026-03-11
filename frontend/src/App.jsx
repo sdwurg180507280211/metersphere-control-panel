@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useServiceStore, useBuildStore, useLogStore, usePackageStore, useConfigStore } from './store/useAppStore'
+import { useUiStore } from './store/useUiStore'
 import Sidebar from './components/Sidebar'
 import BuildTab from './components/BuildTab'
 import ServicesTab from './components/ServicesTab'
@@ -48,10 +49,7 @@ const TAB_ITEMS = [
 ]
 
 function App() {
-  const [activeTab, setActiveTab] = useState(() => {
-    const saved = localStorage.getItem('activeTab')
-    return saved && TAB_ITEMS.some(item => item.id === saved) ? saved : 'build'
-  })
+  const { activeTab, setActiveTab, syncHash } = useUiStore()
   const searchInputRef = useRef(null)
 
   const { fetchServices, fetchCatalog } = useServiceStore()
@@ -64,8 +62,33 @@ function App() {
 
   useWebSocket()
 
+  // 处理浏览器 Hash 变化 (前进/后退)
   useEffect(() => {
-    localStorage.setItem('activeTab', activeTab)
+    const handlePopState = () => {
+      const nextTab = window.location.hash.slice(1)
+      if (nextTab && nextTab !== activeTab) {
+        // 如果是 config 页有未保存变更，需要特殊处理
+        if (activeTab === 'config' && hasUnsavedConfigChanges) {
+          const shouldLeave = window.confirm('配置页有未保存变更，确定离开当前页面吗？')
+          if (!shouldLeave) {
+            // 回滚 Hash 到当前页
+            window.history.pushState(null, '', `#${activeTab}`)
+            return
+          }
+        }
+        syncHash()
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [activeTab, hasUnsavedConfigChanges, syncHash])
+
+  // 初始化设置 Hash
+  useEffect(() => {
+    if (!window.location.hash) {
+      window.history.replaceState(null, '', `#${activeTab}`)
+    }
   }, [activeTab])
 
   useEffect(() => {
@@ -95,7 +118,7 @@ function App() {
     }
 
     setActiveTab(nextTab)
-  }, [activeTab, hasUnsavedConfigChanges])
+  }, [activeTab, hasUnsavedConfigChanges, setActiveTab])
 
   useEffect(() => {
     const handleSwitchTab = (event) => {
