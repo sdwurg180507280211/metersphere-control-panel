@@ -7,6 +7,48 @@ import './LogViewer.css'
 const LOG_LINE_HEIGHT = 20
 const LOG_OVERSCAN = 20
 
+// 日志级别优先级（用于过滤）
+const LOG_LEVEL_PRIORITY = {
+  'error': 0,
+  'warn': 1,
+  'info': 2,
+  'debug': 3,
+  'trace': 4
+}
+
+// 本地过滤函数
+function filterLogLines(lines, level, searchTerm) {
+  let nextLines = lines
+
+  // 处理带级别信息的日志行对象
+  if (level !== 'all') {
+    const targetPriority = LOG_LEVEL_PRIORITY[level]
+    nextLines = nextLines.filter((line) => {
+      // 如果是对象格式（新格式）
+      if (typeof line === 'object' && line.level) {
+        const linePriority = LOG_LEVEL_PRIORITY[line.level] ?? 2
+        return linePriority <= targetPriority
+      }
+      // 如果是字符串格式（旧格式），回退到字符串匹配
+      const lineStr = String(line)
+      if (level === 'error') return lineStr.includes('ERROR') || lineStr.includes('✗') || lineStr.includes('失败')
+      if (level === 'warn') return lineStr.includes('WARN') || lineStr.includes('warning')
+      if (level === 'info') return !lineStr.includes('ERROR') && !lineStr.includes('WARN')
+      return true
+    })
+  }
+
+  if (searchTerm) {
+    const term = searchTerm.toLowerCase()
+    nextLines = nextLines.filter((line) => {
+      const text = typeof line === 'object' ? line.text : String(line)
+      return text.toLowerCase().includes(term)
+    })
+  }
+
+  return nextLines
+}
+
 // 日志级别配置
 const LOG_LEVEL_CONFIG = {
   error: { label: 'ERROR', color: '#ff4d4f', bgColor: '#fff1f0', borderColor: '#ffccc7' },
@@ -16,6 +58,16 @@ const LOG_LEVEL_CONFIG = {
   trace: { label: 'TRACE', color: '#bfbfbf', bgColor: 'transparent', borderColor: 'transparent' },
   separator: { label: '', color: '#1890ff', bgColor: '#e6f7ff', borderColor: '#91d5ff' },
   stacktrace: { label: '', color: '#ff4d4f', bgColor: 'transparent', borderColor: 'transparent' }
+}
+
+// 直接订阅日志状态
+function useLogLines(type) {
+  return useLogStore((state) => {
+    if (type === 'service') return state.serviceLogLines
+    if (type === 'build') return state.buildLogLines
+    if (type === 'package') return state.packageLogLines
+    return []
+  })
 }
 
 function LogViewer({ type, searchInputRef }) {
@@ -32,17 +84,19 @@ function LogViewer({ type, searchInputRef }) {
     filters,
     setLogLevel,
     setSearchTerm,
-    getLogLines,
-    getFilteredLogs,
     clearServiceLogs,
     clearBuildLogs,
     clearPackageLogs
   } = useLogStore()
 
   const { logLevel, searchTerm } = filters[type]
-  const originalLines = getLogLines(type)
+  // 直接订阅状态，确保响应式更新
+  const originalLines = useLogLines(type)
 
-  const lines = useMemo(() => getFilteredLogs(type), [getFilteredLogs, type, logLevel, searchTerm, originalLines])
+  // 本地过滤逻辑，确保响应式
+  const lines = useMemo(() => {
+    return filterLogLines(originalLines, logLevel, searchTerm)
+  }, [originalLines, logLevel, searchTerm])
   const originalLogs = useMemo(() => {
     return originalLines.map(line => typeof line === 'object' ? line.text : line).join('\n')
   }, [originalLines])

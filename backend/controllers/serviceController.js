@@ -129,6 +129,53 @@ const serviceController = {
       logger.broadcast(`系统 reload 失败: ${error.message}`, 'service');
       return sendError(res, error);
     }
+  },
+
+  async tunnelStart(req, res) {
+    try {
+      const { password, ports } = req.body || {};
+      if (typeof password !== 'string' || password.length === 0) {
+        return sendError(res, createAppError(400, 'SSH_PASSWORD_REQUIRED', '请输入远程主机密码'));
+      }
+      if (!Array.isArray(ports) || ports.length === 0) {
+        return sendError(res, createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射'));
+      }
+
+      const result = await systemCommandService.startTunnel(password, ports);
+      return res.json({
+        success: true,
+        message: 'SSH 隧道已建立',
+        data: result
+      });
+    } catch (error) {
+      logger.broadcast(`SSH 隧道启动失败: ${error.message}`, 'service');
+      return sendError(res, error);
+    }
+  },
+
+  async tunnelStop(req, res) {
+    try {
+      const result = await systemCommandService.stopTunnel();
+      return res.json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      logger.broadcast(`SSH 隧道停止失败: ${error.message}`, 'service');
+      return sendError(res, error);
+    }
+  },
+
+  async tunnelStatus(req, res) {
+    try {
+      const status = await systemCommandService.getTunnelStatus();
+      return res.json({
+        success: true,
+        data: { status }
+      });
+    } catch (error) {
+      return sendError(res, error);
+    }
   }
 };
 

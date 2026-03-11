@@ -5,6 +5,7 @@ import LogViewer from './LogViewer'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
 import PasswordDialog from './PasswordDialog'
+import TunnelDialog from './TunnelDialog'
 import Tooltip from './Tooltip'
 import { ServiceCardSkeleton } from './Skeleton'
 import './ServicesTab.css'
@@ -96,6 +97,7 @@ function ServicesTab({ searchInputRef }) {
     error: '',
     loading: false
   })
+  const [tunnelDialogOpen, setTunnelDialogOpen] = useState(false)
 
   useEffect(() => {
     const loadData = async () => {
@@ -354,6 +356,12 @@ function ServicesTab({ searchInputRef }) {
               <span className="service-count">({runningCount}/{catalog.length} 运行中)</span>
             </h2>
             <div className="batch-actions">
+              <Tooltip content="建立 SSH 反向隧道到 8.152.216.176" position="bottom">
+                <button className="btn-batch btn-tunnel" onClick={() => setTunnelDialogOpen(true)}>
+                  <span className="btn-icon-text">SSH</span>
+                  隧道
+                </button>
+              </Tooltip>
               <Tooltip content="执行 sudo msctl reload" position="bottom">
                 <button className="btn-batch btn-system-reload" onClick={openSystemReloadDialog}>
                   <span className="btn-icon-text">SYS</span>
@@ -427,6 +435,11 @@ function ServicesTab({ searchInputRef }) {
         onChange={(password) => setReloadDialog((prev) => ({ ...prev, password, error: '' }))}
         onConfirm={confirmSystemReload}
         onCancel={closeSystemReloadDialog}
+      />
+
+      <TunnelDialog
+        isOpen={tunnelDialogOpen}
+        onClose={() => setTunnelDialogOpen(false)}
       />
     </div>
   )

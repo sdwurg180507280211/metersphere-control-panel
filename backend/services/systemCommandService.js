@@ -122,6 +122,178 @@ class SystemCommandService {
       });
     });
   }
+
+  /**
+   * 启动 SSH 反向隧道
+   * @param {string} password - 远程主机 root 密码
+   * @param {Array<{remotePort: number, localPort: number}>} ports - 端口映射数组
+   */
+  async startTunnel(password, ports) {
+    if (typeof password !== 'string' || password.length === 0) {
+      throw createAppError(400, 'SSH_PASSWORD_REQUIRED', '请输入远程主机密码');
+    }
+
+    if (!Array.isArray(ports) || ports.length === 0) {
+      throw createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射');
+    }
+
+    const REMOTE_HOST = '8.152.216.176';
+    const REMOTE_USER = 'root';
+
+    // 检查是否已有隧道进程
+    const currentStatus = await this.getTunnelStatus();
+    if (currentStatus === 'RUNNING') {
+      throw createAppError(409, 'TUNNEL_ALREADY_RUNNING', 'SSH 隧道已在运行中');
+    }
+
+    // 构建 -R 参数
+    const reverseArgs = ports.flatMap(({ remotePort, localPort }) => [
+      '-R', `${remotePort}:localhost:${localPort}`
+    ]);
+
+    const sshArgs = [
+      '-p', password,
+      'ssh',
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'ServerAliveInterval=60',
+      '-o', 'ServerAliveCountMax=3',
+      '-o', 'ExitOnForwardFailure=yes',
+      '-N',
+      ...reverseArgs,
+      `${REMOTE_USER}@${REMOTE_HOST}`
+    ];
+
+    logger.broadcast('\n========== 建立 SSH 反向隧道 ==========', 'service');
+    logger.broadcast(`目标: ${REMOTE_USER}@${REMOTE_HOST}`, 'service');
+    ports.forEach(({ remotePort, localPort }) => {
+      logger.broadcast(`  端口映射: 远程:${remotePort} → 本地:${localPort}`, 'service');
+    });
+
+    return new Promise((resolve, reject) => {
+      const child = spawn('sshpass', sshArgs, {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          LANG: 'C',
+          LC_ALL: 'C'
+        }
+      });
+
+      let stderr = '';
+      let settled = false;
+
+      const finishReject = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      const finishResolve = (payload) => {
+        if (settled) return;
+        settled = true;
+        resolve(payload);
+      };
+
+      // 给 ssh 一些时间连接，3 秒后检查是否仍在运行
+      const connectTimer = setTimeout(async () => {
+        try {
+          // 进程仍在运行，视为连接成功
+          process.kill(child.pid, 0);
+          child.unref();
+          logger.broadcast('SSH 隧道已建立', 'service');
+          finishResolve({ pid: child.pid });
+        } catch {
+          // 进程已退出，连接失败
+          finishReject(createAppError(500, 'TUNNEL_CONNECT_FAILED',
+            stderr.trim() || 'SSH 隧道连接失败'));
+        }
+      }, 3000);
+
+      child.stderr?.on('data', (raw) => {
+        const msg = raw.toString();
+        stderr += msg;
+        if (msg.trim()) {
+          logger.broadcast(msg, 'service');
+        }
+      });
+
+      child.on('error', (error) => {
+        clearTimeout(connectTimer);
+        if (error.code === 'ENOENT') {
+          finishReject(createAppError(500, 'SSHPASS_NOT_FOUND',
+            '未找到 sshpass 命令，请执行: brew install hudochenkov/sshpass/sshpass'));
+          return;
+        }
+        finishReject(createAppError(500, 'TUNNEL_EXEC_ERROR',
+          `SSH 隧道启动失败: ${error.message}`));
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(connectTimer);
+        if (code !== 0 && !settled) {
+          const output = stderr.trim();
+          if (/permission denied|authentication failure/i.test(output)) {
+            finishReject(createAppError(401, 'INVALID_SSH_PASSWORD', '远程主机密码错误'));
+          } else {
+            finishReject(createAppError(500, 'TUNNEL_FAILED',
+              output || 'SSH 隧道启动失败'));
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * 停止 SSH 反向隧道
+   */
+  async stopTunnel() {
+    logger.broadcast('\n========== 停止 SSH 反向隧道 ==========', 'service');
+
+    return new Promise((resolve, reject) => {
+      const child = spawn('pkill', ['-f', 'ssh.*8\\.152\\.216\\.176'], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      child.on('close', (code) => {
+        if (code === 0) {
+          logger.broadcast('SSH 隧道已停止', 'service');
+          resolve({ message: 'SSH 隧道已停止' });
+        } else if (code === 1) {
+          // pkill exit 1 means no matching process
+          logger.broadcast('未找到运行中的隧道进程', 'service');
+          resolve({ message: '无需停止，隧道未运行' });
+        } else {
+          reject(createAppError(500, 'TUNNEL_STOP_FAILED', '停止隧道进程失败'));
+        }
+      });
+
+      child.on('error', (error) => {
+        reject(createAppError(500, 'TUNNEL_STOP_ERROR',
+          `停止隧道失败: ${error.message}`));
+      });
+    });
+  }
+
+  /**
+   * 获取 SSH 隧道状态
+   * @returns {Promise<string>} 'RUNNING' | 'STOPPED'
+   */
+  async getTunnelStatus() {
+    return new Promise((resolve) => {
+      const child = spawn('pgrep', ['-f', 'ssh.*8\\.152\\.216\\.176'], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+
+      child.on('close', (code) => {
+        resolve(code === 0 ? 'RUNNING' : 'STOPPED');
+      });
+
+      child.on('error', () => {
+        resolve('STOPPED');
+      });
+    });
+  }
 }
 
 module.exports = new SystemCommandService();

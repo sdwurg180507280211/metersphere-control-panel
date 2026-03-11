@@ -17,6 +17,11 @@ router.post('/restart-all', serviceController.restartAll);
 // 系统命令
 router.post('/system/reload', serviceController.systemReload);
 
+// SSH 隧道
+router.post('/tunnel/start', serviceController.tunnelStart);
+router.post('/tunnel/stop', serviceController.tunnelStop);
+router.get('/tunnel/status', serviceController.tunnelStatus);
+
 // 单个服务操作
 router.get('/:id/status', serviceController.getStatus);
 router.get('/:id/health', serviceController.healthCheck);
