@@ -75,7 +75,9 @@ function LogViewer({ type, searchInputRef }) {
   const searchInputRefLocal = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [viewportHeight, setViewportHeight] = useState(0)
-  const [scrollTop, setScrollTop] = useState(0)
+  const scrollTopRef = useRef(0)
+  const rafIdRef = useRef(null)
+  const [, setRenderTick] = useState(0)
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
   const [copied, setCopied] = useState(false)
   const [copiedSelection, setCopiedSelection] = useState(false)
@@ -137,7 +139,8 @@ function LogViewer({ type, searchInputRef }) {
       requestAnimationFrame(() => {
         if (logRef.current) {
           logRef.current.scrollTop = logRef.current.scrollHeight
-          setScrollTop(logRef.current.scrollTop)
+          scrollTopRef.current = logRef.current.scrollTop
+          setRenderTick((t) => t + 1)
         }
       })
     }
@@ -145,17 +148,20 @@ function LogViewer({ type, searchInputRef }) {
 
   const totalHeight = lines.length * LOG_LINE_HEIGHT
   const visibleCount = Math.max(Math.ceil(viewportHeight / LOG_LINE_HEIGHT), 1)
-  const startIndex = Math.max(Math.floor(scrollTop / LOG_LINE_HEIGHT) - LOG_OVERSCAN, 0)
+  const startIndex = Math.max(Math.floor(scrollTopRef.current / LOG_LINE_HEIGHT) - LOG_OVERSCAN, 0)
   const endIndex = Math.min(startIndex + visibleCount + LOG_OVERSCAN * 2, lines.length)
   const visibleLines = lines.slice(startIndex, endIndex)
 
   const handleScroll = useCallback(() => {
-    if (logRef.current) {
-      const { scrollTop: nextScrollTop, scrollHeight, clientHeight } = logRef.current
-      const atBottom = scrollHeight - nextScrollTop - clientHeight < 50
-      setAutoScroll(atBottom)
-      setScrollTop(nextScrollTop)
-    }
+    if (!logRef.current) return
+    const { scrollTop: nextScrollTop, scrollHeight, clientHeight } = logRef.current
+    const atBottom = scrollHeight - nextScrollTop - clientHeight < 50
+    scrollTopRef.current = nextScrollTop
+    setAutoScroll(atBottom)
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
+    rafIdRef.current = requestAnimationFrame(() => {
+      setRenderTick((t) => t + 1)
+    })
   }, [])
 
   const handleClear = () => {
@@ -166,7 +172,8 @@ function LogViewer({ type, searchInputRef }) {
     } else {
       clearServiceLogs()
     }
-    setScrollTop(0)
+    scrollTopRef.current = 0
+    setRenderTick((t) => t + 1)
   }
 
   const handleDownload = () => {

@@ -612,7 +612,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         running: false,
         pid: null
       }, { serviceConfig });
-      return { success: false, error: '服务未运行或停止失败' };
+      return { success: true, method: 'none', phase: options.finalPhase || 'stopped' };
     }
 
     for (const pid of pidCandidates) {
@@ -677,7 +677,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     if (current.phase === 'starting' || current.phase === 'checking_health' || current.phase === 'restarting') {
       return this._setServiceStatus(serviceId, {
-        running: true,
+        running: false,
         pid,
         phase: 'failed',
         error: health.error || '健康检查未通过'
@@ -686,7 +686,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     if (current.phase === 'failed') {
       return this._setServiceStatus(serviceId, {
-        running: true,
+        running: false,
         pid,
         phase: 'failed',
         error: current.error || health.error || '健康检查未通过'
@@ -694,7 +694,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     return this._setServiceStatus(serviceId, {
-      running: true,
+      running: false,
       pid,
       phase: 'failed',
       error: health.error || '健康检查未通过'

@@ -188,9 +188,6 @@ class ServiceTaskService {
         timingContext,
         details: { serviceId }
       });
-      if (!result.success) {
-        throw createAppError(500, 'STOP_FAILED', result.error || '停止服务失败', { serviceId });
-      }
 
       return jobService.completeJob(job.jobId, result, {
         stage: 'completed',

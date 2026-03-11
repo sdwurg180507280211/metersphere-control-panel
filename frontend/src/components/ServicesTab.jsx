@@ -299,11 +299,18 @@ function ServicesTab({ searchInputRef }) {
     })
 
     toast.promise(
-      fetch(endpoint, { method: 'POST' }).then((response) => response.json()),
+      fetch(endpoint, { method: 'POST' })
+        .then((response) => response.json())
+        .then((data) => {
+          if (!data.success) {
+            throw new Error(data.error?.message || data.error || `${actionLabels[action]}失败`)
+          }
+          return data
+        }),
       {
         loading: `正在${actionLabels[action]}所有服务...`,
         success: `${actionLabels[action]}命令已发送`,
-        error: `${actionLabels[action]}失败`
+        error: (err) => err.message || `${actionLabels[action]}失败`
       }
     )
 

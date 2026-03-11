@@ -19,7 +19,8 @@ class WebSocketService {
         ws,
         type: null,
         subscriptions: new Set(),
-        lastPing: Date.now()
+        lastPing: Date.now(),
+        heartbeatInterval: null
       });
 
       console.log(`WebSocket 客户端连接: ${clientId}`);
@@ -42,12 +43,12 @@ class WebSocketService {
 
       ws.on('close', () => {
         console.log(`WebSocket 客户端断开: ${clientId}`);
-        this.clients.delete(clientId);
+        this._removeClient(clientId);
       });
 
       ws.on('error', (err) => {
         console.error(`WebSocket 错误 (${clientId}):`, err);
-        this.clients.delete(clientId);
+        this._removeClient(clientId);
       });
 
       // 心跳检测
@@ -120,16 +121,36 @@ class WebSocketService {
       }
       this.sendToClient(clientId, { type: 'ping' });
     }, 30000);
+
+    const client = this.clients.get(clientId);
+    if (client) {
+      client.heartbeatInterval = interval;
+    }
+  }
+
+  _removeClient(clientId) {
+    const client = this.clients.get(clientId);
+    if (client?.heartbeatInterval) {
+      clearInterval(client.heartbeatInterval);
+    }
+    this.clients.delete(clientId);
   }
 
   _checkHeartbeats() {
     const now = Date.now();
+    const staleClientIds = [];
     for (const [clientId, client] of this.clients) {
-      if (now - client.lastPing > 120000) { // 2分钟无响应
-        console.log(`关闭无响应客户端: ${clientId}`);
-        client.ws.close();
-        this.clients.delete(clientId);
+      if (now - client.lastPing > 120000) {
+        staleClientIds.push(clientId);
       }
+    }
+    for (const clientId of staleClientIds) {
+      console.log(`关闭无响应客户端: ${clientId}`);
+      const client = this.clients.get(clientId);
+      if (client) {
+        client.ws.close();
+      }
+      this._removeClient(clientId);
     }
   }
 

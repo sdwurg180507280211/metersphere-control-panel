@@ -68,9 +68,16 @@ class Logger {
 
   addClient(res) {
     this.logClients.push(res);
-    return () => {
+
+    const removeClient = () => {
       this.logClients = this.logClients.filter((client) => client !== res);
     };
+
+    // 自动清理断开的 SSE 客户端
+    res.on('close', removeClient);
+    res.on('error', removeClient);
+
+    return removeClient;
   }
 
   updateOptions(options = {}) {
@@ -228,12 +235,18 @@ class Logger {
       type,
       timestamp: new Date().toISOString(),
       serviceId: effectiveServiceId,
-      lines: parsedLines.map(item => ({
-        text: item.line,
-        level: item.level,
-        isStackTrace: item.isStackTrace,
-        isEmpty: item.isEmpty || false
-      }))
+      lines: parsedLines.map((item, index) => {
+        const timestampedLine = lines[index];
+        const lineText = (timestampedLine && timestampedLine.trim() !== '' && !timestampedLine.startsWith('====='))
+          ? `[${timestamp}] ${item.line}`
+          : item.line;
+        return {
+          text: lineText,
+          level: item.level,
+          isStackTrace: item.isStackTrace,
+          isEmpty: item.isEmpty || false
+        };
+      })
     };
 
     // 按级别分文件存储
@@ -340,7 +353,7 @@ class Logger {
   writeToFile(message, type) {
     const date = new Date().toISOString().split('T')[0];
     const stream = this.getLogStream(type, date);
-    stream.write(message);
+    stream.write(message.endsWith('\n') ? message : message + '\n');
   }
 
   /**
