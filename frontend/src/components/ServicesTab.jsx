@@ -286,6 +286,10 @@ function ServicesTab({ searchInputRef }) {
 
     catalog.forEach((service) => {
       const serviceStatus = services[service.id] || { running: false, phase: 'stopped' }
+      // 停止操作只更新正在运行或忙碌中的服务，跳过已停止的
+      if (action === 'stop' && !serviceStatus.running && !BUSY_SERVICE_PHASES.has(serviceStatus.phase)) {
+        return
+      }
       updateServiceStatus(service.id, {
         ...serviceStatus,
         phase: phaseMap[action],
