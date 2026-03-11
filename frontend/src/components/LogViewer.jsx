@@ -73,7 +73,7 @@ function useLogLines(type) {
 function LogViewer({ type, searchInputRef }) {
   const logRef = useRef(null)
   const searchInputRefLocal = useRef(null)
-  const shouldAutoScroll = useRef(true)
+  const [autoScroll, setAutoScroll] = useState(true)
   const [viewportHeight, setViewportHeight] = useState(0)
   const [scrollTop, setScrollTop] = useState(0)
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
@@ -133,11 +133,15 @@ function LogViewer({ type, searchInputRef }) {
   }, [])
 
   useEffect(() => {
-    if (logRef.current && shouldAutoScroll.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight
-      setScrollTop(logRef.current.scrollTop)
+    if (logRef.current && autoScroll) {
+      requestAnimationFrame(() => {
+        if (logRef.current) {
+          logRef.current.scrollTop = logRef.current.scrollHeight
+          setScrollTop(logRef.current.scrollTop)
+        }
+      })
     }
-  }, [lines])
+  }, [lines, autoScroll])
 
   const totalHeight = lines.length * LOG_LINE_HEIGHT
   const visibleCount = Math.max(Math.ceil(viewportHeight / LOG_LINE_HEIGHT), 1)
@@ -145,13 +149,14 @@ function LogViewer({ type, searchInputRef }) {
   const endIndex = Math.min(startIndex + visibleCount + LOG_OVERSCAN * 2, lines.length)
   const visibleLines = lines.slice(startIndex, endIndex)
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (logRef.current) {
       const { scrollTop: nextScrollTop, scrollHeight, clientHeight } = logRef.current
-      shouldAutoScroll.current = scrollHeight - nextScrollTop - clientHeight < 50
+      const atBottom = scrollHeight - nextScrollTop - clientHeight < 50
+      setAutoScroll(atBottom)
       setScrollTop(nextScrollTop)
     }
-  }
+  }, [])
 
   const handleClear = () => {
     if (type === 'build') {
@@ -364,13 +369,13 @@ function LogViewer({ type, searchInputRef }) {
       </div>
       
       {/* 回到底部按钮 */}
-      {!shouldAutoScroll.current && lines.length > 0 && (
+      {!autoScroll && lines.length > 0 && (
         <button
           className="scroll-to-bottom"
           onClick={() => {
             if (logRef.current) {
               logRef.current.scrollTop = logRef.current.scrollHeight
-              shouldAutoScroll.current = true
+              setAutoScroll(true)
             }
           }}
         >
