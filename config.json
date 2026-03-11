@@ -3,7 +3,7 @@
   "projectRoot": "/Users/edy/ideaProjects/metersphere",
   "maxLogLines": 1000,
   "redis": {
-    "mode": "redis",
+    "mode": "memory",
     "host": "localhost",
     "port": 6379,
     "password": "Password123@redis",
