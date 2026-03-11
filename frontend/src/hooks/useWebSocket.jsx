@@ -11,6 +11,7 @@ export function useWebSocket() {
   const wsRef = useRef(null)
   const reconnectTimerRef = useRef(null)
   const heartbeatTimerRef = useRef(null)
+  const scheduledRefreshesRef = useRef({})
   const reconnectCountRef = useRef(0)
   const isConnectingRef = useRef(false)
   const isUnmountedRef = useRef(false)
@@ -33,6 +34,36 @@ export function useWebSocket() {
     incrementReconnect,
     resetReconnect
   } = useWebSocketStore()
+
+  const clearScheduledRefreshes = useCallback(() => {
+    Object.values(scheduledRefreshesRef.current).forEach(({ timerId }) => {
+      clearTimeout(timerId)
+    })
+    scheduledRefreshesRef.current = {}
+  }, [])
+
+  const scheduleRefresh = useCallback((key, callback, delay = 0) => {
+    const existing = scheduledRefreshesRef.current[key]
+    const nextRunAt = Date.now() + delay
+
+    if (existing) {
+      if (existing.runAt <= nextRunAt) {
+        return
+      }
+
+      clearTimeout(existing.timerId)
+    }
+
+    const timerId = setTimeout(() => {
+      delete scheduledRefreshesRef.current[key]
+      callback()
+    }, delay)
+
+    scheduledRefreshesRef.current[key] = {
+      timerId,
+      runAt: nextRunAt
+    }
+  }, [])
 
   // 处理单个模块构建完成
   const handleBuildCompleted = useCallback((data) => {
@@ -105,8 +136,8 @@ export function useWebSocket() {
     )
 
     // 刷新服务状态
-    setTimeout(() => fetchServicesRef.current(), 500)
-  }, [])
+    scheduleRefresh('services', () => fetchServicesRef.current(), 500)
+  }, [scheduleRefresh])
 
   // 处理批量构建完成
   const handleBatchBuildCompleted = useCallback((data) => {
@@ -164,8 +195,8 @@ export function useWebSocket() {
       toast.success(`批量构建完成：${successCount} 成功，${failedCount} 失败`)
     }
 
-    setTimeout(() => fetchServicesRef.current(), 500)
-  }, [])
+    scheduleRefresh('services', () => fetchServicesRef.current(), 500)
+  }, [scheduleRefresh])
 
   const handleJobEvent = useCallback((channel, job) => {
     if (!job) return
@@ -192,9 +223,9 @@ export function useWebSocket() {
       }
 
       if (isTerminal) {
-        setTimeout(() => fetchActiveBuildsRef.current(), 300)
-        setTimeout(() => fetchBuildHistoryRef.current(), 300)
-        setTimeout(() => fetchServicesRef.current(), 500)
+        scheduleRefresh('activeBuilds', () => fetchActiveBuildsRef.current(), 300)
+        scheduleRefresh('buildHistory', () => fetchBuildHistoryRef.current(), 300)
+        scheduleRefresh('services', () => fetchServicesRef.current(), 500)
       }
     }
 
@@ -215,13 +246,13 @@ export function useWebSocket() {
       }
 
       if (isTerminal) {
-        setTimeout(() => fetchServicesRef.current(), 300)
+        scheduleRefresh('services', () => fetchServicesRef.current(), 300)
       }
     }
 
     if (job.type === 'service.batch.start' || job.type === 'service.batch.stop' || job.type === 'service.batch.restart') {
       if (isTerminal) {
-        setTimeout(() => fetchServicesRef.current(), 300)
+        scheduleRefresh('services', () => fetchServicesRef.current(), 300)
       }
     }
 
@@ -236,7 +267,7 @@ export function useWebSocket() {
         toast.error(job.error?.message || '打包任务失败')
       }
     }
-  }, [])
+  }, [scheduleRefresh])
 
   const handlePackageEvent = useCallback((channel, payload) => {
     if (!payload) return
@@ -357,7 +388,7 @@ export function useWebSocket() {
                 case 'build:progress':
                   updateBuildProgressRef.current(data.data.buildId, data.data)
                   if (data.data.status === 'success' || data.data.status === 'failed' || data.data.status === 'cancelled') {
-                    setTimeout(() => fetchServicesRef.current(), 1500)
+                    scheduleRefresh('services', () => fetchServicesRef.current(), 1500)
                   }
                   break
                 case 'service:status':
@@ -401,6 +432,8 @@ export function useWebSocket() {
           heartbeatTimerRef.current = null
         }
 
+        clearScheduledRefreshes()
+
         if (isUnmountedRef.current || intentionalCloseRef.current) return
 
         if (reconnectCountRef.current < MAX_RECONNECT_ATTEMPTS) {
@@ -431,6 +464,7 @@ export function useWebSocket() {
         clearInterval(heartbeatTimerRef.current)
         heartbeatTimerRef.current = null
       }
+      clearScheduledRefreshes()
       if (wsRef.current) {
         wsRef.current.onclose = null
         wsRef.current.onerror = null
@@ -446,7 +480,7 @@ export function useWebSocket() {
       clearTimeout(timer)
       disconnect()
     }
-  }, [setConnected, setClientId, incrementReconnect, resetReconnect])
+  }, [setConnected, setClientId, incrementReconnect, resetReconnect, clearScheduledRefreshes, handleBatchBuildCompleted, handleBuildCompleted, handleJobEvent, handlePackageEvent, scheduleRefresh])
 
   const { connected, clientId, reconnectAttempts } = useWebSocketStore()
 
