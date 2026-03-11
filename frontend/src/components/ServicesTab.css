@@ -417,6 +417,25 @@
   background: rgba(220, 38, 38, 0.36);
 }
 
+.btn-stop-small {
+  color: #fca5a5;
+}
+
+.error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-stop-retry {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.36);
+  color: #fca5a5;
+}
+
+.btn-stop-retry:hover {
+  background: rgba(239, 68, 68, 0.32);
+}
+
 .loading-spinner {
   display: inline-block;
   width: 24px;

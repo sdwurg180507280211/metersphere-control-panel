@@ -398,6 +398,24 @@ function ServicesTab({ searchInputRef }) {
                 isErrorExpanded={expandedErrors.has(service.id)}
                 onToggle={() => toggleService(service.id)}
                 onRestart={(e) => handleRestart(service.id, e)}
+                onForceStop={(e) => {
+                  e.stopPropagation()
+                  const serviceStatus = services[service.id] || { running: false, phase: 'stopped' }
+                  setLoading(service.id, true)
+                  fetch(`/api/services/${service.id}/stop`, { method: 'POST' })
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.success) {
+                        toast.success('停止命令已发送', { icon: '🛑' })
+                        updateServiceStatus(service.id, { ...serviceStatus, phase: 'stopping', running: false, error: null })
+                        if (!connected) setTimeout(fetchServices, 2000)
+                      } else {
+                        toast.error(data.error || '停止失败')
+                      }
+                    })
+                    .catch((err) => toast.error(`网络错误: ${err.message}`))
+                    .finally(() => setTimeout(() => setLoading(service.id, false), 2000))
+                }}
                 onToggleError={() => toggleErrorExpand(service.id)}
                 animationDelay={index * 50}
               />
@@ -491,6 +509,7 @@ function ServiceButton({
   isErrorExpanded,
   onToggle, 
   onRestart,
+  onForceStop,
   onToggleError,
   animationDelay
 }) {
@@ -568,6 +587,19 @@ function ServiceButton({
         </div>
       )}
 
+      {phase === 'failed' && (
+        <div className="service-actions">
+          <Tooltip content="停止服务" position="bottom">
+            <button 
+              className="btn-icon btn-stop-small" 
+              onClick={onForceStop}
+            >
+              🛑
+            </button>
+          </Tooltip>
+        </div>
+      )}
+
       {/* 错误摘要展示 */}
       {error && phase === 'failed' && (
         <div className="error-section">
@@ -585,12 +617,20 @@ function ServiceButton({
             {getErrorHint(error) && (
               <p className="error-hint">💡 {getErrorHint(error)}</p>
             )}
-            <button 
-              className="btn-retry" 
-              onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            >
-              重试启动
-            </button>
+            <div className="error-actions">
+              <button 
+                className="btn-retry btn-stop-retry" 
+                onClick={(e) => { e.stopPropagation(); onForceStop(e); }}
+              >
+                停止服务
+              </button>
+              <button 
+                className="btn-retry" 
+                onClick={(e) => { e.stopPropagation(); onToggle(); }}
+              >
+                重试启动
+              </button>
+            </div>
           </div>
           {!isErrorExpanded && (
             <p className="error-text collapsed" title={error}>
