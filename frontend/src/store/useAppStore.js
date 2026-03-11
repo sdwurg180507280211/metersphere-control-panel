@@ -1,6 +1,24 @@
 import { create } from 'zustand'
 
 const MAX_LOG_LINES = 1000
+const inFlightRequests = new Map()
+
+function runInFlightRequest(key, runner) {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key)
+  }
+
+  const request = Promise.resolve()
+    .then(runner)
+    .finally(() => {
+      if (inFlightRequests.get(key) === request) {
+        inFlightRequests.delete(key)
+      }
+    })
+
+  inFlightRequests.set(key, request)
+  return request
+}
 
 export const useServiceStore = create((set) => ({
   catalog: [],
@@ -21,7 +39,7 @@ export const useServiceStore = create((set) => ({
     loading: { ...state.loading, [id]: isLoading }
   })),
 
-  fetchCatalog: async () => {
+  fetchCatalog: async () => runInFlightRequest('services:catalog', async () => {
     try {
       const res = await fetch('/api/services/catalog')
       const data = await res.json()
@@ -31,9 +49,9 @@ export const useServiceStore = create((set) => ({
     } catch (error) {
       console.error('获取服务目录失败:', error)
     }
-  },
+  }),
 
-  fetchServices: async () => {
+  fetchServices: async () => runInFlightRequest('services:status', async () => {
     try {
       const res = await fetch('/api/services/status')
       const data = await res.json()
@@ -43,7 +61,7 @@ export const useServiceStore = create((set) => ({
     } catch (error) {
       console.error('获取服务状态失败:', error)
     }
-  }
+  })
 }))
 
 export const useLogStore = create((set, get) => ({
@@ -139,7 +157,7 @@ export const useBuildStore = create((set, get) => ({
 
   setCurrentBuild: (build) => set({ currentBuild: build }),
 
-  fetchModules: async () => {
+  fetchModules: async () => runInFlightRequest('build:modules', async () => {
     try {
       const res = await fetch('/api/build/modules')
       const data = await res.json()
@@ -149,9 +167,9 @@ export const useBuildStore = create((set, get) => ({
     } catch (error) {
       console.error('获取模块目录失败:', error)
     }
-  },
+  }),
 
-  fetchActiveBuilds: async () => {
+  fetchActiveBuilds: async () => runInFlightRequest('build:active', async () => {
     try {
       const res = await fetch('/api/progress/active')
       const data = await res.json()
@@ -161,9 +179,9 @@ export const useBuildStore = create((set, get) => ({
     } catch (error) {
       console.error('获取构建任务失败:', error)
     }
-  },
+  }),
 
-  fetchBuildHistory: async (limit = 10) => {
+  fetchBuildHistory: async (limit = 10) => runInFlightRequest(`build:history:${limit}`, async () => {
     try {
       const res = await fetch(`/api/progress/history/recent?limit=${limit}`)
       const data = await res.json()
@@ -173,7 +191,7 @@ export const useBuildStore = create((set, get) => ({
     } catch (error) {
       console.error('获取构建历史失败:', error)
     }
-  },
+  }),
 
   cancelBuild: async (buildId) => {
     try {
@@ -200,7 +218,7 @@ export const usePackageStore = create((set, get) => ({
   })),
   clearCurrentTask: () => set({ currentTask: null, activeLoading: false }),
 
-  fetchOptions: async () => {
+  fetchOptions: async () => runInFlightRequest('package:options', async () => {
     set({ optionsLoading: true })
     try {
       const res = await fetch('/api/package/options')
@@ -213,9 +231,9 @@ export const usePackageStore = create((set, get) => ({
     } finally {
       set({ optionsLoading: false })
     }
-  },
+  }),
 
-  fetchActiveTask: async () => {
+  fetchActiveTask: async () => runInFlightRequest('package:active', async () => {
     set({ activeLoading: true })
     try {
       const res = await fetch('/api/package/active')
@@ -230,7 +248,7 @@ export const usePackageStore = create((set, get) => ({
 
     set({ activeLoading: false })
     return null
-  },
+  }),
 
   startPackage: async (payload) => {
     const res = await fetch('/api/package/run', {
@@ -304,7 +322,7 @@ export const useConfigStore = create((set, get) => ({
   applying: false,
   diagnosticsLoading: false,
 
-  fetchConfig: async () => {
+  fetchConfig: async () => runInFlightRequest('config:fetch', async () => {
     set({ loading: true })
     try {
       const res = await fetch('/api/config')
@@ -333,7 +351,7 @@ export const useConfigStore = create((set, get) => ({
     } finally {
       set({ loading: false })
     }
-  },
+  }),
 
   updateDraft: (fieldPath, value) => set((state) => {
     const currentDraft = cloneValue(state.draft || state.snapshot || {})
@@ -514,7 +532,7 @@ export const useConfigStore = create((set, get) => ({
     dirtyFields: []
   })),
 
-  refreshDiagnostics: async () => {
+  refreshDiagnostics: async () => runInFlightRequest('config:diagnostics', async () => {
     set({ diagnosticsLoading: true })
     try {
       const res = await fetch('/api/config/diagnostics')
@@ -538,7 +556,7 @@ export const useConfigStore = create((set, get) => ({
     } finally {
       set({ diagnosticsLoading: false })
     }
-  }
+  })
 }))
 
 function appendLogChunk(state, type, logData) {
