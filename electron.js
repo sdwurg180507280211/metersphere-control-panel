@@ -1,9 +1,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 
 let mainWindow;
-let backendProcess;
+let server;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -24,18 +23,13 @@ function createWindow() {
 }
 
 function startBackend() {
-  const nodePath = process.execPath.replace(/electron$/i, 'node');
-  backendProcess = spawn(nodePath, [path.join(__dirname, 'backend/server.js')], {
-    env: { ...process.env, PORT: 5000 }
-  });
-
-  backendProcess.stdout.on('data', (data) => {
-    console.log(`Backend: ${data}`);
-  });
-
-  backendProcess.stderr.on('data', (data) => {
-    console.error(`Backend Error: ${data}`);
-  });
+  try {
+    process.env.PORT = '5000';
+    server = require('./backend/server.js');
+    console.log('Backend started on port 5000');
+  } catch (error) {
+    console.error('Failed to start backend:', error);
+  }
 }
 
 app.on('ready', () => {
@@ -44,9 +38,6 @@ app.on('ready', () => {
 });
 
 app.on('window-all-closed', () => {
-  if (backendProcess) {
-    backendProcess.kill();
-  }
   app.quit();
 });
 
