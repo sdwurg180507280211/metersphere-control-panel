@@ -14,7 +14,7 @@ function createWindow() {
     }
   });
 
-  const startURL = process.env.ELECTRON_START_URL || `file://${path.join(__dirname, 'frontend/dist/index.html')}`;
+  const startURL = process.env.ELECTRON_START_URL || 'http://localhost:5000';
   mainWindow.loadURL(startURL);
 
   mainWindow.on('closed', () => {
@@ -22,18 +22,18 @@ function createWindow() {
   });
 }
 
-function startBackend() {
+async function startBackend() {
   try {
-    process.env.PORT = '5000';
-    server = require('./backend/server.js');
+    const { startServer } = require('./backend/server.js');
+    server = await startServer(5000);
     console.log('Backend started on port 5000');
   } catch (error) {
     console.error('Failed to start backend:', error);
   }
 }
 
-app.on('ready', () => {
-  startBackend();
+app.on('ready', async () => {
+  await startBackend();
   setTimeout(createWindow, 2000);
 });
 
