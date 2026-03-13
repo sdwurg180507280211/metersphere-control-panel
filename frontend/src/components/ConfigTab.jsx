@@ -6,6 +6,7 @@ import ConfigServicesSection from './ConfigServicesSection'
 import ConfigPackageSection from './ConfigPackageSection'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
+import ConfigClaudeCodeSection from './ConfigClaudeCodeSection'
 import ConfigSaveBar from './ConfigSaveBar'
 import PropertiesDialog from './PropertiesDialog'
 import './ConfigTab.css'
@@ -15,6 +16,7 @@ function ConfigTab() {
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
   const [showRuntimeModal, setShowRuntimeModal] = useState(false)
   const [showPackageModal, setShowPackageModal] = useState(false)
+  const [showClaudeCodeModal, setShowClaudeCodeModal] = useState(false)
   const [showPropertiesModal, setShowPropertiesModal] = useState(false)
 
   const {
@@ -144,6 +146,10 @@ function ConfigTab() {
                 <span className="config-action-icon">📦</span>
                 <span className="config-action-label">构建与打包</span>
               </button>
+              <button className="config-action-btn" onClick={() => setShowClaudeCodeModal(true)}>
+                <span className="config-action-icon">🚀</span>
+                <span className="config-action-label">ClaudeCode 配置</span>
+              </button>
               <button className="config-action-btn" onClick={() => setShowPropertiesModal(true)}>
                 <span className="config-action-icon">📄</span>
                 <span className="config-action-label">MeterSphere 配置文件</span>
@@ -248,6 +254,25 @@ function ConfigTab() {
               <ConfigPackageSection
                 packageConfig={draft.package || {}}
                 resolved={resolved}
+                fieldErrors={fieldErrors}
+                fieldWarnings={fieldWarnings}
+                onChange={updateDraft}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClaudeCodeModal && (
+        <div className="log-modal-overlay" onClick={() => setShowClaudeCodeModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>ClaudeCode 配置</h3>
+              <button className="log-modal-close" onClick={() => setShowClaudeCodeModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigClaudeCodeSection
+                claudeCodeConfig={draft.claudeCode || {}}
                 fieldErrors={fieldErrors}
                 fieldWarnings={fieldWarnings}
                 onChange={updateDraft}

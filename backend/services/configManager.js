@@ -81,6 +81,7 @@ class ConfigManager {
       maxLogLines: editableDraft.maxLogLines,
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
+      claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 
@@ -158,7 +159,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode']
     };
   }
 
@@ -219,6 +220,7 @@ class ConfigManager {
 
   getRuntimeConfig() {
     const appliedRedis = this.appliedEditableConfig?.redis || {};
+    const appliedClaudeCode = this.appliedEditableConfig?.claudeCode || {};
     return this._clone({
       cache: {
         configuredMode: process.env.MS_CACHE_MODE || appliedRedis.mode || 'memory',
@@ -250,7 +252,11 @@ class ConfigManager {
         MS_REDIS_DB: process.env.MS_REDIS_DB || null,
         MS_PROPERTIES_PATH: process.env.MS_PROPERTIES_PATH || null,
         MS_PACKAGE_SCRIPT_PATH: process.env.MS_PACKAGE_SCRIPT_PATH || null,
-        PACKAGE_SCRIPT_PATH: process.env.PACKAGE_SCRIPT_PATH || null
+        PACKAGE_SCRIPT_PATH: process.env.PACKAGE_SCRIPT_PATH || null,
+        ANTHROPIC_BASE_URL: appliedClaudeCode.baseUrl || null,
+        ANTHROPIC_AUTH_TOKEN: appliedClaudeCode.authToken || null,
+        ANTHROPIC_MODEL: appliedClaudeCode.model || null,
+        ANTHROPIC_SMALL_FAST_MODEL: appliedClaudeCode.smallFastModel || null
       }
     });
   }

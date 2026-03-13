@@ -477,6 +477,14 @@ class ServiceTaskService {
               details: error.details || {},
               jobId: childJob.jobId
             });
+
+            if (serviceConfig.critical && actionLabel.includes('start')) {
+              logger.broadcast(`关键服务 ${serviceItem.name} 启动失败，停止后续服务启动`, 'service');
+              throw createAppError(500, 'CRITICAL_SERVICE_FAILED', `关键服务 ${serviceItem.name} 启动失败`, {
+                serviceId,
+                serviceName: serviceItem.name
+              });
+            }
           }
 
           await jobService.updateJob(parentJob.jobId, {

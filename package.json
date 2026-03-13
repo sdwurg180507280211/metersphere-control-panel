@@ -2,14 +2,19 @@
   "name": "metersphere-control-panel",
   "version": "2.0.0",
   "description": "MeterSphere 服务控制面板",
-  "main": "backend/server.js",
+  "author": "MeterSphere Team",
+  "main": "electron.js",
   "scripts": {
     "start": "node backend/server.js",
     "predev": "node scripts/clean-port.js 3000 5000",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "nodemon backend/server.js",
     "dev:frontend": "cd frontend && npm run dev",
+    "electron:dev": "ELECTRON_START_URL=http://localhost:3000 electron .",
     "build": "cd frontend && npm run build",
+    "electron:build": "npm run build && electron-builder --mac",
+    "pack": "electron-builder --mac --dir",
+    "dist": "npm run build && electron-builder --mac dmg",
     "install:all": "npm install && cd frontend && npm install"
   },
   "dependencies": {
@@ -20,6 +25,28 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
     "nodemon": "^3.0.2"
+  },
+  "build": {
+    "appId": "com.metersphere.control-panel",
+    "productName": "MeterSphere Control Panel",
+    "files": [
+      "electron.js",
+      "backend/**/*",
+      "frontend/dist/**/*",
+      "config.json",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ]
+    },
+    "dmg": {
+      "title": "MeterSphere Control Panel"
+    }
   }
 }

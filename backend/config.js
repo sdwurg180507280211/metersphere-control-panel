@@ -125,6 +125,19 @@ function normalizePackageConfig(rawPackage = {}) {
   return normalized;
 }
 
+function normalizeClaudeCodeConfig(rawConfig = {}) {
+  const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
+    ? rawConfig
+    : {};
+
+  return {
+    baseUrl: normalizeString(config.baseUrl, ''),
+    authToken: normalizeString(config.authToken, ''),
+    model: normalizeString(config.model, ''),
+    smallFastModel: normalizeString(config.smallFastModel, '')
+  };
+}
+
 function normalizeServiceDefinition(serviceId, rawService = {}) {
   const service = rawService && typeof rawService === 'object' && !Array.isArray(rawService)
     ? rawService
@@ -169,6 +182,7 @@ function normalizeEditableConfig(rawConfig = {}) {
       metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE),
       redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON)
     },
+    claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
   };
@@ -249,6 +263,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     projectRootInput: editable.projectRoot,
     maxLogLines: editable.maxLogLines,
     properties: editable.properties,
+    claudeCode: editable.claudeCode,
     package: editable.package,
     services: editable.services,
     serviceCatalog,
@@ -286,6 +301,7 @@ module.exports = {
   EXTRA_FRONTEND_MODULES,
   loadConfigFromFile,
   normalizeEditableConfig,
+  normalizeClaudeCodeConfig,
   normalizePackageConfig,
   normalizeServiceDefinition,
   normalizeServices,

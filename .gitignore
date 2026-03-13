@@ -4,3 +4,7 @@ frontend/dist/
 logs/
 .pids/
 .DS_Store
+
+# Electron build output
+dist/
+.codex-tmp/
