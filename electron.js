@@ -24,7 +24,8 @@ function createWindow() {
 }
 
 function startBackend() {
-  backendProcess = spawn('node', [path.join(__dirname, 'backend/server.js')], {
+  const nodePath = process.execPath.replace(/electron$/i, 'node');
+  backendProcess = spawn(nodePath, [path.join(__dirname, 'backend/server.js')], {
     env: { ...process.env, PORT: 5000 }
   });
 
