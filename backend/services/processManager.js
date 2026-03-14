@@ -1092,7 +1092,10 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       const child = spawn(npmCommand.command, [...npmCommand.argsPrefix, ...args], {
         cwd,
         detached: process.platform !== 'win32',
-        env: process.env
+        env: {
+          ...process.env,
+          PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin`
+        }
       });
 
       this._registerBuildProcess(buildId, child, `${command} ${args.join(' ')}`);
