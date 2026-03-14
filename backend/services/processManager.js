@@ -420,6 +420,20 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       };
     }
 
+    // 在 Electron 环境中尝试使用完整路径
+    const { execSync } = require('child_process');
+    try {
+      const npmPath = execSync('which npm', { encoding: 'utf8' }).trim();
+      if (npmPath) {
+        return {
+          command: npmPath,
+          argsPrefix: []
+        };
+      }
+    } catch (e) {
+      // which 命令失败，使用默认值
+    }
+
     return {
       command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
       argsPrefix: []
