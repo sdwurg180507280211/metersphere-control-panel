@@ -19,6 +19,7 @@ class ConfigDiagnosticsService {
 
     const diagnostics = {
       projectRoot: this._buildProjectRootDiagnostics(normalizedEditable, resolvedConfig, errors),
+      npmPath: this._buildNpmPathDiagnostics(normalizedEditable, errors, warnings),
       services: [],
       ports: [],
       packageScript: null,
@@ -112,6 +113,48 @@ class ConfigDiagnosticsService {
       hasMavenWrapper,
       matchedPomCount,
       source: path.isAbsolute(editableConfig.projectRoot) ? 'absolute-path' : 'control-panel-relative'
+    };
+  }
+
+  _buildNpmPathDiagnostics(editableConfig, errors, warnings) {
+    const npmPath = editableConfig.npmPath;
+    if (!npmPath) {
+      return {
+        valid: true,
+        input: '',
+        exists: false,
+        executable: false,
+        source: 'auto-detect'
+      };
+    }
+
+    const exists = fs.existsSync(npmPath);
+    let executable = false;
+
+    if (exists) {
+      try {
+        const stat = fs.statSync(npmPath);
+        if (stat.isFile()) {
+          fs.accessSync(npmPath, fs.constants.X_OK);
+          executable = true;
+        }
+      } catch (error) {
+        executable = false;
+      }
+    }
+
+    if (!exists) {
+      errors.push(this._createIssue('error', 'npmPath', '指定的 npm 路径不存在', { npmPath }));
+    } else if (!executable) {
+      errors.push(this._createIssue('error', 'npmPath', '指定的 npm 路径不可执行', { npmPath }));
+    }
+
+    return {
+      valid: exists && executable,
+      input: npmPath,
+      exists,
+      executable,
+      source: 'manual-config'
     };
   }
 

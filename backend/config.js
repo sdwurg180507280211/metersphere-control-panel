@@ -176,6 +176,7 @@ function normalizeEditableConfig(rawConfig = {}) {
   return {
     port: normalizeNumericField(config.port, DEFAULT_PORT),
     projectRoot: normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT),
+    npmPath: normalizeString(config.npmPath, ''),
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
     redis: config.redis || {},
     properties: {
@@ -261,6 +262,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     port: editable.port,
     projectRoot,
     projectRootInput: editable.projectRoot,
+    npmPath: editable.npmPath,
     maxLogLines: editable.maxLogLines,
     properties: editable.properties,
     claudeCode: editable.claudeCode,
