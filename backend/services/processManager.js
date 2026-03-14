@@ -468,12 +468,32 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     };
   }
 
+  _getExtendedEnv(baseEnv = process.env, commandPath = null) {
+    if (!commandPath || !path.isAbsolute(commandPath)) {
+      return baseEnv;
+    }
+
+    const commandDir = path.dirname(commandPath);
+    const env = { ...baseEnv };
+    const pathKey = process.platform === 'win32' ? 'Path' : 'PATH';
+    const oldPath = env[pathKey] || '';
+
+    if (!oldPath.includes(commandDir)) {
+      const separator = process.platform === 'win32' ? ';' : ':';
+      env[pathKey] = oldPath ? `${commandDir}${separator}${oldPath}` : commandDir;
+    }
+
+    return env;
+  }
+
   _runCommand({ command, args, cwd, logType = 'service', serviceId = null, env = process.env, timeoutMs = 0 }) {
+    const extendedEnv = this._getExtendedEnv(env, command);
+
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
         cwd,
         detached: false,
-        env
+        env: extendedEnv
       });
 
       let stderrOutput = '';
@@ -1020,6 +1040,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   async executeBuild(moduleConfig, buildId, options = {}) {
     const frontendDir = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
     const targetDir = path.join(this._getProjectRoot(), moduleConfig.targetPath);
+    const { command: npmCommand, argsPrefix: npmArgsPrefix } = this._resolveNpmCommand();
 
     logger.broadcast(`\n========== 构建 ${moduleConfig.name} 前端 ==========`, 'build');
     logger.broadcast(`构建ID: ${buildId}`, 'build');
@@ -1035,9 +1056,13 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       if (dependencyDecision.shouldInstall) {
         const installCommand = fs.existsSync(path.join(frontendDir, 'package-lock.json')) ? 'ci' : 'install';
         logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
+        
+        const fullArgs = [...npmArgsPrefix, installCommand];
+        logger.broadcast(`${npmCommand} ${fullArgs.join(' ')}`, 'build');
+
         await this._runCommandWithProgress({
-          command: 'npm',
-          args: [installCommand],
+          command: npmCommand,
+          args: fullArgs,
           cwd: frontendDir,
           buildId,
           stepIndex: 1,
@@ -1051,12 +1076,14 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
       this._throwIfCancelled(buildId);
       await buildProgressService.updateStep(buildId, 2, 'running', 0, '开始编译...');
+      
+      const buildArgs = [...npmArgsPrefix, 'run', 'build'];
       logger.broadcast(`cd ${moduleConfig.frontendPath}`, 'build');
-      logger.broadcast('npm run build', 'build');
+      logger.broadcast(`${npmCommand} ${buildArgs.join(' ')}`, 'build');
 
       await this._runCommandWithProgress({
-        command: 'npm',
-        args: ['run', 'build'],
+        command: npmCommand,
+        args: buildArgs,
         cwd: frontendDir,
         buildId,
         stepIndex: 2,
@@ -1093,15 +1120,14 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   _runCommandWithProgress({ command, args, cwd, buildId, stepIndex, stepName, logType, detectMilestones = false }) {
+    const extendedEnv = this._getExtendedEnv(process.env, command);
+
     return new Promise((resolve, reject) => {
-      const npmCommand = command === 'npm' ? this._resolveNpmCommand() : { command, argsPrefix: [] };
-      const child = spawn(npmCommand.command, [...npmCommand.argsPrefix, ...args], {
+      const child = spawn(command, args, {
         cwd,
+        shell: true,
         detached: process.platform !== 'win32',
-        env: {
-          ...process.env,
-          PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin`
-        }
+        env: extendedEnv
       });
 
       this._registerBuildProcess(buildId, child, `${command} ${args.join(' ')}`);

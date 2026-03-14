@@ -7,6 +7,8 @@ import ConfigPackageSection from './ConfigPackageSection'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
 import ConfigClaudeCodeSection from './ConfigClaudeCodeSection'
+import ConfigRedisSection from './ConfigRedisSection'
+import ConfigPathSection from './ConfigPathSection'
 import ConfigSaveBar from './ConfigSaveBar'
 import PropertiesDialog from './PropertiesDialog'
 import './ConfigTab.css'
@@ -18,6 +20,8 @@ function ConfigTab() {
   const [showPackageModal, setShowPackageModal] = useState(false)
   const [showClaudeCodeModal, setShowClaudeCodeModal] = useState(false)
   const [showPropertiesModal, setShowPropertiesModal] = useState(false)
+  const [showRedisModal, setShowRedisModal] = useState(false)
+  const [showPathModal, setShowPathModal] = useState(false)
 
   const {
     snapshot,
@@ -150,6 +154,14 @@ function ConfigTab() {
                 <span className="config-action-icon">🚀</span>
                 <span className="config-action-label">ClaudeCode 配置</span>
               </button>
+              <button className="config-action-btn" onClick={() => setShowRedisModal(true)}>
+                <span className="config-action-icon">💾</span>
+                <span className="config-action-label">Redis 配置</span>
+              </button>
+              <button className="config-action-btn" onClick={() => setShowPathModal(true)}>
+                <span className="config-action-icon">📂</span>
+                <span className="config-action-label">路径配置</span>
+              </button>
               <button className="config-action-btn" onClick={() => setShowPropertiesModal(true)}>
                 <span className="config-action-icon">📄</span>
                 <span className="config-action-label">MeterSphere 配置文件</span>
@@ -273,6 +285,44 @@ function ConfigTab() {
             <div className="log-modal-body">
               <ConfigClaudeCodeSection
                 claudeCodeConfig={draft.claudeCode || {}}
+                fieldErrors={fieldErrors}
+                fieldWarnings={fieldWarnings}
+                onChange={updateDraft}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRedisModal && (
+        <div className="log-modal-overlay" onClick={() => setShowRedisModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>Redis 配置</h3>
+              <button className="log-modal-close" onClick={() => setShowRedisModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigRedisSection
+                redisConfig={draft.redis || {}}
+                fieldErrors={fieldErrors}
+                fieldWarnings={fieldWarnings}
+                onChange={updateDraft}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPathModal && (
+        <div className="log-modal-overlay" onClick={() => setShowPathModal(false)}>
+          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="log-modal-header">
+              <h3>路径配置</h3>
+              <button className="log-modal-close" onClick={() => setShowPathModal(false)}>✕</button>
+            </div>
+            <div className="log-modal-body">
+              <ConfigPathSection
+                propertiesConfig={draft.properties || {}}
                 fieldErrors={fieldErrors}
                 fieldWarnings={fieldWarnings}
                 onChange={updateDraft}

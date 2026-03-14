@@ -8,13 +8,13 @@ const path = require('path');
 const CONFIG_PATH = process.env.MS_CONFIG_PATH || path.join(__dirname, '../config.json');
 const CONTROL_PANEL_ROOT = path.resolve(__dirname, '..');
 
-const DEFAULT_PORT = 3000;
-const DEFAULT_PROJECT_ROOT = '/Users/edy/ideaProjects/metersphere';
-const DEFAULT_MAX_LOG_LINES = 1000;
+const DEFAULT_PORT = parseInt(process.env.MS_PORT || '3000', 10);
+const DEFAULT_PROJECT_ROOT = process.env.MS_PROJECT_ROOT || path.resolve(CONTROL_PANEL_ROOT, '..');
+const DEFAULT_MAX_LOG_LINES = parseInt(process.env.MS_MAX_LOG_LINES || '1000', 10);
 const DEFAULT_SERVICE_START_ORDER = 99;
 const DEFAULT_HEALTH_CHECK = '/actuator/health';
-const DEFAULT_PROPERTIES_METERSPHERE = '/opt/metersphere/conf/metersphere.properties';
-const DEFAULT_PROPERTIES_REDISSON = '/opt/metersphere/conf/redisson.yml';
+const DEFAULT_PROPERTIES_METERSPHERE = process.env.MS_PROPERTIES_PATH || '/opt/metersphere/conf/metersphere.properties';
+const DEFAULT_PROPERTIES_REDISSON = process.env.MS_REDISSON_PATH || '/opt/metersphere/conf/redisson.yml';
 
 const FRONTEND_SERVICE_IDS = [
   'system-setting',

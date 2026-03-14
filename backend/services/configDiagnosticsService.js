@@ -19,7 +19,6 @@ class ConfigDiagnosticsService {
 
     const diagnostics = {
       projectRoot: this._buildProjectRootDiagnostics(normalizedEditable, resolvedConfig, errors),
-      npmPath: this._buildNpmPathDiagnostics(normalizedEditable, errors, warnings),
       services: [],
       ports: [],
       packageScript: null,
@@ -28,6 +27,7 @@ class ConfigDiagnosticsService {
     };
 
     this._validateGeneralConfig(normalizedEditable, errors, warnings);
+    diagnostics.npmPath = this._buildNpmPathDiagnostics(normalizedEditable, errors, warnings);
     diagnostics.services = this._buildServiceDiagnostics(normalizedEditable, resolvedConfig, diagnostics.ports, errors, warnings);
     diagnostics.packageScript = this._buildPackageDiagnostics(resolvedConfig, errors, warnings);
 
