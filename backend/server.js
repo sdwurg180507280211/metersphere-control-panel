@@ -4,6 +4,10 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fixPath = require('fix-path');
+
+// 关键：解决 macOS DMG 打包后的 $PATH 环境变量丢失问题
+fixPath();
 const fs = require('fs');
 const configManager = require('./services/configManager');
 const logger = require('./utils/logger');

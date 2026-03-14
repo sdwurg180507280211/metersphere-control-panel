@@ -12,6 +12,8 @@ const {
   buildResolvedConfig
 } = require('../config');
 
+const projectScannerService = require('./projectScannerService');
+
 class ConfigManager {
   constructor() {
     this.configPath = CONFIG_PATH;
@@ -24,6 +26,44 @@ class ConfigManager {
     this.lastSavedAt = null;
     this.lastAppliedAt = null;
     this._initialize();
+  }
+  async scanProject(projectRoot) {
+    const root = projectRoot || this.currentEditableConfig.projectRoot;
+    if (!root) {
+      throw createAppError(400, 'PROJECT_ROOT_MISSING', '项目根路径未配置');
+    }
+
+    console.log(`开始扫描项目: ${root}`);
+    try {
+      const scannedServices = await projectScannerService.scan(root);
+      
+      // 合并逻辑：如果当前配置中已存在同名服务，则以当前配置为准（保留用户已做的微调）
+      const currentServices = this.currentEditableConfig.services || {};
+      const mergedServices = { ...scannedServices };
+      
+      Object.keys(currentServices).forEach(id => {
+        if (mergedServices[id]) {
+          // 仅合并探测到的关键字段，如果不冲突则保留
+          mergedServices[id] = {
+            ...mergedServices[id],
+            ...currentServices[id]
+          };
+        } else {
+          // 即使没扫到，也保留用户手动定义的（可能是非标服务）
+          mergedServices[id] = currentServices[id];
+        }
+      });
+
+      return {
+        projectRoot: root,
+        scannedAt: new Date().toISOString(),
+        services: mergedServices,
+        count: Object.keys(mergedServices).length
+      };
+    } catch (error) {
+      console.error(`扫描项目失败: ${error.message}`);
+      throw createAppError(500, 'SCAN_FAILED', '项目扫描失败', { cause: error.message });
+    }
   }
 
   _initialize() {
@@ -78,7 +118,6 @@ class ConfigManager {
       ...currentRaw,
       port: editableDraft.port,
       projectRoot: editableDraft.projectRoot,
-      npmPath: editableDraft.npmPath,
       maxLogLines: editableDraft.maxLogLines,
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
@@ -86,11 +125,27 @@ class ConfigManager {
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 
-    const packageConfig = this._buildPersistedPackage(currentRaw.package, editableDraft.package || {});
+    // 只有当 npmPath 不是自动探测到的默认值时才保存
+    const defaultNpm = require('../config').normalizeEditableConfig({ projectRoot: editableDraft.projectRoot }).npmPath;
+    if (editableDraft.npmPath && editableDraft.npmPath !== defaultNpm) {
+      persisted.npmPath = editableDraft.npmPath;
+    } else {
+      delete persisted.npmPath;
+    }
+
+    const packageConfig = this._buildPersistedPackage(currentRaw.package, editableDraft.package || {}, editableDraft.projectRoot);
     if (packageConfig === undefined) {
       delete persisted.package;
     } else {
       persisted.package = packageConfig;
+    }
+
+    // 清理冗余的默认路径配置
+    if (persisted.properties) {
+      const defaultProps = require('../config').normalizeEditableConfig({ projectRoot: editableDraft.projectRoot }).properties;
+      if (persisted.properties.metersphere === defaultProps.metersphere) delete persisted.properties.metersphere;
+      if (persisted.properties.redisson === defaultProps.redisson) delete persisted.properties.redisson;
+      if (Object.keys(persisted.properties).length === 0) delete persisted.properties;
     }
 
     return persisted;
@@ -104,11 +159,27 @@ class ConfigManager {
           ...rawService,
           name: serviceDraft.name,
           pom: serviceDraft.pom,
-          port: serviceDraft.port,
-          healthCheckPort: serviceDraft.healthCheckPort,
-          healthCheck: serviceDraft.healthCheck,
-          startOrder: serviceDraft.startOrder
+          port: serviceDraft.port
         };
+
+        // 仅保存非默认值
+        if (serviceDraft.healthCheckPort && serviceDraft.healthCheckPort !== serviceDraft.port) {
+          nextService.healthCheckPort = serviceDraft.healthCheckPort;
+        } else {
+          delete nextService.healthCheckPort;
+        }
+
+        if (serviceDraft.healthCheck && serviceDraft.healthCheck !== '/actuator/health') {
+          nextService.healthCheck = serviceDraft.healthCheck;
+        } else {
+          delete nextService.healthCheck;
+        }
+
+        if (serviceDraft.startOrder && serviceDraft.startOrder !== 99) {
+          nextService.startOrder = serviceDraft.startOrder;
+        } else {
+          delete nextService.startOrder;
+        }
 
         if (Object.prototype.hasOwnProperty.call(rawService, 'enabled') || serviceDraft.enabled === false || !currentServices[serviceId]) {
           nextService.enabled = serviceDraft.enabled !== false;
@@ -121,14 +192,30 @@ class ConfigManager {
     );
   }
 
-  _buildPersistedPackage(rawPackage, editablePackage) {
+  _buildPersistedPackage(rawPackage, editablePackage, projectRoot) {
     const nextPackage = {
       ...(rawPackage || {}),
       ...(editablePackage || {})
     };
 
+    const defaultMaxJobs = require('../config').normalizeEditableConfig({ projectRoot }).package.maxJobs;
+
     Object.keys(nextPackage).forEach((key) => {
       const value = nextPackage[key];
+      // 如果是默认值，则删除，保持 JSON 精简
+      if (key === 'maxJobs' && value === defaultMaxJobs) {
+        delete nextPackage[key];
+        return;
+      }
+      if (key === 'parallelBuild' && value === true) {
+        delete nextPackage[key];
+        return;
+      }
+      if (key === 'buildOnly' && value === false) {
+        delete nextPackage[key];
+        return;
+      }
+
       if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
         delete nextPackage[key];
       }
@@ -144,6 +231,12 @@ class ConfigManager {
   _writeFileAtomic(rawConfig) {
     const directory = path.dirname(this.configPath);
     const tempPath = path.join(directory, `${path.basename(this.configPath)}.tmp`);
+    
+    // 安全：写入前备份
+    if (fs.existsSync(this.configPath)) {
+      fs.copyFileSync(this.configPath, `${this.configPath}.bak`);
+    }
+
     fs.writeFileSync(tempPath, `${JSON.stringify(rawConfig, null, 2)}\n`, 'utf8');
     fs.renameSync(tempPath, this.configPath);
   }

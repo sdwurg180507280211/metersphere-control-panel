@@ -321,6 +321,7 @@ export const useConfigStore = create((set, get) => ({
   saving: false,
   applying: false,
   diagnosticsLoading: false,
+  scanning: false,
 
   fetchConfig: async () => runInFlightRequest('config:fetch', async () => {
     set({ loading: true })
@@ -331,27 +332,56 @@ export const useConfigStore = create((set, get) => ({
         throw new Error(data.error?.message || '加载配置失败')
       }
 
+      const configData = data.data;
       set({
-        snapshot: cloneValue(data.data.editable),
-        draft: cloneValue(data.data.editable),
-        resolved: data.data.resolved,
-        snapshotResolved: cloneValue(data.data.resolved),
-        runtime: data.data.runtime,
-        diagnostics: data.data.diagnostics,
-        snapshotDiagnostics: cloneValue(data.data.diagnostics),
-        validation: data.data.validation || { valid: true, errors: [], warnings: [] },
-        snapshotValidation: cloneValue(data.data.validation || { valid: true, errors: [], warnings: [] }),
-        meta: data.data.meta,
-        applyImpact: data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
-        snapshotApplyImpact: cloneValue(data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
+        snapshot: cloneValue(configData.editable),
+        draft: cloneValue(configData.editable),
+        resolved: configData.resolved,
+        snapshotResolved: cloneValue(configData.resolved),
+        runtime: configData.runtime,
+        diagnostics: configData.diagnostics,
+        snapshotDiagnostics: cloneValue(configData.diagnostics),
+        validation: configData.validation || { valid: true, errors: [], warnings: [] },
+        snapshotValidation: cloneValue(configData.validation || { valid: true, errors: [], warnings: [] }),
+        meta: configData.meta,
+        applyImpact: configData.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
+        snapshotApplyImpact: cloneValue(configData.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
         dirtyFields: []
       })
 
-      return data.data
+      return configData
     } finally {
       set({ loading: false })
     }
   }),
+
+  scanProject: async (projectRoot) => {
+    set({ scanning: true })
+    try {
+      const res = await fetch('/api/config/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectRoot })
+      })
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || '项目扫描失败')
+      }
+
+      // 扫描完成后，更新 draft 中的 services
+      const nextDraft = cloneValue(get().draft || get().snapshot || {})
+      nextDraft.services = data.data.services
+      
+      set({
+        draft: nextDraft,
+        dirtyFields: collectDirtyPaths(get().snapshot || {}, nextDraft)
+      })
+
+      return data.data
+    } finally {
+      set({ scanning: false })
+    }
+  },
 
   updateDraft: (fieldPath, value) => set((state) => {
     const currentDraft = cloneValue(state.draft || state.snapshot || {})

@@ -1,30 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { useBuildStore, useConfigStore, usePackageStore, useServiceStore } from '../store/useAppStore'
-import ConfigGeneralSection from './ConfigGeneralSection'
-import ConfigServicesSection from './ConfigServicesSection'
-import ConfigPackageSection from './ConfigPackageSection'
+import ConfigSaveBar from './ConfigSaveBar'
+import ConfigField from './ConfigField'
+import CustomSelect from './CustomSelect'
+import PropertiesDialog from './PropertiesDialog'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
-import ConfigClaudeCodeSection from './ConfigClaudeCodeSection'
-import ConfigRedisSection from './ConfigRedisSection'
-import ConfigPathSection from './ConfigPathSection'
-import ConfigSaveBar from './ConfigSaveBar'
-import PropertiesDialog from './PropertiesDialog'
 import './ConfigTab.css'
 
 function ConfigTab() {
-  const [showServicesModal, setShowServicesModal] = useState(false)
-  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
-  const [showRuntimeModal, setShowRuntimeModal] = useState(false)
-  const [showPackageModal, setShowPackageModal] = useState(false)
-  const [showClaudeCodeModal, setShowClaudeCodeModal] = useState(false)
+  const [activeTab, setActiveTab] = useState('environment')
   const [showPropertiesModal, setShowPropertiesModal] = useState(false)
-  const [showRedisModal, setShowRedisModal] = useState(false)
-  const [showPathModal, setShowPathModal] = useState(false)
+  const [showRuntimeModal, setShowRuntimeModal] = useState(false)
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
 
   const {
-    snapshot,
     draft,
     resolved,
     runtime,
@@ -37,6 +28,7 @@ function ConfigTab() {
     validating,
     saving,
     applying,
+    scanning,
     diagnosticsLoading,
     fetchConfig,
     updateDraft,
@@ -47,7 +39,8 @@ function ConfigTab() {
     saveConfig,
     applyConfig,
     resetDraft,
-    refreshDiagnostics
+    refreshDiagnostics,
+    scanProject
   } = useConfigStore()
 
   const { fetchCatalog, fetchServices } = useServiceStore()
@@ -62,9 +55,15 @@ function ConfigTab() {
 
   const fieldErrors = useMemo(() => buildFieldMap(validation?.errors || []), [validation?.errors])
   const fieldWarnings = useMemo(() => buildFieldMap(validation?.warnings || []), [validation?.warnings])
-  const validationErrorCount = validation?.errors?.length || 0
-  const validationWarningCount = validation?.warnings?.length || 0
-  const diagnosticsIssueCount = (diagnostics?.errors?.length || 0) + (diagnostics?.warnings?.length || 0)
+
+  const handleScan = async () => {
+    try {
+      const result = await scanProject(draft.projectRoot)
+      toast.success(`扫描完成，探测到 ${result.count} 个服务`)
+    } catch (error) {
+      toast.error(error.message || '扫描失败')
+    }
+  }
 
   const handleValidate = async () => {
     try {
@@ -100,86 +99,284 @@ function ConfigTab() {
         fetchActivePackageTask(),
         refreshDiagnostics()
       ])
-
-      if (result.requiresRestart?.length > 0) {
-        toast.success('配置已应用，部分字段需重启控制面板')
-      } else {
-        toast.success('配置已应用到运行时')
-      }
+      toast.success(result.requiresRestart?.length > 0 ? '配置已应用，部分字段需重启' : '配置已应用')
     } catch (error) {
-      if (error.details?.blockingJobs?.length) {
-        toast.error(`存在 ${error.details.blockingJobs.length} 个运行中任务，暂时无法应用`)
-        return
-      }
       toast.error(error.message || '应用配置失败')
-    }
-  }
-
-  const handleRefreshDiagnostics = async () => {
-    try {
-      await refreshDiagnostics()
-      toast.success('诊断信息已刷新')
-    } catch (error) {
-      toast.error(error.message || '刷新诊断失败')
     }
   }
 
   if (loading || !draft) {
     return (
       <div className="tab-content config-tab config-tab-loading">
-        <div className="config-loading-card">正在加载配置快照...</div>
+        <div className="config-loading-card">正在加载配置...</div>
       </div>
     )
   }
 
+  const renderEnvironment = () => (
+    <div className="config-section">
+      <h3 className="config-section-title">基础环境</h3>
+      <p className="config-section-subtitle">配置 MeterSphere 项目根路径及环境依赖</p>
+      
+      <div className="config-form-grid">
+        <ConfigField 
+          label="项目根目录" 
+          path="projectRoot" 
+          fieldErrors={fieldErrors} 
+          fieldWarnings={fieldWarnings}
+          hint="控制面板将以此为锚点探测所有微服务"
+        >
+          <input 
+            value={draft.projectRoot ?? ''} 
+            onChange={e => updateDraft('projectRoot', e.target.value)} 
+            placeholder="/Users/xxx/ideaProjects/metersphere"
+          />
+        </ConfigField>
+
+        <ConfigField 
+          label="npm 命令路径" 
+          path="npmPath" 
+          fieldErrors={fieldErrors} 
+          fieldWarnings={fieldWarnings}
+          hint={resolved?.npmPath ? `当前推测路径: ${resolved.npmPath}` : "留空则自动探测系统环境变量"}
+        >
+          <input 
+            value={draft.npmPath ?? ''} 
+            onChange={e => updateDraft('npmPath', e.target.value)} 
+            placeholder="例如: /usr/local/bin/npm"
+          />
+        </ConfigField>
+
+        <ConfigField 
+          label="metersphere.properties 路径" 
+          path="properties.metersphere" 
+          fieldErrors={fieldErrors} 
+          fieldWarnings={fieldWarnings}
+          hint={resolved?.properties?.metersphere ? `当前指向: ${resolved.properties.metersphere}` : "留空则尝试自动查找"}
+        >
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input 
+              value={draft.properties?.metersphere ?? ''} 
+              onChange={e => updateDraft('properties.metersphere', e.target.value)} 
+              placeholder="自动探测中..."
+            />
+            <button className="config-scan-btn" onClick={() => setShowPropertiesModal(true)}>编辑内容</button>
+          </div>
+        </ConfigField>
+
+        <ConfigField 
+          label="redisson.yml 路径" 
+          path="properties.redisson" 
+          fieldErrors={fieldErrors} 
+          fieldWarnings={fieldWarnings}
+          hint={resolved?.properties?.redisson ? `当前指向: ${resolved.properties.redisson}` : "留空则尝试自动查找"}
+        >
+          <input 
+            value={draft.properties?.redisson ?? ''} 
+            onChange={e => updateDraft('properties.redisson', e.target.value)} 
+            placeholder="自动探测中..."
+          />
+        </ConfigField>
+      </div>
+    </div>
+  )
+
+  const renderServices = () => (
+    <div className="config-section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 className="config-section-title">服务管理</h3>
+        <button 
+          className={`config-scan-btn ${scanning ? 'scanning' : ''}`} 
+          onClick={handleScan}
+          disabled={scanning}
+        >
+          {scanning ? <span className="config-spinner" /> : <span className="config-scan-icon">🔍</span>}
+          {scanning ? '智能探测中...' : '自动扫描项目服务'}
+        </button>
+      </div>
+      <p className="config-section-subtitle">探测到的微服务列表及运行参数（修改后将覆盖自动探测结果）</p>
+
+      <table className="config-service-table">
+        <thead>
+          <tr>
+            <th>状态</th>
+            <th>服务标识 / 名称</th>
+            <th>POM 路径</th>
+            <th>端口</th>
+            <th>顺序</th>
+            <th style={{ width: '80px' }}>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(draft.services || {}).sort((a,b) => (a[1].startOrder || 99) - (b[1].startOrder || 99)).map(([id, s]) => (
+            <tr key={id} className="config-service-row">
+              <td>
+                <input 
+                  type="checkbox" 
+                  checked={s.enabled !== false} 
+                  onChange={e => updateService(id, { enabled: e.target.checked })} 
+                />
+              </td>
+              <td>
+                <div style={{ fontWeight: 600 }}>{id}</div>
+                <input 
+                  className="config-service-input-small"
+                  value={s.name ?? ''} 
+                  onChange={e => updateService(id, { name: e.target.value })} 
+                  style={{ width: '120px' }}
+                />
+              </td>
+              <td>
+                <span className="config-service-meta">{s.pom}</span>
+              </td>
+              <td>
+                <input 
+                  className="config-service-input-small"
+                  type="number"
+                  value={s.port ?? ''} 
+                  onChange={e => updateService(id, { port: e.target.value })} 
+                />
+                <span className="config-service-meta">HC: {s.healthCheckPort || s.port || '-'}</span>
+              </td>
+              <td>
+                <input 
+                  className="config-service-input-small"
+                  type="number"
+                  value={s.startOrder ?? ''} 
+                  onChange={e => updateService(id, { startOrder: e.target.value })} 
+                />
+              </td>
+              <td>
+                <button className="config-action-btn-danger" onClick={() => removeService(id)} title="移除">✕</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button className="config-scan-btn" style={{ marginTop: '16px', width: '100%' }} onClick={() => addService()}>
+        + 手动添加服务
+      </button>
+    </div>
+  )
+
+  const renderIntegrations = () => (
+    <div className="config-section">
+      <h3 className="config-section-title">外部集成</h3>
+      <p className="config-section-subtitle">配置 Redis 缓存及 ClaudeCode AI 集成凭据</p>
+
+      <div className="config-form-grid">
+        <ConfigField label="Redis 缓存模式" path="redis.mode">
+          <CustomSelect
+            value={draft.redis?.mode ?? 'memory'}
+            onChange={val => updateDraft('redis.mode', val)}
+            options={[
+              { value: 'memory', label: '内存缓存' },
+              { value: 'redis', label: 'Redis' }
+            ]}
+          />
+        </ConfigField>
+        
+        <ConfigField label="Redis 主机" path="redis.host">
+          <input 
+            value={draft.redis?.host ?? ''} 
+            onChange={e => updateDraft('redis.host', e.target.value)} 
+            disabled={draft.redis?.mode !== 'redis'}
+            placeholder="localhost"
+          />
+        </ConfigField>
+
+        <ConfigField label="ClaudeCode Base URL" path="claudeCode.baseUrl">
+          <input 
+            value={draft.claudeCode?.baseUrl ?? ''} 
+            onChange={e => updateDraft('claudeCode.baseUrl', e.target.value)} 
+            placeholder="https://api.anthropic.com"
+          />
+        </ConfigField>
+
+        <ConfigField label="ClaudeCode API Token" path="claudeCode.authToken">
+          <input 
+            type="password"
+            value={draft.claudeCode?.authToken ?? ''} 
+            onChange={e => updateDraft('claudeCode.authToken', e.target.value)} 
+            placeholder="sk-..."
+          />
+        </ConfigField>
+      </div>
+    </div>
+  )
+
+  const renderAdvanced = () => (
+    <div className="config-section">
+      <h3 className="config-section-title">高级设置</h3>
+      <p className="config-section-subtitle">低频修改的运行参数</p>
+
+      <div className="config-form-grid">
+        <ConfigField label="最大日志行数" path="maxLogLines">
+          <input 
+            type="number"
+            value={draft.maxLogLines ?? ''} 
+            onChange={e => updateDraft('maxLogLines', e.target.value)} 
+          />
+        </ConfigField>
+
+        <ConfigField label="并行构建任务数" path="package.maxJobs">
+          <input 
+            type="number"
+            value={draft.package?.maxJobs ?? ''} 
+            onChange={e => updateDraft('package.maxJobs', e.target.value)} 
+            placeholder={`系统建议: ${resolved?.package?.maxJobs || '-'}`}
+          />
+        </ConfigField>
+
+        <div style={{ display: 'flex', gap: '24px', gridColumn: '1 / -1' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={draft.package?.parallelBuild !== false} 
+              onChange={e => updateDraft('package.parallelBuild', e.target.checked)} 
+              style={{ width: 'auto', marginRight: '8px' }}
+            />
+            <span>启用并行构建</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="config-action-grid" style={{ marginTop: '40px' }}>
+        <button className="config-action-btn" onClick={() => setShowDiagnosticsModal(true)}>
+          <span className="config-action-icon">🔍</span>
+          <span className="config-action-label">配置诊断</span>
+        </button>
+        <button className="config-action-btn" onClick={() => setShowRuntimeModal(true)}>
+          <span className="config-action-icon">⚙️</span>
+          <span className="config-action-label">运行时信息</span>
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     <div className="tab-content config-tab">
-      <div className="config-layout">
-        <div className="config-main">
-          <ConfigGeneralSection
-            draft={draft}
-            resolved={resolved}
-            meta={meta}
-            fieldErrors={fieldErrors}
-            fieldWarnings={fieldWarnings}
-            onChange={updateDraft}
-          />
-          <section className="config-card">
-            <div className="config-action-grid">
-              <button className="config-action-btn" onClick={() => setShowPackageModal(true)}>
-                <span className="config-action-icon">📦</span>
-                <span className="config-action-label">构建与打包</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowClaudeCodeModal(true)}>
-                <span className="config-action-icon">🚀</span>
-                <span className="config-action-label">ClaudeCode 配置</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowRedisModal(true)}>
-                <span className="config-action-icon">💾</span>
-                <span className="config-action-label">Redis 配置</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowPathModal(true)}>
-                <span className="config-action-icon">📂</span>
-                <span className="config-action-label">路径配置</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowPropertiesModal(true)}>
-                <span className="config-action-icon">📄</span>
-                <span className="config-action-label">MeterSphere 配置文件</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowServicesModal(true)}>
-                <span className="config-action-icon">📋</span>
-                <span className="config-action-label">服务配置</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowDiagnosticsModal(true)}>
-                <span className="config-action-icon">🔍</span>
-                <span className="config-action-label">配置诊断</span>
-              </button>
-              <button className="config-action-btn" onClick={() => setShowRuntimeModal(true)}>
-                <span className="config-action-icon">⚙️</span>
-                <span className="config-action-label">运行时信息</span>
-              </button>
-            </div>
-          </section>
+      <div className="config-container">
+        <div className="config-sidebar">
+          <div className={`config-nav-item ${activeTab === 'environment' ? 'active' : ''}`} onClick={() => setActiveTab('environment')}>
+            <span className="config-nav-icon">🌍</span> 基础环境
+          </div>
+          <div className={`config-nav-item ${activeTab === 'services' ? 'active' : ''}`} onClick={() => setActiveTab('services')}>
+            <span className="config-nav-icon">📋</span> 服务管理
+          </div>
+          <div className={`config-nav-item ${activeTab === 'integrations' ? 'active' : ''}`} onClick={() => setActiveTab('integrations')}>
+            <span className="config-nav-icon">🔗</span> 外部集成
+          </div>
+          <div className={`config-nav-item ${activeTab === 'advanced' ? 'active' : ''}`} onClick={() => setActiveTab('advanced')}>
+            <span className="config-nav-icon">⚙️</span> 高级设置
+          </div>
+        </div>
+
+        <div className="config-content">
+          {activeTab === 'environment' && renderEnvironment()}
+          {activeTab === 'services' && renderServices()}
+          {activeTab === 'integrations' && renderIntegrations()}
+          {activeTab === 'advanced' && renderAdvanced()}
         </div>
       </div>
 
@@ -196,25 +393,8 @@ function ConfigTab() {
         onReset={resetDraft}
       />
 
-      {showServicesModal && (
-        <div className="log-modal-overlay" onClick={() => setShowServicesModal(false)}>
-          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <h3>服务配置</h3>
-              <button className="log-modal-close" onClick={() => setShowServicesModal(false)}>✕</button>
-            </div>
-            <div className="log-modal-body">
-              <ConfigServicesSection
-                services={draft.services || {}}
-                fieldErrors={fieldErrors}
-                fieldWarnings={fieldWarnings}
-                onAddService={addService}
-                onUpdateService={updateService}
-                onRemoveService={removeService}
-              />
-            </div>
-          </div>
-        </div>
+      {showPropertiesModal && (
+        <PropertiesDialog onClose={() => setShowPropertiesModal(false)} />
       )}
 
       {showDiagnosticsModal && (
@@ -229,7 +409,7 @@ function ConfigTab() {
                 diagnostics={diagnostics}
                 validation={validation}
                 loading={diagnosticsLoading}
-                onRefresh={handleRefreshDiagnostics}
+                onRefresh={refreshDiagnostics}
               />
             </div>
           </div>
@@ -254,97 +434,14 @@ function ConfigTab() {
           </div>
         </div>
       )}
-
-      {showPackageModal && (
-        <div className="log-modal-overlay" onClick={() => setShowPackageModal(false)}>
-          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <h3>构建与打包</h3>
-              <button className="log-modal-close" onClick={() => setShowPackageModal(false)}>✕</button>
-            </div>
-            <div className="log-modal-body">
-              <ConfigPackageSection
-                packageConfig={draft.package || {}}
-                resolved={resolved}
-                fieldErrors={fieldErrors}
-                fieldWarnings={fieldWarnings}
-                onChange={updateDraft}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showClaudeCodeModal && (
-        <div className="log-modal-overlay" onClick={() => setShowClaudeCodeModal(false)}>
-          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <h3>ClaudeCode 配置</h3>
-              <button className="log-modal-close" onClick={() => setShowClaudeCodeModal(false)}>✕</button>
-            </div>
-            <div className="log-modal-body">
-              <ConfigClaudeCodeSection
-                claudeCodeConfig={draft.claudeCode || {}}
-                fieldErrors={fieldErrors}
-                fieldWarnings={fieldWarnings}
-                onChange={updateDraft}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showRedisModal && (
-        <div className="log-modal-overlay" onClick={() => setShowRedisModal(false)}>
-          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <h3>Redis 配置</h3>
-              <button className="log-modal-close" onClick={() => setShowRedisModal(false)}>✕</button>
-            </div>
-            <div className="log-modal-body">
-              <ConfigRedisSection
-                redisConfig={draft.redis || {}}
-                fieldErrors={fieldErrors}
-                fieldWarnings={fieldWarnings}
-                onChange={updateDraft}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPathModal && (
-        <div className="log-modal-overlay" onClick={() => setShowPathModal(false)}>
-          <div className="log-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="log-modal-header">
-              <h3>路径配置</h3>
-              <button className="log-modal-close" onClick={() => setShowPathModal(false)}>✕</button>
-            </div>
-            <div className="log-modal-body">
-              <ConfigPathSection
-                propertiesConfig={draft.properties || {}}
-                fieldErrors={fieldErrors}
-                fieldWarnings={fieldWarnings}
-                onChange={updateDraft}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPropertiesModal && (
-        <PropertiesDialog onClose={() => setShowPropertiesModal(false)} />
-      )}
     </div>
   )
 }
 
 function buildFieldMap(items) {
-  return items.reduce((acc, item) => {
+  return (items || []).reduce((acc, item) => {
     const key = item.path || 'global'
-    if (!acc[key]) {
-      acc[key] = []
-    }
+    if (!acc[key]) acc[key] = []
     acc[key].push(item.message)
     return acc
   }, {})

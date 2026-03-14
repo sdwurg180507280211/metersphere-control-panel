@@ -91,18 +91,23 @@ class ConfigDiagnosticsService {
     const valid = exists && hasMavenWrapper && matchedPomCount > 0;
 
     if (!exists) {
-      this._pushIssue(errors, 'error', this._createIssue('error', 'projectRoot', '项目根目录不存在', {
-        resolvedPath
-      }));
+      if (resolvedPath) {
+        this._pushIssue(errors, 'error', this._createIssue('error', 'projectRoot', '项目根目录不存在', {
+          resolvedPath
+        }));
+      }
     } else if (!hasMavenWrapper) {
       this._pushIssue(errors, 'error', this._createIssue('error', 'projectRoot', '项目根目录缺少 mvnw，可执行项目识别失败', {
         resolvedPath,
         mavenWrapperPath
       }));
-    } else if (matchedPomCount === 0) {
-      this._pushIssue(errors, 'error', this._createIssue('error', 'projectRoot', '项目根目录下未匹配到任何服务 pom.xml', {
+    } else if (Object.keys(editableConfig.services || {}).length > 0 && matchedPomCount === 0) {
+      // 只有在配置了服务但全都没匹配上时，才报真正的红色错误
+      this._pushIssue(errors, 'error', this._createIssue('error', 'projectRoot', '项目根目录下未匹配到任何已配置服务的 pom.xml', {
         resolvedPath
       }));
+    } else if (Object.keys(editableConfig.services || {}).length === 0) {
+      // 如果根本没有配置任何服务，不用阻塞，只当作普通提示即可
     }
 
     return {

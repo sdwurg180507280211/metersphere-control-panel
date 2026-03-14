@@ -46,6 +46,16 @@ const configController = {
     }
   },
 
+  async scanProject(req, res) {
+    try {
+      const { projectRoot } = req.body || {};
+      const result = await configManager.scanProject(projectRoot);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
   async testRedis(req, res) {
     try {
       const { host, port, password, db } = req.body;

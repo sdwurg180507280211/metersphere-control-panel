@@ -4,17 +4,68 @@
  */
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { execSync } = require('child_process');
 
-const CONFIG_PATH = process.env.MS_CONFIG_PATH || path.join(__dirname, '../config.json');
+// 关键：将配置存储在用户主目录，解决 DMG 只读环境下的写入失败问题
+const APP_DATA_DIR = path.join(os.homedir(), '.metersphere-control-panel');
+const CONFIG_PATH = process.env.MS_CONFIG_PATH || path.join(APP_DATA_DIR, 'config.json');
+
+// 确保配置目录存在
+if (!fs.existsSync(APP_DATA_DIR)) {
+  try {
+    fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.error(`无法创建配置目录: ${APP_DATA_DIR}`, e);
+  }
+}
+
 const CONTROL_PANEL_ROOT = path.resolve(__dirname, '..');
 
 const DEFAULT_PORT = parseInt(process.env.MS_PORT || '3000', 10);
-const DEFAULT_PROJECT_ROOT = process.env.MS_PROJECT_ROOT || path.resolve(CONTROL_PANEL_ROOT, '..');
+// 关键：在 Electron 打包环境 (asar / .app 下)，__dirname 会指向应用内部
+// 这时不能向上两级去找 metersphere 项目根目录，而是直接给出留空（让用户自行选择）或默认定位到 ~/Workspace
+const isElectronPackaged = process.env.NODE_ENV !== 'development' && __dirname.includes('app.asar') || __dirname.includes('Resources/app');
+const DEFAULT_PROJECT_ROOT = process.env.MS_PROJECT_ROOT || (isElectronPackaged ? '' : path.resolve(CONTROL_PANEL_ROOT, '..'));
 const DEFAULT_MAX_LOG_LINES = parseInt(process.env.MS_MAX_LOG_LINES || '1000', 10);
 const DEFAULT_SERVICE_START_ORDER = 99;
 const DEFAULT_HEALTH_CHECK = '/actuator/health';
-const DEFAULT_PROPERTIES_METERSPHERE = process.env.MS_PROPERTIES_PATH || '/opt/metersphere/conf/metersphere.properties';
-const DEFAULT_PROPERTIES_REDISSON = process.env.MS_REDISSON_PATH || '/opt/metersphere/conf/redisson.yml';
+
+function detectNpmPath() {
+  try {
+    const whichCmd = os.platform() === 'win32' ? 'where npm' : 'which npm';
+    const output = execSync(whichCmd, { encoding: 'utf8' }).trim();
+    return output.split('\n')[0];
+  } catch (e) {
+    return '';
+  }
+}
+
+function detectMaxJobs() {
+  const cpus = os.cpus().length;
+  return Math.max(1, cpus - 1);
+}
+
+function detectPropertiesPath(projectRoot, filename) {
+  if (!projectRoot || !fs.existsSync(projectRoot)) return '';
+  
+  // 约定优于配置：通常在项目根目录同级的 conf 目录下
+  const standardPath = path.resolve(projectRoot, '../conf', filename);
+  if (fs.existsSync(standardPath)) {
+    return standardPath;
+  }
+  
+  // 备选路径：项目根目录下的 conf
+  const altPath = path.resolve(projectRoot, 'conf', filename);
+  if (fs.existsSync(altPath)) {
+    return altPath;
+  }
+  
+  return '';
+}
+
+const DEFAULT_PROPERTIES_METERSPHERE = process.env.MS_PROPERTIES_PATH || '';
+const DEFAULT_PROPERTIES_REDISSON = process.env.MS_REDISSON_PATH || '';
 
 const FRONTEND_SERVICE_IDS = [
   'system-setting',
@@ -37,11 +88,6 @@ const EXTRA_FRONTEND_MODULES = [
   }
 ];
 
-function toInt(value, fallback) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) ? parsed : fallback;
-}
-
 function normalizeString(value, fallback = '') {
   if (value === undefined || value === null) {
     return fallback;
@@ -50,7 +96,6 @@ function normalizeString(value, fallback = '') {
   const normalized = String(value).trim();
   return normalized || fallback;
 }
-
 
 function normalizeNumericField(value, fallback = null) {
   if (value === undefined || value === null || value === '') {
@@ -84,43 +129,23 @@ function normalizeBoolean(value, fallback = true) {
 }
 
 function normalizePackageConfig(rawPackage = {}) {
-  if (!rawPackage || typeof rawPackage !== 'object' || Array.isArray(rawPackage)) {
-    return {};
-  }
+  const config = rawPackage && typeof rawPackage === 'object' && !Array.isArray(rawPackage)
+    ? rawPackage
+    : {};
 
   const normalized = {
-    ...rawPackage
+    ...config
   };
 
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'scriptPath')) {
-    normalized.scriptPath = normalizeString(rawPackage.scriptPath, '');
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'imageVersion')) {
-    normalized.imageVersion = normalizeString(rawPackage.imageVersion, '');
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'packagePath')) {
-    normalized.packagePath = normalizeString(rawPackage.packagePath, '');
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'defaultServices')) {
-    normalized.defaultServices = Array.isArray(rawPackage.defaultServices)
-      ? [...new Set(rawPackage.defaultServices.map((item) => normalizeString(item)).filter(Boolean))]
-      : [];
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'parallelBuild')) {
-    normalized.parallelBuild = normalizeBoolean(rawPackage.parallelBuild, true);
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'buildOnly')) {
-    normalized.buildOnly = normalizeBoolean(rawPackage.buildOnly, false);
-  }
-
-  if (Object.prototype.hasOwnProperty.call(rawPackage, 'maxJobs')) {
-    normalized.maxJobs = normalizeNumericField(rawPackage.maxJobs, null);
-  }
+  normalized.scriptPath = normalizeString(config.scriptPath, '');
+  normalized.imageVersion = normalizeString(config.imageVersion, '');
+  normalized.packagePath = normalizeString(config.packagePath, '');
+  normalized.defaultServices = Array.isArray(config.defaultServices)
+    ? [...new Set(config.defaultServices.map((item) => normalizeString(item)).filter(Boolean))]
+    : [];
+  normalized.parallelBuild = normalizeBoolean(config.parallelBuild, true);
+  normalized.buildOnly = normalizeBoolean(config.buildOnly, false);
+  normalized.maxJobs = normalizeNumericField(config.maxJobs, detectMaxJobs());
 
   return normalized;
 }
@@ -173,15 +198,18 @@ function normalizeEditableConfig(rawConfig = {}) {
     ? rawConfig
     : {};
 
+  const projectRoot = normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT);
+  const npmPath = normalizeString(config.npmPath, detectNpmPath());
+  
   return {
     port: normalizeNumericField(config.port, DEFAULT_PORT),
-    projectRoot: normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT),
-    npmPath: normalizeString(config.npmPath, ''),
+    projectRoot,
+    npmPath,
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
     redis: config.redis || {},
     properties: {
-      metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE),
-      redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON)
+      metersphere: normalizeString(config.properties?.metersphere, detectPropertiesPath(projectRoot, 'metersphere.properties') || DEFAULT_PROPERTIES_METERSPHERE),
+      redisson: normalizeString(config.properties?.redisson, detectPropertiesPath(projectRoot, 'redisson.yml') || DEFAULT_PROPERTIES_REDISSON)
     },
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     package: normalizePackageConfig(config.package || {}),
@@ -224,6 +252,12 @@ function isValidProjectRoot(projectRoot, services = {}) {
   }
 
   const hasMavenWrapper = fs.existsSync(path.join(projectRoot, 'mvnw'));
+  
+  // 如果 services 为空（刚填入路径还未扫描），只校验 mvnw 是否存在即可
+  if (Object.keys(services).length === 0) {
+    return hasMavenWrapper;
+  }
+
   const hasAtLeastOneServicePom = Object.values(services).some((service) => (
     service?.pom && fs.existsSync(path.join(projectRoot, service.pom))
   ));
@@ -285,8 +319,18 @@ function buildConfigSnapshot(rawConfig = {}) {
 }
 
 function loadConfigFromFile(configPath = CONFIG_PATH) {
-  const content = fs.readFileSync(configPath, 'utf8');
-  return JSON.parse(content);
+  if (!fs.existsSync(configPath)) {
+    const defaultConfig = {};
+    fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+    return defaultConfig;
+  }
+  try {
+    const content = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(content);
+  } catch (err) {
+    console.error(`解析配置文件失败 (${configPath}):`, err);
+    return {};
+  }
 }
 
 module.exports = {
