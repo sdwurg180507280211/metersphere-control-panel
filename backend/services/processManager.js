@@ -420,18 +420,40 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       };
     }
 
-    // 在 Electron 环境中尝试使用完整路径
+    // 尝试多种方法找到 npm
     const { execSync } = require('child_process');
+
+    // 方法1: 使用 which
     try {
-      const npmPath = execSync('which npm', { encoding: 'utf8' }).trim();
-      if (npmPath) {
-        return {
-          command: npmPath,
-          argsPrefix: []
-        };
+      const npmPath = execSync('which npm', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      if (npmPath && fs.existsSync(npmPath)) {
+        return { command: npmPath, argsPrefix: [] };
       }
-    } catch (e) {
-      // which 命令失败，使用默认值
+    } catch (e) {}
+
+    // 方法2: 检查常见路径
+    const commonPaths = [
+      '/usr/local/bin/npm',
+      '/opt/homebrew/bin/npm',
+      '/usr/bin/npm',
+      path.join(process.env.HOME || '', '.nvm/versions/node/*/bin/npm')
+    ];
+
+    for (const npmPath of commonPaths) {
+      if (fs.existsSync(npmPath)) {
+        return { command: npmPath, argsPrefix: [] };
+      }
+    }
+
+    // 方法3: 使用 PATH 环境变量
+    if (process.env.PATH) {
+      const paths = process.env.PATH.split(':');
+      for (const p of paths) {
+        const npmPath = path.join(p, 'npm');
+        if (fs.existsSync(npmPath)) {
+          return { command: npmPath, argsPrefix: [] };
+        }
+      }
     }
 
     return {
