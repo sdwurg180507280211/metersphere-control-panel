@@ -61,6 +61,19 @@ function GeneralConfigDialog({ onClose, draft, resolved, meta, fieldErrors, fiel
 
             <div className="config-field-card config-field-card-wide">
               <label className="config-field">
+                <span>npm 命令路径</span>
+                <input
+                  value={draft.npmPath ?? ''}
+                  onChange={(e) => onChange('npmPath', e.target.value)}
+                  placeholder="/usr/local/bin/npm 或留空自动检测"
+                />
+                <small className="config-hint">用于前端构建，留空则自动查找 npm</small>
+                <FieldMessages path="npmPath" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
+              </label>
+            </div>
+
+            <div className="config-field-card config-field-card-wide">
+              <label className="config-field">
                 <span>metersphere.properties 路径</span>
                 <input
                   value={draft.properties?.metersphere ?? ''}

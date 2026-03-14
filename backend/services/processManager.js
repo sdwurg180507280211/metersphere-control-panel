@@ -413,6 +413,12 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   _resolveNpmCommand() {
+    // 优先使用配置文件中的 npmPath
+    const config = this._getRuntimeConfig();
+    if (config.npmPath && fs.existsSync(config.npmPath)) {
+      return { command: config.npmPath, argsPrefix: [] };
+    }
+
     if (process.env.npm_execpath && path.isAbsolute(process.env.npm_execpath)) {
       return {
         command: process.execPath,
