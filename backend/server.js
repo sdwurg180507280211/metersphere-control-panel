@@ -37,7 +37,12 @@ app.use('/api/package', packageRoutes);
 app.use('/api/config', configRoutes);
 
 // 静态文件 - 生产环境提供 React 构建产物
-const publicPath = path.join(__dirname, '../frontend/dist');
+// 区分 Electron 打包环境和普通 Node 环境
+const isDev = process.env.NODE_ENV === 'development';
+const isElectron = process.versions.electron !== undefined;
+const publicPath = isElectron && !isDev
+  ? path.join(process.resourcesPath, 'app/frontend/dist')
+  : path.join(__dirname, '../frontend/dist');
 
 /**
  * 检查前端是否已构建
@@ -288,16 +293,29 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('未处理的 Promise 拒绝:', reason);
 });
 
-// 启动服务器
-const startupConfig = configManager.getResolvedConfig();
-logger.updateOptions({ maxLogLines: startupConfig.maxLogLines });
+// 启动服务器函数
+async function startServer(port) {
+  const startupConfig = configManager.getResolvedConfig();
+  logger.updateOptions({ maxLogLines: startupConfig.maxLogLines });
 
-server.listen(startupConfig.port, async () => {
-  console.log(`控制面板运行在 http://localhost:${startupConfig.port}`);
-  console.log(`项目根目录: ${startupConfig.projectRoot}`);
-  
-  // 初始化服务
-  await initServices();
-});
+  const listenPort = port || startupConfig.port;
 
-module.exports = app;
+  return new Promise((resolve, reject) => {
+    server.listen(listenPort, async () => {
+      console.log(`控制面板运行在 http://localhost:${listenPort}`);
+      console.log(`项目根目录: ${startupConfig.projectRoot}`);
+
+      await initServices();
+      resolve(server);
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+// 仅在直接运行时启动
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, server, startServer };

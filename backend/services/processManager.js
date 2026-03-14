@@ -559,7 +559,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     // 设置 JVM 崩溃日志路径，统一输出到控制面板项目的 logs/ 目录
     const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
-    const jvmOpts = `-XX:ErrorFile=${errorFilePath}`;
+    const jvmOpts = `-XX:ErrorFile="${errorFilePath}"`;
 
     // 使用 JAVA_TOOL_OPTIONS 环境变量确保 JVM 参数生效
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {

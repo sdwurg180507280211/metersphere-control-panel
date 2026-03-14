@@ -175,6 +175,7 @@ class SystemCommandService {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          PATH: `${process.env.PATH}:/usr/local/bin:/opt/homebrew/bin`,
           LANG: 'C',
           LC_ALL: 'C'
         }
