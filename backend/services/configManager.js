@@ -78,6 +78,7 @@ class ConfigManager {
       ...currentRaw,
       port: editableDraft.port,
       projectRoot: editableDraft.projectRoot,
+      npmPath: editableDraft.npmPath,
       maxLogLines: editableDraft.maxLogLines,
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
