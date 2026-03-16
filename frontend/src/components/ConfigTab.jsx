@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
-import { useBuildStore, useConfigStore, usePackageStore, useServiceStore } from '../store/useAppStore'
+import { useBuildStore, useConfigStore, usePackageStore, useServiceStore, useWebSocketStore } from '../store/useAppStore'
 import ConfigSaveBar from './ConfigSaveBar'
 import ConfigField from './ConfigField'
 import CustomSelect from './CustomSelect'
 import PropertiesDialog from './PropertiesDialog'
+import PasswordDialog from './PasswordDialog'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
 import './ConfigTab.css'
@@ -15,6 +16,12 @@ function ConfigTab() {
   const [showRuntimeModal, setShowRuntimeModal] = useState(false)
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
   const [serviceFilter, setServiceFilter] = useState('')
+  const [reloadDialog, setReloadDialog] = useState({
+    isOpen: false,
+    password: '',
+    error: '',
+    loading: false
+  })
 
   const {
     draft,
@@ -48,6 +55,7 @@ function ConfigTab() {
   const { fetchCatalog, fetchServices } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
   const { fetchOptions: fetchPackageOptions, fetchActiveTask: fetchActivePackageTask } = usePackageStore()
+  const { connected } = useWebSocketStore()
 
   useEffect(() => {
     fetchConfig().catch((error) => {
@@ -119,6 +127,67 @@ function ConfigTab() {
     }
   }
 
+  const openSystemReloadDialog = useCallback(() => {
+    setReloadDialog({
+      isOpen: true,
+      password: '',
+      error: '',
+      loading: false
+    })
+  }, [])
+
+  const closeSystemReloadDialog = useCallback(() => {
+    setReloadDialog((prev) => (prev.loading ? prev : {
+      isOpen: false,
+      password: '',
+      error: '',
+      loading: false
+    }))
+  }, [])
+
+  const confirmSystemReload = useCallback(async () => {
+    if (!reloadDialog.password) {
+      setReloadDialog((prev) => ({ ...prev, error: '请输入管理员密码' }))
+      return
+    }
+
+    setReloadDialog((prev) => ({ ...prev, loading: true, error: '' }))
+
+    try {
+      const response = await fetch('/api/services/system/reload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ password: reloadDialog.password })
+      })
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success(data.message || 'msctl reload 执行成功', { icon: '⚙️' })
+        setReloadDialog({
+          isOpen: false,
+          password: '',
+          error: '',
+          loading: false
+        })
+        if (connected) {
+          await fetchServices()
+        }
+        return
+      }
+
+      const message = data?.error?.message || 'msctl reload 执行失败'
+      setReloadDialog((prev) => ({ ...prev, loading: false, error: message }))
+      toast.error(message)
+    } catch (error) {
+      const message = `网络错误: ${error.message}`
+      setReloadDialog((prev) => ({ ...prev, loading: false, error: message }))
+      toast.error(message)
+    }
+  }, [connected, fetchServices, reloadDialog.password])
+
+
   if (loading || !draft) {
     return (
       <div className="tab-content config-tab config-tab-loading">
@@ -130,8 +199,16 @@ function ConfigTab() {
 
   const renderEnvironment = () => (
     <div className="config-section">
-      <h3 className="config-section-title">基础环境</h3>
-      <p className="config-section-subtitle">控制面板的核心运行锚点。系统将基于项目根目录自动推导微服务结构与配置文件位置。</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+        <div>
+          <h3 className="config-section-title">基础环境</h3>
+          <p className="config-section-subtitle">控制面板的核心运行锚点。系统将基于项目根目录自动推导微服务结构与配置文件位置。</p>
+        </div>
+        <button className="config-scan-btn" onClick={openSystemReloadDialog} style={{ whiteSpace: 'nowrap' }}>
+          <span>⚙️</span>
+          系统 Reload
+        </button>
+      </div>
       
       <div className="config-form-grid">
         <ConfigField label="项目根目录 (Project Root)" path="projectRoot" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} checkPath={true} hint=" MeterSphere 源码仓库的绝对路径">
@@ -355,6 +432,18 @@ function ConfigTab() {
           </div>
         </div>
       )}
+
+      <PasswordDialog
+        isOpen={reloadDialog.isOpen}
+        title="执行系统 Reload"
+        description="请输入管理员密码后执行 sudo msctl reload。"
+        value={reloadDialog.password}
+        error={reloadDialog.error}
+        loading={reloadDialog.loading}
+        onChange={(password) => setReloadDialog((prev) => ({ ...prev, password, error: '' }))}
+        onConfirm={confirmSystemReload}
+        onCancel={closeSystemReloadDialog}
+      />
     </div>
   )
 }
