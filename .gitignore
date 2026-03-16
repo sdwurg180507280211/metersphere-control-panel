@@ -5,6 +5,9 @@ logs/
 .pids/
 .DS_Store
 
+# Local config
+config.json
+
 # Electron build output
 dist/
 .codex-tmp/

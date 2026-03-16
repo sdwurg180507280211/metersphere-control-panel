@@ -1,13 +1,13 @@
 {
   "port": 3000,
-  "projectRoot": "/Users/edy/ideaProjects/metersphere",
-  "npmPath": "/Users/edy/.nvm/versions/node/v24.13.1/bin/npm",
+  "projectRoot": "/path/to/metersphere",
+  "npmPath": "/path/to/npm",
   "maxLogLines": 1000,
   "redis": {
     "mode": "memory",
     "host": "localhost",
     "port": 6379,
-    "password": "Password123@redis",
+    "password": "",
     "db": 0
   },
   "jvmOptions": "-Xms256m -Xmx512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m",
