@@ -208,8 +208,8 @@ function normalizeEditableConfig(rawConfig = {}) {
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
     redis: config.redis || {},
     properties: {
-      metersphere: normalizeString(config.properties?.metersphere, detectPropertiesPath(projectRoot, 'metersphere.properties') || DEFAULT_PROPERTIES_METERSPHERE),
-      redisson: normalizeString(config.properties?.redisson, detectPropertiesPath(projectRoot, 'redisson.yml') || DEFAULT_PROPERTIES_REDISSON)
+      metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE || '/opt/metersphere/conf/metersphere.properties'),
+      redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON || '/opt/metersphere/conf/redisson.yml')
     },
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     package: normalizePackageConfig(config.package || {}),

@@ -53,6 +53,21 @@
 npm run install:all
 ```
 
+#### 故障排除
+
+如果遇到 Electron 下载失败（`socket hang up` 错误），使用国内镜像源：
+
+```bash
+# 配置镜像源
+npm config set registry https://registry.npmmirror.com
+export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+
+# 清理缓存后重新安装
+npm cache clean --force
+rm -rf node_modules package-lock.json frontend/node_modules frontend/package-lock.json
+npm run install:all
+```
+
 ### 开发模式
 
 ```bash

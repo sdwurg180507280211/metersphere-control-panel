@@ -28,7 +28,7 @@ function readMetersphereRedisConfig() {
 function readConfigJsonRedis() {
   try {
     if (!fs.existsSync(CONFIG_PATH)) {
-      return ;
+      return {};
     }
     const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     return config.redis || {};
