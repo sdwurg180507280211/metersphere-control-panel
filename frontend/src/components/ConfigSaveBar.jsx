@@ -6,54 +6,56 @@ function ConfigSaveBar({
   validating,
   saving,
   applying,
+  hasUnappliedChanges,
+  applyImpact,
   onValidate,
   onSave,
   onApply,
   onReset
 }) {
+  const isDirty = dirtyCount > 0
+  const canApply = hasUnappliedChanges && !isDirty
+  const requiresRestart = applyImpact?.requiresRestart?.length > 0
+
+  if (!isDirty && !hasUnappliedChanges) return null
+
   return (
-    <div className={`config-save-bar-fixed ${dirtyCount > 0 ? 'is-dirty' : ''}`}>
-      <div className="save-bar-info">
-        <span className="save-bar-count">
-          {dirtyCount > 0 ? `已修改 ${dirtyCount} 项` : '未发现变更'}
-        </span>
-      </div>
-      <div className="save-bar-actions">
-        <button 
-          className="bar-btn ghost" 
-          onClick={onReset} 
-          disabled={dirtyCount === 0 || saving || applying || validating}
-          title="重置为当前快照"
-        >
-          <span className="bar-btn-icon">↺</span>
-          重置
-        </button>
-        <button 
-          className="bar-btn ghost" 
-          onClick={onValidate} 
-          disabled={saving || applying || validating}
-          title="检查配置合法性"
-        >
-          <span className="bar-btn-icon">{validating ? '◌' : '🔍'}</span>
-          {validating ? '校验中' : '校验'}
-        </button>
-        <div className="bar-divider" />
-        <button 
-          className="bar-btn primary" 
-          onClick={onSave} 
-          disabled={saving || applying}
-        >
-          <span className="bar-btn-icon">{saving ? '◌' : '💾'}</span>
-          {saving ? '保存中' : '保存'}
-        </button>
-        <button 
-          className="bar-btn accent" 
-          onClick={onApply} 
-          disabled={applying || saving}
-        >
-          <span className="bar-btn-icon">{applying ? '◌' : '🚀'}</span>
-          {applying ? '应用中' : '应用'}
-        </button>
+    <div className="config-save-bar-container">
+      <div className="config-save-island">
+        <div className="island-info">
+          {isDirty ? (
+            <span className="island-status dirty">
+              <span className="dot" /> 有 {dirtyCount} 项未保存修改
+            </span>
+          ) : hasUnappliedChanges ? (
+            <span className="island-status unapplied">
+              <span className="dot" /> 配置已保存，等待应用生效
+              {requiresRestart && <span className="restart-badge" title="部分字段修改需重启控制面板">需重启</span>}
+            </span>
+          ) : null}
+        </div>
+        
+        <div className="island-actions">
+          {isDirty && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="island-btn-secondary" onClick={onReset} disabled={validating || saving || applying}>
+                重置
+              </button>
+              <button className="island-btn-secondary" onClick={onValidate} disabled={validating || saving || applying}>
+                {validating ? '校验中...' : '校验'}
+              </button>
+              <button className="island-btn-primary" onClick={onSave} disabled={validating || saving || applying}>
+                {saving ? '保存中...' : '保存修改'}
+              </button>
+            </div>
+          )}
+          
+          {canApply && (
+            <button className="island-btn-apply" onClick={onApply} disabled={validating || saving || applying}>
+              {applying ? '应用中...' : '立即应用到运行时'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 const configManager = require('../services/configManager');
+const sudoFileService = require('../services/sudoFileService');
 const { sendError } = require('../utils/errors');
 
 const configController = {
@@ -46,6 +47,17 @@ const configController = {
     }
   },
 
+  async validatePath(req, res) {
+    const { path: targetPath } = req.body;
+    try {
+      const fs = require('fs');
+      const exists = fs.existsSync(targetPath);
+      res.json({ success: true, data: { exists } });
+    } catch (error) {
+      res.json({ success: true, data: { exists: false } });
+    }
+  },
+
   async scanProject(req, res) {
     try {
       const { projectRoot } = req.body || {};
@@ -83,6 +95,13 @@ const configController = {
       const content = configManager.getPropertiesFile(filename);
       res.json({ success: true, data: { content } });
     } catch (error) {
+      if (error.code === 'EACCES') {
+        return res.json({
+          success: false,
+          code: 'EACCES',
+          message: `权限不足：无法读取配置文件。路径: ${error.path || 'unknown'}`
+        });
+      }
       sendError(res, error);
     }
   },
@@ -92,6 +111,37 @@ const configController = {
       const { filename } = req.params;
       const { content } = req.body;
       configManager.savePropertiesFile(filename, content);
+      res.json({ success: true, message: '保存成功' });
+    } catch (error) {
+      if (error.code === 'EACCES') {
+        return res.json({
+          success: false,
+          code: 'EACCES',
+          message: `权限不足：无法写入配置文件。路径: ${error.path || 'unknown'}`
+        });
+      }
+      sendError(res, error);
+    }
+  },
+
+  async getPropertiesWithSudo(req, res) {
+    try {
+      const { filename } = req.params;
+      const { password } = req.body;
+      const filePath = configManager.getPropertiesFilePath(filename);
+      const content = await sudoFileService.readFile(filePath, password);
+      res.json({ success: true, data: { content } });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
+  async savePropertiesWithSudo(req, res) {
+    try {
+      const { filename } = req.params;
+      const { content, password } = req.body;
+      const filePath = configManager.getPropertiesFilePath(filename);
+      await sudoFileService.writeFile(filePath, content, password);
       res.json({ success: true, message: '保存成功' });
     } catch (error) {
       sendError(res, error);

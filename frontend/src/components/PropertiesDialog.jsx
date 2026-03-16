@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import toast from 'react-hot-toast'
+import PasswordDialog from './PasswordDialog'
 import './PropertiesDialog.css'
 
 function PropertiesDialog({ onClose }) {
@@ -14,6 +15,13 @@ function PropertiesDialog({ onClose }) {
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Password dialog state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null) // 'read' | 'write'
   
   // Search and replace state
   const [showSearch, setShowSearch] = useState(false)
@@ -37,7 +45,6 @@ function PropertiesDialog({ onClose }) {
   }, [activeTab])
 
   const fetchProperties = async (filename) => {
-    // If we only want to fetch once, we could check if it's already fetched, but re-fetching ensures it's fresh
     setLoading(true)
     try {
       const res = await fetch(`/api/config/properties/${filename}`)
@@ -45,6 +52,9 @@ function PropertiesDialog({ onClose }) {
       if (data.success) {
         setContents(prev => ({ ...prev, [filename]: data.data.content }))
         setInitialContents(prev => ({ ...prev, [filename]: data.data.content }))
+      } else if (data.code === 'EACCES') {
+        setPendingAction('read')
+        setShowPasswordDialog(true)
       } else {
         toast.error(data.message || `获取 ${filename} 失败`)
       }
@@ -60,15 +70,16 @@ function PropertiesDialog({ onClose }) {
     try {
       const res = await fetch(`/api/config/properties/${activeTab}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: contents[activeTab] })
       })
       const data = await res.json()
       if (data.success) {
         setInitialContents(prev => ({ ...prev, [activeTab]: contents[activeTab] }))
         toast.success(`${activeTab} 保存成功`)
+      } else if (data.code === 'EACCES') {
+        setPendingAction('write')
+        setShowPasswordDialog(true)
       } else {
         toast.error(data.message || '保存失败')
       }
@@ -81,6 +92,62 @@ function PropertiesDialog({ onClose }) {
 
   const handleChange = (e) => {
     setContents(prev => ({ ...prev, [activeTab]: e.target.value }))
+  }
+
+  const handlePasswordConfirm = async () => {
+    if (!password) {
+      setPasswordError('请输入管理员密码')
+      return
+    }
+
+    setPasswordLoading(true)
+    setPasswordError('')
+
+    try {
+      if (pendingAction === 'read') {
+        const res = await fetch(`/api/config/properties/${activeTab}/sudo-read`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        })
+        const data = await res.json()
+        if (data.success) {
+          setContents(prev => ({ ...prev, [activeTab]: data.data.content }))
+          setInitialContents(prev => ({ ...prev, [activeTab]: data.data.content }))
+          setShowPasswordDialog(false)
+          setPassword('')
+          toast.success('读取成功')
+        } else {
+          setPasswordError(data.message || '读取失败')
+        }
+      } else if (pendingAction === 'write') {
+        const res = await fetch(`/api/config/properties/${activeTab}/sudo-write`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: contents[activeTab], password })
+        })
+        const data = await res.json()
+        if (data.success) {
+          setInitialContents(prev => ({ ...prev, [activeTab]: contents[activeTab] }))
+          setShowPasswordDialog(false)
+          setPassword('')
+          toast.success('保存成功')
+        } else {
+          setPasswordError(data.message || '保存失败')
+        }
+      }
+    } catch (err) {
+      setPasswordError(`操作失败: ${err.message}`)
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
+  const handlePasswordCancel = () => {
+    setShowPasswordDialog(false)
+    setPassword('')
+    setPasswordError('')
+    setPendingAction(null)
   }
 
   // Handle Tab indentation
@@ -235,12 +302,13 @@ function PropertiesDialog({ onClose }) {
   }
 
   return (
-    <div className="log-modal-overlay" onClick={handleClose}>
-      <div className="log-modal properties-modal" onClick={e => e.stopPropagation()}>
-        <div className="log-modal-header">
-          <h3>MeterSphere 配置文件</h3>
-          <button className="log-modal-close" onClick={handleClose}>✕</button>
-        </div>
+    <>
+      <div className="log-modal-overlay" onClick={handleClose}>
+        <div className="log-modal properties-modal" onClick={e => e.stopPropagation()}>
+          <div className="log-modal-header">
+            <h3>MeterSphere 配置文件</h3>
+            <button className="log-modal-close" onClick={handleClose}>✕</button>
+          </div>
         <div className="properties-tabs">
           <button 
             className={`properties-tab ${activeTab === 'metersphere.properties' ? 'active' : ''}`}
@@ -336,7 +404,20 @@ function PropertiesDialog({ onClose }) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+
+      <PasswordDialog
+        isOpen={showPasswordDialog}
+        title="需要管理员权限"
+        description={`${pendingAction === 'read' ? '读取' : '写入'}配置文件需要管理员权限，请输入密码以继续。`}
+        value={password}
+        error={passwordError}
+        loading={passwordLoading}
+        onChange={setPassword}
+        onConfirm={handlePasswordConfirm}
+        onCancel={handlePasswordCancel}
+      />
+    </>
   )
 }
 

@@ -555,12 +555,20 @@ class ConfigManager {
     const propKey = filename === 'metersphere.properties' ? 'metersphere' : 'redisson';
     const filePath = this.currentEditableConfig?.properties?.[propKey] || `/opt/metersphere/conf/${filename}`;
     const dir = path.dirname(filePath);
-    
+
     if (!fs.existsSync(dir)) {
       throw createAppError(404, 'DIR_NOT_FOUND', `配置目录不存在，无法保存: ${dir}`);
     }
-    
+
     fs.writeFileSync(filePath, content || '', 'utf8');
+  }
+
+  getPropertiesFilePath(filename) {
+    if (!['metersphere.properties', 'redisson.yml'].includes(filename)) {
+      throw createAppError(400, 'INVALID_FILENAME', '不支持的配置文件');
+    }
+    const propKey = filename === 'metersphere.properties' ? 'metersphere' : 'redisson';
+    return this.currentEditableConfig?.properties?.[propKey] || `/opt/metersphere/conf/${filename}`;
   }
 }
 

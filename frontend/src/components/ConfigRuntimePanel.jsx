@@ -1,52 +1,97 @@
+import React from 'react'
+
 function ConfigRuntimePanel({ runtime, resolved, meta, applyImpact }) {
+  if (!runtime) return null
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text)
+    alert('已复制到剪贴板')
+  }
+
   return (
-    <section className="config-card config-panel-card">
-      <div className="config-runtime-grid">
-        <PanelGroup title="解析后配置">
-          <PanelItem label="项目根目录" value={resolved?.projectRoot || '-'} />
-          <PanelItem label="服务数量" value={String(resolved?.serviceCatalog?.length || 0)} />
-          <PanelItem label="前端模块" value={String(resolved?.frontendModules?.length || 0)} />
-          <PanelItem label="待应用变更" value={String(applyImpact?.changedPaths?.length || 0)} />
-        </PanelGroup>
+    <div className="runtime-container">
+      <div className="runtime-grid">
+        {/* 第一组：基础环境 */}
+        <section className="runtime-card">
+          <div className="runtime-card-header">
+            <span className="runtime-icon">🏠</span>
+            <h5>项目与路径</h5>
+          </div>
+          <div className="runtime-card-body">
+            <RuntimeItem label="项目根目录" value={resolved?.projectRoot} onCopy={handleCopy} isPath />
+            <RuntimeItem label="npm 路径" value={resolved?.npmPath} onCopy={handleCopy} isPath />
+            <RuntimeItem label="配置文件" value={meta?.configPath} onCopy={handleCopy} isPath />
+          </div>
+        </section>
 
-        <PanelGroup title="缓存 / Redis">
-          <PanelItem label="缓存模式" value={runtime?.cache?.configuredMode || '-'} />
-          <PanelItem label="Redis Host" value={runtime?.redis?.host || '-'} />
-          <PanelItem label="Redis Port" value={String(runtime?.redis?.port || '-')} />
-          <PanelItem label="Properties 路径" value={runtime?.redis?.propertiesPath || '-'} />
-        </PanelGroup>
+        {/* 第二组：缓存与数据 */}
+        <section className="runtime-card">
+          <div className="runtime-card-header">
+            <span className="runtime-icon">💾</span>
+            <h5>缓存系统 (Redis)</h5>
+          </div>
+          <div className="runtime-card-body">
+            <RuntimeItem label="运行模式" value={runtime.cache?.configuredMode?.toUpperCase()} isTag />
+            <RuntimeItem label="Redis 主机" value={runtime.redis?.host || 'N/A'} />
+            <RuntimeItem label="Key 前缀" value={runtime.cache?.keyPrefix} />
+          </div>
+        </section>
 
-        <PanelGroup title="任务与超时">
-          <PanelItem label="任务限流窗口" value={`${runtime?.job?.rateLimitWindowSeconds || '-'} 秒`} />
-          <PanelItem label="服务健康检查" value={`${runtime?.timeouts?.healthTimeoutMs || '-'} ms`} />
-          <PanelItem label="服务启动" value={`${runtime?.timeouts?.startTimeoutMs || '-'} ms`} />
-          <PanelItem label="服务 Reload" value={`${runtime?.timeouts?.reloadTimeoutMs || '-'} ms`} />
-        </PanelGroup>
+        {/* 第三组：任务引擎 */}
+        <section className="runtime-card">
+          <div className="runtime-card-header">
+            <span className="runtime-icon">⚙️</span>
+            <h5>任务执行引擎</h5>
+          </div>
+          <div className="runtime-card-body">
+            <RuntimeItem label="并发数限制" value={resolved?.package?.maxJobs} />
+            <RuntimeItem label="健康检查频率" value={`${runtime.timeouts?.healthTimeoutMs / 1000}s`} />
+            <RuntimeItem label="任务超时" value={`${runtime.timeouts?.compileTimeoutMs / 60000}min`} />
+          </div>
+        </section>
 
-        <PanelGroup title="生效说明">
-          <PanelItem label="热应用字段" value={(meta?.hotApplySupportedFields || []).join(', ') || '-'} />
-          <PanelItem label="需重启字段" value={(meta?.requiresRestartFields || []).join(', ') || '-'} />
-          <PanelItem label="存在未应用改动" value={meta?.hasUnappliedChanges ? '是' : '否'} />
-        </PanelGroup>
+        {/* 第四组：外部集成 */}
+        <section className="runtime-card">
+          <div className="runtime-card-header">
+            <span className="runtime-icon">🚀</span>
+            <h5>AI 模型集成</h5>
+          </div>
+          <div className="runtime-card-body">
+            <RuntimeItem label="API Base" value={runtime.envOverrides?.ANTHROPIC_BASE_URL || '默认'} />
+            <RuntimeItem label="模型名称" value={runtime.envOverrides?.ANTHROPIC_MODEL || '未配置'} />
+            <RuntimeItem label="Token 状态" value={runtime.envOverrides?.ANTHROPIC_AUTH_TOKEN ? '已加载 (加密)' : '未加载'} isTag />
+          </div>
+        </section>
       </div>
-    </section>
-  )
-}
 
-function PanelGroup({ title, children }) {
-  return (
-    <div className="config-panel-group">
-      <div className="config-subtitle">{title}</div>
-      <div className="config-panel-list">{children}</div>
+      {/* 底部：应用影响 */}
+      {applyImpact?.changedPaths?.length > 0 && (
+        <div className="runtime-footer-notice">
+          <div className="notice-icon">🔔</div>
+          <div className="notice-text">
+            发现有 {applyImpact.changedPaths.length} 项更改尚未应用到运行时。
+            {applyImpact.requiresRestart?.length > 0 && <span className="warning-inline"> 部分更改需要重启后面板才能生效。</span>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function PanelItem({ label, value }) {
+function RuntimeItem({ label, value, onCopy, isPath, isTag }) {
   return (
-    <div className="config-panel-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
+    <div className="runtime-item">
+      <div className="runtime-item-label">{label}</div>
+      <div className="runtime-item-value-wrapper">
+        <span className={`runtime-item-value ${isPath ? 'mono' : ''} ${isTag ? 'tag' : ''}`}>
+          {value || '-'}
+        </span>
+        {onCopy && value && (
+          <button className="runtime-copy-btn" onClick={() => onCopy(value)} title="复制内容">
+            📋
+          </button>
+        )}
+      </div>
     </div>
   )
 }

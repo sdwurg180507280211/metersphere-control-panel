@@ -1,132 +1,107 @@
-.config-save-bar-fixed {
+.config-save-bar-container {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 240px; /* 侧边栏宽度 */
+  right: 0;
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: 8px 12px 8px 16px;
-  background: rgba(11, 23, 57, 0.88);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-full);
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  justify-content: center;
+  pointer-events: none; /* 让鼠标可以点击背景 */
   z-index: 1000;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: translateY(0);
+  animation: island-up 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.config-save-bar-fixed.is-dirty {
-  border-color: rgba(124, 58, 237, 0.42);
-  box-shadow: 0 0 30px rgba(124, 58, 237, 0.2);
+@keyframes island-up {
+  from { transform: translateY(100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.save-bar-info {
+.config-save-island {
+  pointer-events: auto; /* 恢复点击 */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 12px 24px;
+  border-radius: 40px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .config-save-island {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.island-info {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.island-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-right: 12px;
-  border-right: 1px solid var(--border-subtle);
 }
 
-.save-bar-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
+.island-status.dirty { color: var(--accent-color); }
+.island-status.unapplied { color: #10b981; }
+
+.island-status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: dot-pulse 1.5s infinite;
 }
 
-.is-dirty .save-bar-count {
-  color: var(--warning);
+.restart-badge {
+  background: #f59e0b;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  font-weight: 700;
 }
 
-.save-bar-actions {
+.island-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
-.bar-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-full);
+.island-btn-primary, .island-btn-secondary, .island-btn-apply {
+  padding: 8px 16px;
+  border-radius: 20px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-  color: var(--text-primary);
-}
-
-.bar-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  filter: grayscale(0.8);
-}
-
-.bar-btn.ghost {
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.bar-btn.ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-}
-
-.bar-btn.primary {
-  background: rgba(124, 58, 237, 0.16);
-  border-color: rgba(124, 58, 237, 0.4);
-  color: #c4b5fd;
-}
-
-.bar-btn.primary:hover:not(:disabled) {
-  background: var(--accent-primary);
-  color: #fff;
-}
-
-.bar-btn.accent {
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
-  color: #fff;
+  transition: all 0.2s;
   border: none;
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
 }
 
-.bar-btn.accent:hover:not(:disabled) {
+.island-btn-primary {
+  background: var(--accent-color);
+  color: white;
+}
+
+.island-btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.island-btn-apply {
+  background: #10b981;
+  color: white;
+}
+
+.island-btn-primary:hover, .island-btn-apply:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.35);
-}
-
-.bar-btn-icon {
-  font-size: 14px;
-}
-
-.bar-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-subtle);
-  margin: 0 4px;
-}
-
-/* 窄屏适配 */
-@media (max-width: 768px) {
-  .config-save-bar-fixed {
-    bottom: 16px;
-    right: 16px;
-    left: 16px;
-    justify-content: space-between;
-    border-radius: 16px;
-  }
-  
-  .save-bar-info {
-    display: none;
-  }
-  
-  .save-bar-actions {
-    width: 100%;
-    justify-content: space-around;
-  }
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
