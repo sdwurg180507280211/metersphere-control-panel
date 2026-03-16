@@ -8,6 +8,7 @@ import BuildTab from './components/BuildTab'
 import ServicesTab from './components/ServicesTab'
 import PackageTab from './components/PackageTab'
 import ConfigTab from './components/ConfigTab'
+import SqlTab from './components/SqlTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
@@ -45,6 +46,14 @@ const TAB_ITEMS = [
     description: '编辑控制面板配置、运行时诊断、保存与应用动作统一呈现。',
     navCode: 'CF',
     shortcut: '4'
+  },
+  {
+    id: 'sql',
+    label: 'SQL 查询',
+    title: 'SQL Query Workspace',
+    description: '执行 SQL 查询并查看结果，支持查询历史记录。',
+    navCode: 'SQL',
+    shortcut: '5'
   }
 ]
 
@@ -205,6 +214,9 @@ function App() {
                 </TabTransition>
                 <TabTransition activeTab={activeTab} tabId="config">
                   <ConfigTab />
+                </TabTransition>
+                <TabTransition activeTab={activeTab} tabId="sql">
+                  <SqlTab />
                 </TabTransition>
               </div>
             </section>

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-const TAB_IDS = ['build', 'services', 'package', 'config']
+const TAB_IDS = ['build', 'services', 'package', 'config', 'sql']
 
 const getInitialTab = () => {
   const hash = window.location.hash.slice(1)

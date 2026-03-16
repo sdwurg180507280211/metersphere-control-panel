@@ -7,6 +7,7 @@ const SHORTCUTS = [
   { key: '2', description: '切换到服务管理页面' },
   { key: '3', description: '切换到打包页面' },
   { key: '4', description: '切换到配置页面' },
+  { key: '5', description: '切换到 SQL 查询页面' },
   { key: 'b', description: '开始构建（在构建页面）' },
   { key: 'r', description: '刷新数据' },
   { key: 'c', description: '清除当前日志' },
@@ -46,6 +47,10 @@ function KeyboardShortcuts({ onSwitchTab, onRefresh, onClearLogs, onFocusSearch 
       case '4':
         e.preventDefault()
         onSwitchTab?.('config')
+        break
+      case '5':
+        e.preventDefault()
+        onSwitchTab?.('sql')
         break
       case 'r':
       case 'R':
