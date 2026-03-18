@@ -1240,7 +1240,6 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       return { success: false, error: '开发服务器已在运行中' };
     }
 
-    // 检查残留的 PID 文件
     const pid = this._getPid(`devserver-${moduleId}`);
     if (pid && this._isProcessRunning(pid)) {
       return { success: false, error: '开发服务器已在运行中' };
@@ -1258,57 +1257,80 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
     const { command: npmCommand, argsPrefix: npmArgsPrefix } = this._resolveNpmCommand();
 
-    // 临时抽取前端开发配置里的端口号。如果在服务列表里能找到原端口，通常将前端服务器放于单独的 40xx 端口，
-    // 获取配置字典里约定的原始端口 (前端默认跑在原端口 - 4000 规则，或者读取 configManager).
-    // Metersphere vue.config.js 通常 4002, 4004 等等。由于目前后端通过 configManager 获取，尝试从配置文件提取对应端口。
-    let devPort = 4200; // 默认防撞
-    const allServices = configManager.getResolvedConfig().services;
-    const srv = allServices[moduleConfig.serviceId];
-    if (srv && srv.port) {
-      devPort = srv.port - 4000; // e.g. 8002 -> 4002
+    const pkgPath = path.join(modulePath, 'package.json');
+    if (!fs.existsSync(pkgPath)) {
+      return { success: false, error: '模块缺少 package.json' };
     }
-    moduleConfig.port = devPort; // 记录到配置中用于打开网页
 
-    // 解析项目 package.json 中的定制指令
-    let runDevArgs = ['run', 'dev'];
+    let devScript = 'serve';
+    let devPort = 4200;
+
     try {
-      const pkgPath = path.join(modulePath, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        const pkgContent = await fsp.readFile(pkgPath, 'utf8');
-        const pkg = JSON.parse(pkgContent);
-        // 动态寻找启动脚本：在 scripts 中寻找值为 "vue-cli-service serve" 或类似命令的 key
-        if (pkg.scripts) {
-          const serveScriptKey = Object.keys(pkg.scripts).find(key => 
-            pkg.scripts[key].includes('vue-cli-service serve') || 
-            pkg.scripts[key].includes('vite') // 兼容未来可能的 vite
-          );
-          if (serveScriptKey) {
-            runDevArgs = ['run', serveScriptKey];
-          }
+      const pkg = JSON.parse(await fsp.readFile(pkgPath, 'utf8'));
+
+      // 查找开发服务器脚本
+      if (pkg.scripts) {
+        devScript = Object.keys(pkg.scripts).find(key =>
+          ['serve', 'dev', 'start'].includes(key) &&
+          (pkg.scripts[key].includes('vue-cli-service') || pkg.scripts[key].includes('vite'))
+        ) || 'serve';
+      }
+
+      // 从 vue.config.js 读取端口配置
+      const vueConfigPath = path.join(modulePath, 'vue.config.js');
+      if (fs.existsSync(vueConfigPath)) {
+        const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+        const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+        if (portMatch) {
+          devPort = parseInt(portMatch[1]);
         }
       }
     } catch (e) {
-      logger.broadcast(`读取模块 package.json 失败, 降级使用 npm run dev: ${e.message}`, 'build');
+      logger.broadcast(`解析模块配置失败: ${e.message}`, 'devserver');
     }
 
-    const child = spawn(npmCommand, [...npmArgsPrefix, ...runDevArgs, '--', '--port', moduleConfig.port || 8000], {
-      cwd: modulePath,
-      env: process.env,
-      detached: false
+    moduleConfig.port = devPort;
+
+    return new Promise((resolve) => {
+      const child = spawn(npmCommand, [...npmArgsPrefix, 'run', devScript], {
+        cwd: modulePath,
+        env: { ...process.env, PORT: devPort.toString() },
+        detached: false
+      });
+
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleConfig, child });
+          this._savePid(`devserver-${moduleId}`, child.pid);
+          resolve({ success: true, module: { id: moduleConfig.id, name: moduleConfig.name } });
+        }
+      }, 2000);
+
+      child.on('error', (err) => {
+        clearTimeout(timeout);
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: false, error: `启动失败: ${err.message}` });
+        }
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(timeout);
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: false, error: `进程立即退出 (代码: ${code})` });
+        } else {
+          logger.broadcast(`${moduleConfig.name} 开发服务器已停止 (退出码: ${code})`, 'devserver');
+          this._clearPid(`devserver-${moduleId}`, child.pid);
+          devServerProcesses.delete(moduleId);
+        }
+      });
+
+      child.stdout?.on('data', (data) => logger.broadcast(data.toString(), 'devserver'));
+      child.stderr?.on('data', (data) => logger.broadcast(data.toString(), 'devserver'));
     });
-
-    devServerProcesses.set(moduleId, { pid: child.pid, module: moduleConfig, child });
-    this._savePid(`devserver-${moduleId}`, child.pid);
-
-    child.stdout?.on('data', (data) => logger.broadcast(data.toString(), 'build'));
-    child.stderr?.on('data', (data) => logger.broadcast(data.toString(), 'build'));
-    child.on('close', (code) => {
-      logger.broadcast(`开发服务器已停止 (退出码: ${code})`, 'build');
-      this._clearPid(`devserver-${moduleId}`, child.pid);
-      devServerProcesses.delete(moduleId);
-    });
-
-    return { success: true, module: { id: moduleConfig.id, name: moduleConfig.name } };
   }
 
   async stopDevServer(moduleId) {
@@ -1343,6 +1365,21 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
         };
       }
     }
+
+    return { running: false, module: null };
+  }
+
+  getAllDevServerStatus() {
+    if (devServerProcesses.size === 0) {
+      return { running: false, module: null };
+    }
+
+    const [moduleId, devServer] = devServerProcesses.entries().next().value;
+    return {
+      running: true,
+      module: { id: devServer.module.id, name: devServer.module.name }
+    };
+  }
 
     return { running: false, module: null };
   }
