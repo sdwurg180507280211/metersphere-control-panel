@@ -141,7 +141,7 @@ const serviceController = {
         return sendError(res, createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射'));
       }
 
-      const result = await systemCommandService.startTunnel(password, ports);
+      const result = await systemCommandService.startTunnel(ports);
       return res.json({
         success: true,
         message: 'SSH 隧道已建立',

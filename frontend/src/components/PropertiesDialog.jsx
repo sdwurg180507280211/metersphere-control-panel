@@ -25,8 +25,8 @@ function PropertiesDialog({ onClose }) {
   
   // Search and replace state
   const [showSearch, setShowSearch] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [replaceTerm, setReplaceTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('properties_search_term') || '')
+  const [replaceTerm, setReplaceTerm] = useState(() => localStorage.getItem('properties_replace_term') || '')
   const [searchResults, setSearchResults] = useState([])
   const [currentResultIndex, setCurrentResultIndex] = useState(-1)
   
@@ -50,6 +50,15 @@ function PropertiesDialog({ onClose }) {
       localStorage.setItem(`properties_draft_${activeTab}`, contents[activeTab])
     }
   }, [contents, activeTab, initialContents])
+
+  // 保存搜索内容到 localStorage
+  useEffect(() => {
+    localStorage.setItem('properties_search_term', searchTerm)
+  }, [searchTerm])
+
+  useEffect(() => {
+    localStorage.setItem('properties_replace_term', replaceTerm)
+  }, [replaceTerm])
 
   const fetchProperties = async (filename) => {
     setLoading(true)
@@ -292,8 +301,6 @@ function PropertiesDialog({ onClose }) {
 
   const closeSearch = () => {
     setShowSearch(false)
-    setSearchTerm('')
-    setReplaceTerm('')
     shouldFocusEditorRef.current = true
     textareaRef.current?.focus()
   }
@@ -344,22 +351,27 @@ function PropertiesDialog({ onClose }) {
         {showSearch && (
           <div className="properties-search-bar">
             <div className="search-group">
-              <input 
-                ref={searchInputRef}
-                className="search-input"
-                placeholder="查找..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    handleNextMatch()
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    handlePrevMatch()
-                  }
-                }}
-              />
+              <div className="search-input-wrapper">
+                <input 
+                  ref={searchInputRef}
+                  className="search-input"
+                  placeholder="查找..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                      e.preventDefault()
+                      handleNextMatch()
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      handlePrevMatch()
+                    }
+                  }}
+                />
+                {searchTerm && (
+                  <button type="button" className="search-input-clear" onClick={() => setSearchTerm('')}>✕</button>
+                )}
+              </div>
               <span className="search-stats">
                 {searchResults.length > 0 ? `${currentResultIndex + 1} / ${searchResults.length}` : '0 / 0'}
               </span>
@@ -368,18 +380,23 @@ function PropertiesDialog({ onClose }) {
             </div>
             
             <div className="search-group">
-              <input 
-                className="search-input"
-                placeholder="替换为..." 
-                value={replaceTerm}
-                onChange={e => setReplaceTerm(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleReplace()
-                  }
-                }}
-              />
+              <div className="search-input-wrapper">
+                <input 
+                  className="search-input"
+                  placeholder="替换为..." 
+                  value={replaceTerm}
+                  onChange={e => setReplaceTerm(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleReplace()
+                    }
+                  }}
+                />
+                {replaceTerm && (
+                  <button type="button" className="search-input-clear" onClick={() => setReplaceTerm('')}>✕</button>
+                )}
+              </div>
               <button className="search-btn-text" onClick={handleReplace} disabled={searchResults.length === 0}>替换</button>
               <button className="search-btn-text" onClick={handleReplaceAll} disabled={searchResults.length === 0}>全部替换</button>
             </div>

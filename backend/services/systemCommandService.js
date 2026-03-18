@@ -125,14 +125,10 @@ class SystemCommandService {
 
   /**
    * 启动 SSH 反向隧道
-   * @param {string} password - 远程主机 root 密码
-   * @param {Array<{remotePort: number, localPort: number}>} ports - 端口映射数组
+   * @param {Array<{remotePort: number, localPort: number}>} ports 端口映射列表
+   * @returns {Promise<{pid: number}>}
    */
-  async startTunnel(password, ports) {
-    if (typeof password !== 'string' || password.length === 0) {
-      throw createAppError(400, 'SSH_PASSWORD_REQUIRED', '请输入远程主机密码');
-    }
-
+  async startTunnel(ports) {
     if (!Array.isArray(ports) || ports.length === 0) {
       throw createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射');
     }
@@ -152,8 +148,6 @@ class SystemCommandService {
     ]);
 
     const sshArgs = [
-      '-p', password,
-      'ssh',
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'ServerAliveInterval=60',
       '-o', 'ServerAliveCountMax=3',
@@ -170,7 +164,7 @@ class SystemCommandService {
     });
 
     return new Promise((resolve, reject) => {
-      const child = spawn('sshpass', sshArgs, {
+      const child = spawn('ssh', sshArgs, {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
@@ -222,8 +216,8 @@ class SystemCommandService {
       child.on('error', (error) => {
         clearTimeout(connectTimer);
         if (error.code === 'ENOENT') {
-          finishReject(createAppError(500, 'SSHPASS_NOT_FOUND',
-            '未找到 sshpass 命令，请执行: brew install hudochenkov/sshpass/sshpass'));
+          finishReject(createAppError(500, 'SSH_NOT_FOUND',
+            '未找到 ssh 命令'));
           return;
         }
         finishReject(createAppError(500, 'TUNNEL_EXEC_ERROR',

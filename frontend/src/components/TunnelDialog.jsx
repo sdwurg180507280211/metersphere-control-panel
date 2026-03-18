@@ -9,7 +9,6 @@ const DEFAULT_PORT_MAPPINGS = [
 ]
 
 function TunnelDialog({ isOpen, onClose }) {
-  const [password, setPassword] = useState('')
   const [portMappings, setPortMappings] = useState(() =>
     DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m }))
   )
@@ -41,7 +40,6 @@ function TunnelDialog({ isOpen, onClose }) {
   // 重置状态
   useEffect(() => {
     if (isOpen) {
-      setPassword('')
       setError('')
       setLoading(false)
       setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
@@ -68,10 +66,6 @@ function TunnelDialog({ isOpen, onClose }) {
   }, [loading])
 
   const handleStart = useCallback(async () => {
-    if (!password) {
-      setError('请输入远程主机密码')
-      return
-    }
     const validPorts = portMappings.filter((m) => m.remotePort && m.localPort)
     if (validPorts.length === 0) {
       setError('请至少配置一个有效的端口映射')
@@ -90,13 +84,12 @@ function TunnelDialog({ isOpen, onClose }) {
       const res = await fetch('/api/services/tunnel/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password, ports })
+        body: JSON.stringify({ ports })
       })
       const data = await res.json()
 
       if (data.success) {
         setStatus('RUNNING')
-        setPassword('')
         setError('')
       } else {
         setError(data?.error?.message || 'SSH 隧道启动失败')
@@ -106,7 +99,7 @@ function TunnelDialog({ isOpen, onClose }) {
     } finally {
       setLoading(false)
     }
-  }, [password, portMappings])
+  }, [portMappings])
 
   const handleStop = useCallback(async () => {
     setLoading(true)
@@ -225,29 +218,6 @@ function TunnelDialog({ isOpen, onClose }) {
               )}
             </div>
           </div>
-
-          {/* 密码输入（仅在停止时显示） */}
-          {!isRunning && (
-            <>
-              <label className="tunnel-dialog-label" htmlFor="tunnel-password">
-                远程主机密码
-              </label>
-              <input
-                id="tunnel-password"
-                className="tunnel-dialog-input"
-                type="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError('') }}
-                placeholder="请输入 root 密码"
-                autoFocus
-                autoComplete="current-password"
-                disabled={loading}
-              />
-              <p className="tunnel-dialog-hint">
-                密码仅用于本次 SSH 连接，通过 sshpass 传入，不会持久化。
-              </p>
-            </>
-          )}
 
           {error ? <p className="tunnel-dialog-error">{error}</p> : null}
 
