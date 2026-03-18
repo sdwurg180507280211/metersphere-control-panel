@@ -337,6 +337,42 @@ const buildController = {
 
   getModules(req, res) {
     res.json({ success: true, data: configManager.getResolvedConfig().frontendModules });
+  },
+
+  async startDevServer(req, res) {
+    try {
+      const { module } = req.body;
+      const result = await processManager.startDevServer(module);
+
+      if (result.success) {
+        res.json({ success: true, message: '开发服务器已启动', module: result.module });
+      } else {
+        return sendError(res, createAppError(400, 'DEV_SERVER_ERROR', result.error));
+      }
+    } catch (error) {
+      return sendError(res, error);
+    }
+  },
+
+  async stopDevServer(req, res) {
+    try {
+      const { module } = req.body;
+      const result = await processManager.stopDevServer(module);
+
+      if (result.success) {
+        res.json({ success: true, message: '开发服务器已停止' });
+      } else {
+        return sendError(res, createAppError(404, 'DEV_SERVER_NOT_RUNNING', result.error));
+      }
+    } catch (error) {
+      return sendError(res, error);
+    }
+  },
+
+  getDevServerStatus(req, res) {
+    const { module } = req.query;
+    const status = processManager.getDevServerStatus(module);
+    res.json({ success: true, data: status });
   }
 };
 

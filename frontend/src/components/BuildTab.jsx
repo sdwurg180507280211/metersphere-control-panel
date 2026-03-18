@@ -4,6 +4,7 @@ import { useBuildStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
+import BackendBuildPromptDialog from './BackendBuildPromptDialog'
 import Tooltip from './Tooltip'
 import { ModuleButtonSkeleton } from './Skeleton'
 import './BuildTab.css'
@@ -12,6 +13,8 @@ function BuildTab({ searchInputRef }) {
   const { modules, activeBuilds, fetchModules, fetchActiveBuilds, addActiveBuild } = useBuildStore()
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, moduleId: null, moduleName: '' })
+  const [backendPrompt, setBackendPrompt] = useState({ isOpen: false })
+  const [devServer, setDevServer] = useState({ running: false, module: null, loading: false })
 
   useEffect(() => {
     const loadData = async () => {
@@ -19,7 +22,27 @@ function BuildTab({ searchInputRef }) {
       setTimeout(() => setInitialLoading(false), 300)
     }
     loadData()
+
+    // 获取开发服务器状态
+    fetch('/api/build/dev-server/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setDevServer({ running: data.data.running, module: data.data.module, loading: false })
+        }
+      })
+      .catch(() => {})
   }, [fetchModules, fetchActiveBuilds])
+
+  useEffect(() => {
+    const handleBuildComplete = (event) => {
+      if (event.detail?.status === 'success') {
+        setBackendPrompt({ isOpen: true })
+      }
+    }
+    window.addEventListener('buildComplete', handleBuildComplete)
+    return () => window.removeEventListener('buildComplete', handleBuildComplete)
+  }, [])
 
   const isBuilding = activeBuilds.some((build) => build.status === 'running')
   const buildCount = activeBuilds.length
@@ -82,6 +105,63 @@ function BuildTab({ searchInputRef }) {
     }
   }, [confirmDialog, modules, addActiveBuild])
 
+  const handleBuildBackend = useCallback(() => {
+    setBackendPrompt({ isOpen: false })
+    window.dispatchEvent(new CustomEvent('switchTab', { detail: 'services' }))
+    toast.success('已切换到服务管理，请启动后端服务', { icon: '🚀' })
+  }, [])
+
+  const handleCancelBackendPrompt = useCallback(() => {
+    setBackendPrompt({ isOpen: false })
+  }, [])
+
+  const handleStartDevServer = useCallback(async (moduleId) => {
+    setDevServer(prev => ({ ...prev, loading: true }))
+    try {
+      const res = await fetch('/api/build/dev-server/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: moduleId })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setDevServer({ running: true, module: data.module, loading: false })
+        toast.success('开发服务器已启动', { icon: '🚀' })
+      } else {
+        toast.error(data.error || '启动失败')
+        setDevServer(prev => ({ ...prev, loading: false }))
+      }
+    } catch (error) {
+      toast.error(`启动失败: ${error.message}`)
+      setDevServer(prev => ({ ...prev, loading: false }))
+    }
+  }, [])
+
+  const handleStopDevServer = useCallback(async () => {
+    setDevServer(prev => ({ ...prev, loading: true }))
+    try {
+      const res = await fetch('/api/build/dev-server/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await res.json()
+      if (data.success) {
+        setDevServer({ running: false, module: null, loading: false })
+        toast.success('开发服务器已停止')
+      } else {
+        toast.error(data.error || '停止失败')
+        setDevServer(prev => ({ ...prev, loading: false }))
+      }
+    } catch (error) {
+      toast.error(`停止失败: ${error.message}`)
+      setDevServer(prev => ({ ...prev, loading: false }))
+    }
+  }, [])
+
+  const handleOpenDevServer = useCallback(() => {
+    window.open('http://localhost:4200', '_blank')
+  }, [])
+
   if (initialLoading) {
     return (
       <div className="tab-content build-tab">
@@ -124,7 +204,52 @@ function BuildTab({ searchInputRef }) {
           {modules.length === 0 ? (
             <EmptyState type="modules" />
           ) : (
-            <div className="module-list">
+            <>
+              <div className="dev-server-panel">
+                <div className="dev-server-header">
+                  <h3>前端开发服务器</h3>
+                  {devServer.running && devServer.module && (
+                    <span className="dev-server-status running">运行中: {devServer.module.name}</span>
+                  )}
+                  {!devServer.running && (
+                    <span className="dev-server-status stopped">未运行</span>
+                  )}
+                </div>
+                <div className="dev-server-controls">
+                  {!devServer.running ? (
+                    <select
+                      className="dev-server-select"
+                      onChange={(e) => e.target.value && handleStartDevServer(e.target.value)}
+                      disabled={devServer.loading}
+                      value=""
+                    >
+                      <option value="">选择模块启动...</option>
+                      {modules.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <>
+                      <button
+                        className="btn-dev-server btn-open"
+                        onClick={handleOpenDevServer}
+                        disabled={devServer.loading}
+                      >
+                        🌐 打开网页
+                      </button>
+                      <button
+                        className="btn-dev-server btn-stop"
+                        onClick={handleStopDevServer}
+                        disabled={devServer.loading}
+                      >
+                        ⏹ 停止服务器
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="module-list">
               {modules.map((module, index) => {
                 const isBuildingThis = activeBuilds.some(b => b.moduleId === module.id && b.status === 'running')
                 return (
@@ -161,6 +286,7 @@ function BuildTab({ searchInputRef }) {
                 )
               })}
             </div>
+            </>
           )}
         </section>
 
@@ -181,6 +307,12 @@ function BuildTab({ searchInputRef }) {
         type="info"
         onConfirm={handleConfirmBuild}
         onCancel={() => setConfirmDialog({ isOpen: false, moduleId: null, moduleName: '' })}
+      />
+
+      <BackendBuildPromptDialog
+        isOpen={backendPrompt.isOpen}
+        onBuildBackend={handleBuildBackend}
+        onCancel={handleCancelBackendPrompt}
       />
     </div>
   )

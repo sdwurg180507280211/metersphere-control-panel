@@ -412,3 +412,105 @@
     padding: 14px;
   }
 }
+
+/* 开发服务器面板 */
+.dev-server-panel {
+  background: rgba(103, 126, 234, 0.08);
+  border: 1px solid rgba(103, 126, 234, 0.2);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.dev-server-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dev-server-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dev-server-status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.dev-server-status.running {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.dev-server-status.stopped {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-tertiary);
+}
+
+.dev-server-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.dev-server-select {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(15, 27, 64, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dev-server-select:hover:not(:disabled) {
+  border-color: rgba(103, 126, 234, 0.4);
+}
+
+.dev-server-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-dev-server {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-dev-server:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-dev-server.btn-open {
+  background: rgba(103, 126, 234, 0.9);
+  color: white;
+}
+
+.btn-dev-server.btn-open:hover:not(:disabled) {
+  background: rgba(103, 126, 234, 1);
+  transform: translateY(-1px);
+}
+
+.btn-dev-server.btn-stop {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-dev-server.btn-stop:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+

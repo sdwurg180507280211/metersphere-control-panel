@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import { passwordCache } from '../utils/passwordCache'
 import './PasswordDialog.css'
 
 function PasswordDialog({
@@ -11,12 +13,27 @@ function PasswordDialog({
   onConfirm,
   onCancel
 }) {
+  const [rememberPassword, setRememberPassword] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      const cached = passwordCache.get()
+      if (cached) {
+        onChange(cached)
+        setRememberPassword(true)
+      }
+    }
+  }, [isOpen, onChange])
+
   if (!isOpen) {
     return null
   }
 
   const handleSubmit = (event) => {
     event.preventDefault()
+    if (rememberPassword && value) {
+      passwordCache.set(value)
+    }
     onConfirm()
   }
 
@@ -46,7 +63,17 @@ function PasswordDialog({
             disabled={loading}
           />
 
-          <p className="password-dialog-hint">密码仅用于本次 sudo 校验，不会在前后端持久化。</p>
+          <label className="password-dialog-checkbox">
+            <input
+              type="checkbox"
+              checked={rememberPassword}
+              onChange={(e) => setRememberPassword(e.target.checked)}
+              disabled={loading}
+            />
+            <span>记住密码 (30分钟内有效)</span>
+          </label>
+
+          <p className="password-dialog-hint">密码仅用于本次 sudo 校验{rememberPassword ? '，将在内存中缓存30分钟' : '，不会持久化'}。</p>
           {error ? <p className="password-dialog-error">{error}</p> : null}
 
           <div className="password-dialog-footer">

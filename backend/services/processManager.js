@@ -23,6 +23,7 @@ if (!fs.existsSync(PID_DIR)) {
 const serviceProcesses = new Map();
 const serviceStatuses = new Map();
 const buildProcesses = new Map();
+const devServerProcesses = new Map();
 const TRANSITIONAL_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting']);
 
 class ProcessManager {
@@ -598,6 +599,20 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const status = await this.getStatus(serviceId);
     if (status.running || this._isTransitionalPhase(status.phase)) {
       return { pid: status.pid, alreadyRunning: true, phase: status.phase };
+    }
+
+    // 检查依赖服务
+    if (serviceConfig.dependencies?.length > 0) {
+      const allowedPhases = ['running', 'checking_health'];
+      for (const depId of serviceConfig.dependencies) {
+        const depStatus = await this.getStatus(depId);
+        if (!allowedPhases.includes(depStatus.phase)) {
+          const depConfig = this._getServiceConfig(depId);
+          const error = `${serviceConfig.name} 依赖 ${depConfig?.name || depId} 服务，请先启动 ${depConfig?.name || depId}`;
+          logger.broadcast(`⚠️  ${error}`, 'service', serviceId);
+          throw new Error(error);
+        }
+      }
     }
 
     this._clearHealthMonitor(serviceId);
@@ -1218,6 +1233,85 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     await fsp.rm(targetDir, { recursive: true, force: true });
     await fsp.mkdir(targetDir, { recursive: true });
     await fsp.cp(path.join(frontendDir, 'dist'), targetDir, { recursive: true });
+  }
+
+  async startDevServer(moduleId) {
+    if (devServerProcesses.has(moduleId)) {
+      return { success: false, error: '开发服务器已在运行中' };
+    }
+
+    // 检查残留的 PID 文件
+    const pid = this._getPid(`devserver-${moduleId}`);
+    if (pid && this._isProcessRunning(pid)) {
+      return { success: false, error: '开发服务器已在运行中' };
+    }
+    if (pid) {
+      this._clearPid(`devserver-${moduleId}`);
+    }
+
+    const validator = require('../utils/validator');
+    if (!validator.isValidModule(moduleId)) {
+      return { success: false, error: '未知的模块' };
+    }
+
+    const moduleConfig = validator.getValidModule(moduleId);
+    const modulePath = path.join(this._getProjectRoot(), moduleConfig.path);
+    const { command: npmCommand, argsPrefix: npmArgsPrefix } = this._resolveNpmCommand();
+
+    const child = spawn(npmCommand, [...npmArgsPrefix, 'run', 'dev'], {
+      cwd: modulePath,
+      env: process.env,
+      detached: false
+    });
+
+    devServerProcesses.set(moduleId, { pid: child.pid, module: moduleConfig, child });
+    this._savePid(`devserver-${moduleId}`, child.pid);
+
+    child.stdout?.on('data', (data) => logger.broadcast(data.toString(), 'build'));
+    child.stderr?.on('data', (data) => logger.broadcast(data.toString(), 'build'));
+    child.on('close', (code) => {
+      logger.broadcast(`开发服务器已停止 (退出码: ${code})`, 'build');
+      this._clearPid(`devserver-${moduleId}`, child.pid);
+      devServerProcesses.delete(moduleId);
+    });
+
+    return { success: true, module: { id: moduleConfig.id, name: moduleConfig.name } };
+  }
+
+  async stopDevServer(moduleId) {
+    const devServer = devServerProcesses.get(moduleId);
+    if (!devServer) {
+      return { success: false, error: '开发服务器未运行' };
+    }
+
+    await this._terminateProcess(devServer.pid);
+    this._clearPid(`devserver-${moduleId}`, devServer.pid);
+    devServerProcesses.delete(moduleId);
+    return { success: true };
+  }
+
+  getDevServerStatus(moduleId) {
+    const devServer = devServerProcesses.get(moduleId);
+    if (devServer) {
+      return {
+        running: true,
+        module: { id: devServer.module.id, name: devServer.module.name }
+      };
+    }
+
+    const pid = this._getPid(`devserver-${moduleId}`);
+    if (pid && this._isProcessRunning(pid)) {
+      const validator = require('../utils/validator');
+      if (validator.isValidModule(moduleId)) {
+        const moduleConfig = validator.getValidModule(moduleId);
+        return {
+          running: true,
+          module: { id: moduleConfig.id, name: moduleConfig.name }
+        };
+      }
+    }
+
+    return { running: false, module: null };
   }
 }
 

@@ -44,14 +44,26 @@ function PropertiesDialog({ onClose }) {
     fetchProperties(activeTab)
   }, [activeTab])
 
+  // 保存草稿到 localStorage
+  useEffect(() => {
+    if (contents[activeTab] !== initialContents[activeTab]) {
+      localStorage.setItem(`properties_draft_${activeTab}`, contents[activeTab])
+    }
+  }, [contents, activeTab, initialContents])
+
   const fetchProperties = async (filename) => {
     setLoading(true)
     try {
       const res = await fetch(`/api/config/properties/${filename}`)
       const data = await res.json()
       if (data.success) {
-        setContents(prev => ({ ...prev, [filename]: data.data.content }))
+        const draft = localStorage.getItem(`properties_draft_${filename}`)
+        const content = draft || data.data.content
+        setContents(prev => ({ ...prev, [filename]: content }))
         setInitialContents(prev => ({ ...prev, [filename]: data.data.content }))
+        if (draft) {
+          toast.success('已恢复上次未保存的编辑', { icon: '📝' })
+        }
       } else if (data.code === 'EACCES') {
         setPendingAction('read')
         setShowPasswordDialog(true)
@@ -76,6 +88,7 @@ function PropertiesDialog({ onClose }) {
       const data = await res.json()
       if (data.success) {
         setInitialContents(prev => ({ ...prev, [activeTab]: contents[activeTab] }))
+        localStorage.removeItem(`properties_draft_${activeTab}`)
         toast.success(`${activeTab} 保存成功`)
       } else if (data.code === 'EACCES') {
         setPendingAction('write')
@@ -114,6 +127,7 @@ function PropertiesDialog({ onClose }) {
         if (data.success) {
           setContents(prev => ({ ...prev, [activeTab]: data.data.content }))
           setInitialContents(prev => ({ ...prev, [activeTab]: data.data.content }))
+          localStorage.removeItem(`properties_draft_${activeTab}`)
           setShowPasswordDialog(false)
           setPassword('')
           toast.success('读取成功')
@@ -129,6 +143,7 @@ function PropertiesDialog({ onClose }) {
         const data = await res.json()
         if (data.success) {
           setInitialContents(prev => ({ ...prev, [activeTab]: contents[activeTab] }))
+          localStorage.removeItem(`properties_draft_${activeTab}`)
           setShowPasswordDialog(false)
           setPassword('')
           toast.success('保存成功')

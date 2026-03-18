@@ -69,6 +69,11 @@ export function useWebSocket() {
   const handleBuildCompleted = useCallback((data) => {
     const { module, linkedService, autoRestart } = data
 
+    // 触发构建完成事件供 BuildTab 监听
+    window.dispatchEvent(new CustomEvent('buildComplete', {
+      detail: { status: 'success', module, linkedService, autoRestart }
+    }))
+
     // 如果设置了自动重启，不需要提示
     if (autoRestart) {
       toast.success(`${module.name} 构建完成，正在自动重启关联服务...`)

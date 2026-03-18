@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { useBuildStore, useConfigStore, usePackageStore, useServiceStore, useWebSocketStore } from '../store/useAppStore'
+import { passwordCache } from '../utils/passwordCache'
 import ConfigSaveBar from './ConfigSaveBar'
 import ConfigField from './ConfigField'
 import CustomSelect from './CustomSelect'
@@ -156,21 +157,14 @@ function ConfigTab() {
     try {
       const response = await fetch('/api/services/system/reload', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: reloadDialog.password })
       })
       const data = await response.json()
 
       if (data.success) {
         toast.success(data.message || 'msctl reload 执行成功', { icon: '⚙️' })
-        setReloadDialog({
-          isOpen: false,
-          password: '',
-          error: '',
-          loading: false
-        })
+        closeSystemReloadDialog()
         if (connected) {
           await fetchServices()
         }

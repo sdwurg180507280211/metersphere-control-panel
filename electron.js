@@ -1,5 +1,9 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const fixPath = require('fix-path');
+
+// 修复 macOS 打包后的 PATH 问题
+fixPath();
 
 let mainWindow;
 let server;
