@@ -205,87 +205,83 @@ function BuildTab({ searchInputRef }) {
             <EmptyState type="modules" />
           ) : (
             <>
-              <div className="dev-server-panel">
-                <div className="dev-server-header">
-                  <h3>前端开发服务器</h3>
-                  {devServer.running && devServer.module && (
-                    <span className="dev-server-status running">运行中: {devServer.module.name}</span>
-                  )}
-                  {!devServer.running && (
-                    <span className="dev-server-status stopped">未运行</span>
-                  )}
-                </div>
-                <div className="dev-server-controls">
-                  {!devServer.running ? (
-                    <select
-                      className="dev-server-select"
-                      onChange={(e) => e.target.value && handleStartDevServer(e.target.value)}
-                      disabled={devServer.loading}
-                      value=""
-                    >
-                      <option value="">选择模块启动...</option>
-                      {modules.map(m => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <>
-                      <button
-                        className="btn-dev-server btn-open"
-                        onClick={handleOpenDevServer}
-                        disabled={devServer.loading}
-                      >
-                        🌐 打开网页
-                      </button>
-                      <button
-                        className="btn-dev-server btn-stop"
-                        onClick={handleStopDevServer}
-                        disabled={devServer.loading}
-                      >
-                        ⏹ 停止服务器
-                      </button>
-                    </>
-                  )}
-                </div>
+              <div className="build-control-header">
+                <h3 className="section-title">前端模块</h3>
+                <span className="module-count">{modules.length} 个模块</span>
               </div>
 
               <div className="module-list">
-              {modules.map((module, index) => {
-                const isBuildingThis = activeBuilds.some(b => b.moduleId === module.id && b.status === 'running')
-                return (
-                  <div
-                    key={module.id}
-                    className={`module-card ${isBuildingThis ? 'building' : 'idle'}`}
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <button
-                      className="module-btn-main"
-                      onClick={() => handleBuildClick(module.id)}
-                      disabled={isBuilding}
+                {modules.map((module, index) => {
+                  const isRunningDev = devServer.running && devServer.module?.id === module.id
+                  const isBuildingThis = activeBuilds.some(b => b.moduleId === module.id && b.status === 'running')
+                  const isOtherDevRunning = devServer.running && devServer.module?.id !== module.id
+
+                  return (
+                    <div
+                      key={module.id}
+                      className={`module-card ${isRunningDev ? 'running' : isBuildingThis ? 'building' : 'idle'}`}
+                      style={{ animationDelay: `${index * 50}ms` }}
                     >
-                      <div className="module-btn-content">
-                        <div className="module-main-row">
-                          <div className="module-info">
-                            <span className={`module-status-icon ${isBuildingThis ? 'spinning' : ''}`}>
-                              {isBuildingThis ? '⚙️' : '○'}
+                      <div className="module-btn-main">
+                        <div className="module-btn-content">
+                          <div className="module-main-row">
+                            <div className="module-info">
+                              <span className={`module-status-icon ${isRunningDev || isBuildingThis ? 'spinning' : ''}`}>
+                                {isRunningDev ? '⚡' : isBuildingThis ? '⚙️' : '○'}
+                              </span>
+                              <span className="module-name">{module.name}</span>
+                            </div>
+                            <span className={`module-status-badge ${isRunningDev ? 'running' : isBuildingThis ? 'building' : 'idle'}`}>
+                              {isRunningDev ? '运行中' : isBuildingThis ? '构建中' : '空闲'}
                             </span>
-                            <span className="module-name">{module.name}</span>
                           </div>
-                          <span className={`module-status-badge ${isBuildingThis ? 'building' : 'idle'}`}>
-                            {isBuildingThis ? '构建中' : '空闲'}
-                          </span>
-                        </div>
-                        <div className="module-meta-row">
-                          {!isBuilding && (
-                            <span className="module-action-hint">点击构建</span>
-                          )}
+
+                          <div className="module-meta-row" style={{ marginTop: '12px', flexDirection: 'column', gap: '8px' }}>
+                            {!isRunningDev ? (
+                              <button
+                                className="btn-dev-server btn-start"
+                                onClick={() => handleStartDevServer(module.id)}
+                                disabled={devServer.loading || isOtherDevRunning || isBuilding}
+                                style={{ width: '100%' }}
+                              >
+                                启动开发服务器
+                              </button>
+                            ) : (
+                              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                                <button
+                                  className="btn-dev-server btn-open"
+                                  onClick={handleOpenDevServer}
+                                  disabled={devServer.loading}
+                                  style={{ flex: 1 }}
+                                >
+                                  🌐 打开
+                                </button>
+                                <button
+                                  className="btn-dev-server btn-stop"
+                                  onClick={handleStopDevServer}
+                                  disabled={devServer.loading}
+                                  style={{ flex: 1 }}
+                                >
+                                  停止
+                                </button>
+                              </div>
+                            )}
+
+                            <button
+                              className="btn-dev-server btn-start"
+                              onClick={() => handleBuildClick(module.id)}
+                              disabled={isBuilding || isRunningDev}
+                              style={{ width: '100%' }}
+                            >
+                              构建生产版本
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
+                    </div>
+                  )
+                })}
+              </div>
             </>
           )}
         </section>

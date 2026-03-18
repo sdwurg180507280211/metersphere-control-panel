@@ -1255,10 +1255,43 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     const moduleConfig = validator.getValidModule(moduleId);
-    const modulePath = path.join(this._getProjectRoot(), moduleConfig.path);
+    const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
     const { command: npmCommand, argsPrefix: npmArgsPrefix } = this._resolveNpmCommand();
 
-    const child = spawn(npmCommand, [...npmArgsPrefix, 'run', 'dev'], {
+    // 临时抽取前端开发配置里的端口号。如果在服务列表里能找到原端口，通常将前端服务器放于单独的 40xx 端口，
+    // 获取配置字典里约定的原始端口 (前端默认跑在原端口 - 4000 规则，或者读取 configManager).
+    // Metersphere vue.config.js 通常 4002, 4004 等等。由于目前后端通过 configManager 获取，尝试从配置文件提取对应端口。
+    let devPort = 4200; // 默认防撞
+    const allServices = configManager.getResolvedConfig().services;
+    const srv = allServices[moduleConfig.serviceId];
+    if (srv && srv.port) {
+      devPort = srv.port - 4000; // e.g. 8002 -> 4002
+    }
+    moduleConfig.port = devPort; // 记录到配置中用于打开网页
+
+    // 解析项目 package.json 中的定制指令
+    let runDevArgs = ['run', 'dev'];
+    try {
+      const pkgPath = path.join(modulePath, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkgContent = await fsp.readFile(pkgPath, 'utf8');
+        const pkg = JSON.parse(pkgContent);
+        // 动态寻找启动脚本：在 scripts 中寻找值为 "vue-cli-service serve" 或类似命令的 key
+        if (pkg.scripts) {
+          const serveScriptKey = Object.keys(pkg.scripts).find(key => 
+            pkg.scripts[key].includes('vue-cli-service serve') || 
+            pkg.scripts[key].includes('vite') // 兼容未来可能的 vite
+          );
+          if (serveScriptKey) {
+            runDevArgs = ['run', serveScriptKey];
+          }
+        }
+      }
+    } catch (e) {
+      logger.broadcast(`读取模块 package.json 失败, 降级使用 npm run dev: ${e.message}`, 'build');
+    }
+
+    const child = spawn(npmCommand, [...npmArgsPrefix, ...runDevArgs, '--', '--port', moduleConfig.port || 8000], {
       cwd: modulePath,
       env: process.env,
       detached: false
