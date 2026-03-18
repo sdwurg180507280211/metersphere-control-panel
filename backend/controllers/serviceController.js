@@ -133,10 +133,7 @@ const serviceController = {
 
   async tunnelStart(req, res) {
     try {
-      const { password, ports } = req.body || {};
-      if (typeof password !== 'string' || password.length === 0) {
-        return sendError(res, createAppError(400, 'SSH_PASSWORD_REQUIRED', '请输入远程主机密码'));
-      }
+      const { ports } = req.body || {};
       if (!Array.isArray(ports) || ports.length === 0) {
         return sendError(res, createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射'));
       }

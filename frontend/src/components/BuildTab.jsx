@@ -97,7 +97,8 @@ function BuildTab({ searchInputRef }) {
           })
         }
       } else {
-        toast.error(data.error || '启动构建失败')
+        const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '启动构建失败'
+        toast.error(errorMsg)
       }
     } catch (error) {
       toast.error(`网络错误: ${error.message}`)
@@ -127,7 +128,8 @@ function BuildTab({ searchInputRef }) {
         setDevServer({ running: true, module: data.module, loading: false })
         toast.success('开发服务器已启动', { icon: '🚀' })
       } else {
-        toast.error(data.error || '启动失败')
+        const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '启动失败'
+        toast.error(errorMsg)
         setDevServer(prev => ({ ...prev, loading: false }))
       }
     } catch (error) {
@@ -148,7 +150,8 @@ function BuildTab({ searchInputRef }) {
         setDevServer({ running: false, module: null, loading: false })
         toast.success('开发服务器已停止')
       } else {
-        toast.error(data.error || '停止失败')
+        const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '停止失败'
+        toast.error(errorMsg)
         setDevServer(prev => ({ ...prev, loading: false }))
       }
     } catch (error) {

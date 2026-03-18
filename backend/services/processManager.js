@@ -1270,10 +1270,22 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
       // 查找开发服务器脚本
       if (pkg.scripts) {
+        // 优先查找标准名称
         devScript = Object.keys(pkg.scripts).find(key =>
           ['serve', 'dev', 'start'].includes(key) &&
           (pkg.scripts[key].includes('vue-cli-service') || pkg.scripts[key].includes('vite'))
-        ) || 'serve';
+        );
+
+        // 如果没找到，查找任何包含 vue-cli-service serve 或 vite 的脚本
+        if (!devScript) {
+          devScript = Object.keys(pkg.scripts).find(key =>
+            pkg.scripts[key].includes('vue-cli-service serve') ||
+            pkg.scripts[key].includes('vite') && !pkg.scripts[key].includes('build')
+          );
+        }
+
+        // 最后使用默认值
+        devScript = devScript || 'serve';
       }
 
       // 从 vue.config.js 读取端口配置
