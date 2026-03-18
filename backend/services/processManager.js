@@ -1289,7 +1289,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       logger.broadcast(`解析模块配置失败: ${e.message}`, 'devserver');
     }
 
-    moduleConfig.port = devPort;
+    const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
 
     return new Promise((resolve) => {
       const child = spawn(npmCommand, [...npmArgsPrefix, 'run', devScript], {
@@ -1302,9 +1302,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleConfig, child });
+          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child });
           this._savePid(`devserver-${moduleId}`, child.pid);
-          resolve({ success: true, module: { id: moduleConfig.id, name: moduleConfig.name } });
+          resolve({ success: true, module: moduleInfo });
         }
       }, 2000);
 
@@ -1322,7 +1322,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
           resolved = true;
           resolve({ success: false, error: `进程立即退出 (代码: ${code})` });
         } else {
-          logger.broadcast(`${moduleConfig.name} 开发服务器已停止 (退出码: ${code})`, 'devserver');
+          logger.broadcast(`${moduleInfo.name} 开发服务器已停止 (退出码: ${code})`, 'devserver');
           this._clearPid(`devserver-${moduleId}`, child.pid);
           devServerProcesses.delete(moduleId);
         }
@@ -1383,9 +1383,6 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       running: true,
       module: { id: devServer.module.id, name: devServer.module.name }
     };
-  }
-
-    return { running: false, module: null };
   }
 }
 
