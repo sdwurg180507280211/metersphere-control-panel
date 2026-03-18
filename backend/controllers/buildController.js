@@ -370,7 +370,8 @@ const buildController = {
   },
 
   getDevServerStatus(req, res) {
-    const status = processManager.getAllDevServerStatus();
+    const { module } = req.query;
+    const status = processManager.getDevServerStatus(module);
     res.json({ success: true, data: status });
   }
 };

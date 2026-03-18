@@ -137,13 +137,11 @@ function BuildTab({ searchInputRef }) {
   }, [])
 
   const handleStopDevServer = useCallback(async () => {
-    if (!devServer.module?.id) return
     setDevServer(prev => ({ ...prev, loading: true }))
     try {
       const res = await fetch('/api/build/dev-server/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: devServer.module.id })
+        headers: { 'Content-Type': 'application/json' }
       })
       const data = await res.json()
       if (data.success) {
@@ -157,7 +155,7 @@ function BuildTab({ searchInputRef }) {
       toast.error(`停止失败: ${error.message}`)
       setDevServer(prev => ({ ...prev, loading: false }))
     }
-  }, [devServer.module])
+  }, [])
 
   const handleOpenDevServer = useCallback(() => {
     window.open('http://localhost:4200', '_blank')

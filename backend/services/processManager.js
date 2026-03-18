@@ -1334,6 +1334,10 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
   }
 
   async stopDevServer(moduleId) {
+    if (!moduleId && devServerProcesses.size > 0) {
+      moduleId = devServerProcesses.keys().next().value;
+    }
+
     const devServer = devServerProcesses.get(moduleId);
     if (!devServer) {
       return { success: false, error: '开发服务器未运行' };
