@@ -1262,7 +1262,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       return { success: false, error: '模块缺少 package.json' };
     }
 
-    let devScript = 'serve';
+    let devScript = null;
     let devPort = 4200;
 
     try {
@@ -1270,21 +1270,30 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
       // 查找开发服务器脚本
       if (pkg.scripts) {
-        // 优先查找标准名称
-        devScript = Object.keys(pkg.scripts).find(key =>
-          ['serve', 'dev', 'start'].includes(key) &&
-          (pkg.scripts[key].includes('vue-cli-service') || pkg.scripts[key].includes('vite'))
-        );
+        // 1. 优先使用 package.json 的 name 字段作为脚本名（MeterSphere 命名规则）
+        const moduleName = pkg.name;
+        if (moduleName && pkg.scripts[moduleName]) {
+          devScript = moduleName;
+          logger.broadcast(`使用模块名称脚本: npm run ${moduleName}`, 'devserver');
+        }
 
-        // 如果没找到，查找任何包含 vue-cli-service serve 或 vite 的脚本
+        // 2. 查找标准开发服务器脚本名称
         if (!devScript) {
           devScript = Object.keys(pkg.scripts).find(key =>
-            pkg.scripts[key].includes('vue-cli-service serve') ||
-            pkg.scripts[key].includes('vite') && !pkg.scripts[key].includes('build')
+            ['serve', 'dev', 'start'].includes(key) &&
+            (pkg.scripts[key].includes('vue-cli-service') || pkg.scripts[key].includes('vite'))
           );
         }
 
-        // 最后使用默认值
+        // 3. 查找任何包含 vue-cli-service serve 或 vite 的脚本
+        if (!devScript) {
+          devScript = Object.keys(pkg.scripts).find(key =>
+            pkg.scripts[key].includes('vue-cli-service serve') ||
+            (pkg.scripts[key].includes('vite') && !pkg.scripts[key].includes('build'))
+          );
+        }
+
+        // 4. 使用默认值
         devScript = devScript || 'serve';
       }
 

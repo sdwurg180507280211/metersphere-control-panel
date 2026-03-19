@@ -143,7 +143,8 @@ function BuildTab({ searchInputRef }) {
     try {
       const res = await fetch('/api/build/dev-server/stop', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: devServer.module?.id })
       })
       const data = await res.json()
       if (data.success) {
@@ -158,7 +159,7 @@ function BuildTab({ searchInputRef }) {
       toast.error(`停止失败: ${error.message}`)
       setDevServer(prev => ({ ...prev, loading: false }))
     }
-  }, [])
+  }, [devServer.module?.id])
 
   const handleOpenDevServer = useCallback(() => {
     const port = devServer.module?.port || 4200
