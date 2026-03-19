@@ -161,8 +161,9 @@ function BuildTab({ searchInputRef }) {
   }, [])
 
   const handleOpenDevServer = useCallback(() => {
-    window.open('http://localhost:4200', '_blank')
-  }, [])
+    const port = devServer.module?.port || 4200
+    window.open(`http://localhost:${port}`, '_blank')
+  }, [devServer.module])
 
   if (initialLoading) {
     return (
