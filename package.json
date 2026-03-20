@@ -15,7 +15,9 @@
     "electron:build": "npm run build && electron-builder --mac",
     "pack": "electron-builder --mac --dir",
     "dist": "npm run build && electron-builder --mac dmg",
-    "install:all": "npm install && cd frontend && npm install"
+    "install:all": "npm install && cd frontend && npm install",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -31,6 +33,7 @@
     "concurrently": "^8.2.2",
     "electron": "^28.3.3",
     "electron-builder": "^24.13.3",
+    "jest": "^29.7.0",
     "nodemon": "^3.0.2"
   },
   "build": {

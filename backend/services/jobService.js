@@ -14,10 +14,29 @@ const REDIS_WRITE_RETRY_TIMES = Number.parseInt(process.env.MS_JOB_REDIS_RETRY_T
 const REDIS_WRITE_RETRY_DELAY_MS = Number.parseInt(process.env.MS_JOB_REDIS_RETRY_DELAY_MS || '500', 10);
 const FLUSH_INTERVAL_MS = 5000;
 
+/**
+ * @typedef {Object} Job
+ * @property {string} jobId - 任务唯一标识
+ * @property {string} type - 任务类型
+ * @property {string} status - 任务状态: pending|running|completed|failed|cancelled
+ * @property {Object} metadata - 任务元数据
+ * @property {Object} [result] - 任务结果
+ * @property {Object} [error] - 错误信息
+ * @property {string} createdAt - 创建时间
+ * @property {string} [updatedAt] - 更新时间
+ */
+
+/**
+ * 统一任务管理服务
+ * 负责任务生命周期管理、Redis 降级处理、任务限流
+ */
 class JobService {
   constructor() {
+    /** @type {Array<{method: string, args: any[], timestamp: number}>} */
     this.pendingRedisWrites = [];
+    /** @type {string|null} */
     this.redisDegradedAt = null;
+    /** @type {string|null} */
     this.redisDegradedReason = null;
 
     this.flushTimer = setInterval(() => {
@@ -29,22 +48,46 @@ class JobService {
     this.flushTimer.unref?.();
   }
 
+  /**
+   * 创建唯一任务 ID
+   * @returns {string} 任务 ID
+   */
   createJobId() {
     return `job_${uuidv4().replace(/-/g, '')}`;
   }
 
+  /**
+   * @private
+   * @param {string} jobId
+   * @returns {string}
+   */
   _jobKey(jobId) {
     return `job:${jobId}`;
   }
 
+  /**
+   * @private
+   * @param {string} resourceKey
+   * @returns {string}
+   */
   _lockKey(resourceKey) {
     return `lock:${resourceKey}`;
   }
 
+  /**
+   * @private
+   * @param {string} resourceKey
+   * @returns {string}
+   */
   _rateKey(resourceKey) {
     return `rate:${resourceKey}`;
   }
 
+  /**
+   * 检查是否强制要求 Redis
+   * @private
+   * @returns {boolean}
+   */
   _redisRequiredForJobs() {
     const flag = process.env.MS_JOB_REDIS_REQUIRED;
     if (flag === 'true') {
@@ -56,10 +99,22 @@ class JobService {
     return cacheService.isRedisConfigured();
   }
 
+  /**
+   * @private
+   * @param {number} ms
+   * @returns {Promise<void>}
+   */
   _sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /**
+   * 转换为结构化错误
+   * @private
+   * @param {Error|Object} error
+   * @param {string} fallbackCode
+   * @returns {{code: string, message: string, details: Object}}
+   */
   _toStructuredError(error, fallbackCode = 'INTERNAL_ERROR') {
     if (!error) {
       return { code: fallbackCode, message: '未知错误', details: {} };

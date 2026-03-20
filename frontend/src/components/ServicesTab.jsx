@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, memo } from 'react'
 import { toast } from 'react-hot-toast'
 import { useServiceStore, useWebSocketStore, useLogStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
@@ -423,12 +423,12 @@ function getErrorHint(error) {
   return null
 }
 
-function ServiceButton({ 
-  service, 
-  status, 
-  isLoading, 
+const ServiceButton = memo(function ServiceButton({
+  service,
+  status,
+  isLoading,
   isErrorExpanded,
-  onToggle, 
+  onToggle,
   onRestart,
   onForceStop,
   onToggleError,
@@ -539,29 +539,24 @@ function ServiceButton({
               <p className="error-hint">💡 {getErrorHint(error)}</p>
             )}
             <div className="error-actions">
-              <button 
-                className="btn-retry btn-stop-retry" 
+              <button
+                className="btn-retry btn-stop-retry"
                 onClick={(e) => { e.stopPropagation(); onForceStop(e); }}
               >
                 停止服务
               </button>
-              <button 
-                className="btn-retry" 
+              <button
+                className="btn-retry"
                 onClick={(e) => { e.stopPropagation(); onToggle(); }}
               >
                 重试启动
               </button>
             </div>
           </div>
-          {!isErrorExpanded && (
-            <p className="error-text collapsed" title={error}>
-              {error.length > 40 ? error.slice(0, 40) + '...' : error}
-            </p>
-          )}
         </div>
       )}
     </div>
   )
-}
+})
 
 export default ServicesTab
