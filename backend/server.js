@@ -24,6 +24,7 @@ const jobRoutes = require('./routes/jobs');
 const packageRoutes = require('./routes/package');
 const configRoutes = require('./routes/config');
 const sqlRoutes = require('./routes/sql');
+const chatRoutes = require('./routes/chat');
 const jobService = require('./services/jobService');
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/package', packageRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/sql', sqlRoutes);
+app.use('/api/chat', chatRoutes);
 
 // 静态文件 - 生产环境提供 React 构建产物
 // 区分 Electron 打包环境和普通 Node 环境

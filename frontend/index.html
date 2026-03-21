@@ -9,5 +9,417 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- Live2D 看板娘 -->
+    <script>
+      const live2d_path = 'https://fastly.jsdelivr.net/npm/live2d-widgets@1.0.0/dist/';
+      function loadExternalResource(url, type) {
+        return new Promise((resolve, reject) => {
+          let tag;
+          if (type === 'css') {
+            tag = document.createElement('link');
+            tag.rel = 'stylesheet';
+            tag.href = url;
+          } else if (type === 'js') {
+            tag = document.createElement('script');
+            tag.type = 'module';
+            tag.src = url;
+          }
+          if (tag) {
+            tag.onload = () => resolve(url);
+            tag.onerror = () => reject(url);
+            document.head.appendChild(tag);
+          }
+        });
+      }
+      (async () => {
+        const OriginalImage = window.Image;
+        window.Image = function(...args) {
+          const img = new OriginalImage(...args);
+          img.crossOrigin = "anonymous";
+          return img;
+        };
+        window.Image.prototype = OriginalImage.prototype;
+        await Promise.all([
+          loadExternalResource(live2d_path + 'waifu.css', 'css'),
+          loadExternalResource(live2d_path + 'waifu-tips.js', 'js')
+        ]);
+        initWidget({
+          waifuPath: live2d_path + 'waifu-tips.json',
+          cubism2Path: live2d_path + 'live2d.min.js',
+          cubism5Path: 'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js',
+          tools: ['hitokoto', 'asteroids', 'switch-model', 'switch-texture', 'photo', 'info', 'chat', 'quit'],
+          logLevel: 'warn',
+          drag: true,
+        });
+      })();
+    </script>
+    <!-- 看板娘聊天功能 -->
+    <script>
+      (function() {
+        let chatMode = false;
+        let sessionId = 'waifu-' + Date.now();
+
+        function waitForWaifu() {
+          return new Promise(resolve => {
+            const check = () => {
+              const tips = document.getElementById('waifu-tips');
+              const tool = document.getElementById('waifu-tool');
+              if (tips && tool) return resolve({ tips, tool });
+              setTimeout(check, 200);
+            };
+            check();
+          });
+        }
+
+        function createChatIcon(toolBar) {
+          // live2d-widgets 用内联 SVG 作图标，chat 不在其内置列表中，需手动创建 SVG 图标
+          const existing = toolBar.querySelector('span[data-tool="chat"]');
+          if (existing) {
+            // 如果已存在但内容为空（FA class 无效），填充 SVG
+            if (!existing.querySelector('svg')) {
+              existing.className = '';
+              existing.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M256 32C114.6 32 0 125.1 0 240c0 49.6 21.4 95 57 130.7C44.5 421.1 2.7 466 2.2 466.5c-2.2 2.3-2.8 5.7-1.5 8.7S4.8 480 8 480c66.3 0 116-31.8 140.6-51.4 34.4 12.5 72 19.4 107.4 19.4 141.4 0 256-93.1 256-208S397.4 32 256 32z"/></svg>';
+            }
+            existing.addEventListener('click', toggleChatMode);
+            return;
+          }
+          const icon = document.createElement('span');
+          icon.dataset.tool = 'chat';
+          icon.title = 'AI 聊天';
+          icon.style.cursor = 'pointer';
+          icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M256 32C114.6 32 0 125.1 0 240c0 49.6 21.4 95 57 130.7C44.5 421.1 2.7 466 2.2 466.5c-2.2 2.3-2.8 5.7-1.5 8.7S4.8 480 8 480c66.3 0 116-31.8 140.6-51.4 34.4 12.5 72 19.4 107.4 19.4 141.4 0 256-93.1 256-208S397.4 32 256 32z"/></svg>';
+          // 插入到 quit 图标之前
+          const quitIcon = toolBar.querySelector('span[data-tool="quit"]');
+          if (quitIcon) {
+            toolBar.insertBefore(icon, quitIcon);
+          } else {
+            toolBar.appendChild(icon);
+          }
+          icon.addEventListener('click', toggleChatMode);
+        }
+
+        function toggleChatMode() {
+          chatMode = !chatMode;
+          const tips = document.getElementById('waifu-tips');
+          if (!tips) return;
+
+          if (chatMode) {
+            enterChatMode(tips);
+          } else {
+            exitChatMode(tips);
+          }
+        }
+
+        // 聊天 UI 的 HTML 模板
+        const CHAT_HTML = `
+            <div class="waifu-chat-container">
+              <div class="waifu-chat-messages" id="waifu-chat-messages">
+                <div class="waifu-chat-msg waifu-chat-ai">你好呀~ 我是小梦，有什么可以帮你的吗？(&#9685;&#7447;&#9685;&#10047;)</div>
+              </div>
+              <div class="waifu-chat-input-wrap">
+                <textarea id="waifu-chat-input" placeholder="输入消息... (Enter 发送)" rows="1"></textarea>
+              </div>
+            </div>`;
+
+        // 保存聊天消息历史（供恢复时使用）
+        let chatMessagesHTML = null;
+
+        function enterChatMode(tips) {
+          // 保存原始内容
+          tips._originalHTML = tips.innerHTML;
+          tips._originalStyle = tips.style.cssText;
+
+          tips.classList.add('waifu-chat-mode');
+
+          // 恢复之前的聊天内容 or 使用初始模板
+          tips.innerHTML = chatMessagesHTML || CHAT_HTML;
+
+          // 强制保持可见
+          function forceVisible() {
+            tips.style.opacity = '1';
+            tips.style.visibility = 'visible';
+            tips.style.display = 'block';
+          }
+          forceVisible();
+
+          // 拦截 live2d-widgets 的 showMessage：劫持 innerHTML setter
+          // 当 chatMode 为 true 时，阻止外部代码覆盖 tips 的内容
+          if (!tips._origInnerHTMLDescriptor) {
+            tips._origInnerHTMLDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+          }
+
+          const origDesc = tips._origInnerHTMLDescriptor;
+          Object.defineProperty(tips, 'innerHTML', {
+            configurable: true,
+            get() {
+              return origDesc.get.call(this);
+            },
+            set(val) {
+              // 如果处于聊天模式，且新值不包含聊天容器，说明是 live2d-widgets 在覆盖内容 → 忽略
+              if (chatMode && !val.includes('waifu-chat-container')) {
+                forceVisible();
+                return;
+              }
+              origDesc.set.call(this, val);
+            }
+          });
+
+          // 同样拦截 style 变更
+          if (!tips._chatStyleObserver) {
+            tips._chatStyleObserver = new MutationObserver(() => {
+              if (chatMode) forceVisible();
+            });
+            tips._chatStyleObserver.observe(tips, { attributes: true, attributeFilter: ['style'] });
+          }
+
+          const input = document.getElementById('waifu-chat-input');
+          if (input) {
+            input.focus();
+            input.addEventListener('keydown', handleChatKeydown);
+            input.addEventListener('input', autoResizeInput);
+          }
+
+          // 高亮聊天图标
+          const chatIcon = document.querySelector('#waifu-tool span[data-tool="chat"]');
+          if (chatIcon) chatIcon.classList.add('waifu-chat-active');
+        }
+
+        function exitChatMode(tips) {
+          // 保存当前聊天消息历史，以便下次进入时恢复
+          const messagesEl = document.getElementById('waifu-chat-messages');
+          if (messagesEl) {
+            chatMessagesHTML = tips.innerHTML;
+          }
+
+          tips.classList.remove('waifu-chat-mode');
+
+          // 断开 style observer
+          if (tips._chatStyleObserver) {
+            tips._chatStyleObserver.disconnect();
+            tips._chatStyleObserver = null;
+          }
+
+          // 移除 innerHTML 拦截，恢复原生行为
+          if (tips._origInnerHTMLDescriptor) {
+            delete tips.innerHTML;
+          }
+
+          // 恢复原始状态
+          if (tips._originalHTML !== undefined) {
+            tips.innerHTML = tips._originalHTML;
+          }
+          if (tips._originalStyle !== undefined) {
+            tips.style.cssText = tips._originalStyle;
+          }
+
+          const chatIcon = document.querySelector('#waifu-tool span[data-tool="chat"]');
+          if (chatIcon) chatIcon.classList.remove('waifu-chat-active');
+        }
+
+        function autoResizeInput() {
+          this.style.height = 'auto';
+          this.style.height = Math.min(this.scrollHeight, 60) + 'px';
+        }
+
+        function handleChatKeydown(e) {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            const input = e.target;
+            const message = input.value.trim();
+            if (!message) return;
+            input.value = '';
+            input.style.height = 'auto';
+            sendChatMessage(message);
+          }
+        }
+
+        async function sendChatMessage(message) {
+          const messagesEl = document.getElementById('waifu-chat-messages');
+          if (!messagesEl) return;
+
+          // 显示用户消息
+          appendMessage(messagesEl, message, 'user');
+
+          // 显示加载状态
+          const loadingEl = appendMessage(messagesEl, '思考中...', 'ai loading');
+
+          // 禁用输入
+          const input = document.getElementById('waifu-chat-input');
+          if (input) input.disabled = true;
+
+          try {
+            const res = await fetch('/api/chat/message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message, sessionId })
+            });
+            const data = await res.json();
+
+            // 移除加载状态
+            loadingEl.remove();
+
+            if (data.success) {
+              appendMessage(messagesEl, data.data.reply, 'ai');
+            } else {
+              appendMessage(messagesEl, '出错了: ' + (data.error?.message || '未知错误'), 'ai error');
+            }
+          } catch (err) {
+            loadingEl.remove();
+            appendMessage(messagesEl, '网络错误，请检查后端服务~', 'ai error');
+          } finally {
+            if (input) {
+              input.disabled = false;
+              input.focus();
+            }
+          }
+        }
+
+        function appendMessage(container, text, type) {
+          const div = document.createElement('div');
+          const classes = type.split(' ').map(c => c === 'user' ? 'waifu-chat-user' : c === 'ai' ? 'waifu-chat-ai' : `waifu-chat-${c}`);
+          div.className = 'waifu-chat-msg ' + classes.join(' ');
+          div.textContent = text;
+          container.appendChild(div);
+          container.scrollTop = container.scrollHeight;
+          return div;
+        }
+
+        // 初始化：等待看板娘加载后注入聊天按钮
+        waitForWaifu().then(({ tool }) => {
+          createChatIcon(tool);
+        });
+      })();
+    </script>
+    <!-- 看板娘位置调整：移到右下角，避开左侧 Sidebar -->
+    <style>
+      #waifu {
+        left: auto !important;
+        right: 0 !important;
+      }
+      #waifu-toggle {
+        left: auto !important;
+        right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: -100px;
+        justify-content: flex-start !important;
+      }
+      #waifu-toggle.waifu-toggle-active {
+        margin-right: -50px;
+      }
+      #waifu-toggle.waifu-toggle-active:hover {
+        margin-right: -30px;
+      }
+      #waifu-tool {
+        right: auto !important;
+        left: -10px;
+      }
+      #waifu-tips {
+        background-color: rgba(20, 30, 60, 0.85) !important;
+        border: 1px solid rgba(100, 140, 255, 0.3) !important;
+        color: #e2e8f0 !important;
+        box-shadow: 0 3px 15px 2px rgba(0, 0, 0, 0.3) !important;
+      }
+      #waifu-tips span {
+        color: #60a5fa !important;
+      }
+
+      /* 聊天模式样式 */
+      #waifu-tips.waifu-chat-mode {
+        width: 280px !important;
+        min-height: 200px !important;
+        max-height: 320px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        transition: all 0.3s ease !important;
+      }
+      .waifu-chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 200px;
+        max-height: 320px;
+      }
+      .waifu-chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        max-height: 250px;
+      }
+      .waifu-chat-messages::-webkit-scrollbar {
+        width: 4px;
+      }
+      .waifu-chat-messages::-webkit-scrollbar-thumb {
+        background: rgba(100, 140, 255, 0.3);
+        border-radius: 2px;
+      }
+      .waifu-chat-msg {
+        padding: 6px 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 85%;
+        word-break: break-word;
+        animation: waifu-chat-fade-in 0.25s ease;
+      }
+      @keyframes waifu-chat-fade-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .waifu-chat-ai {
+        align-self: flex-start;
+        background: rgba(60, 80, 140, 0.6);
+        color: #e2e8f0;
+        border-bottom-left-radius: 3px;
+      }
+      .waifu-chat-user {
+        align-self: flex-end;
+        background: rgba(96, 165, 250, 0.3);
+        color: #e2e8f0;
+        border-bottom-right-radius: 3px;
+      }
+      .waifu-chat-loading {
+        opacity: 0.6;
+        font-style: italic;
+      }
+      .waifu-chat-error {
+        color: #fca5a5 !important;
+      }
+      .waifu-chat-input-wrap {
+        padding: 8px 10px;
+        border-top: 1px solid rgba(100, 140, 255, 0.2);
+      }
+      #waifu-chat-input {
+        width: 100%;
+        background: rgba(30, 40, 70, 0.8);
+        border: 1px solid rgba(100, 140, 255, 0.3);
+        border-radius: 8px;
+        color: #e2e8f0;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-family: inherit;
+        resize: none;
+        outline: none;
+        line-height: 1.4;
+        transition: border-color 0.2s;
+      }
+      #waifu-chat-input:focus {
+        border-color: rgba(96, 165, 250, 0.6);
+      }
+      #waifu-chat-input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #waifu-chat-input::placeholder {
+        color: rgba(226, 232, 240, 0.4);
+      }
+      /* 聊天图标激活状态 */
+      #waifu-tool span.waifu-chat-active {
+        color: #60a5fa !important;
+      }
+    </style>
   </body>
 </html>

@@ -150,6 +150,19 @@ function normalizePackageConfig(rawPackage = {}) {
   return normalized;
 }
 
+function normalizeWaifuConfig(rawConfig = {}) {
+  const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
+    ? rawConfig
+    : {};
+
+  return {
+    apiKey: normalizeString(config.apiKey, ''),
+    baseUrl: normalizeString(config.baseUrl, ''),
+    model: normalizeString(config.model, 'qwen3.5-plus'),
+    systemPrompt: normalizeString(config.systemPrompt, '')
+  };
+}
+
 function normalizeClaudeCodeConfig(rawConfig = {}) {
   const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
     ? rawConfig
@@ -211,6 +224,7 @@ function normalizeEditableConfig(rawConfig = {}) {
       metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE || '/opt/metersphere/conf/metersphere.properties'),
       redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON || '/opt/metersphere/conf/redisson.yml')
     },
+    waifu: normalizeWaifuConfig(config.waifu || {}),
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
@@ -299,6 +313,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     npmPath: editable.npmPath,
     maxLogLines: editable.maxLogLines,
     properties: editable.properties,
+    waifu: editable.waifu,
     claudeCode: editable.claudeCode,
     package: editable.package,
     services: editable.services,
@@ -347,6 +362,7 @@ module.exports = {
   EXTRA_FRONTEND_MODULES,
   loadConfigFromFile,
   normalizeEditableConfig,
+  normalizeWaifuConfig,
   normalizeClaudeCodeConfig,
   normalizePackageConfig,
   normalizeServiceDefinition,
