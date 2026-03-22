@@ -578,9 +578,16 @@
     {
       "name": "藿藿",
       "paths": [
-        "/live2d/huohuo/▐╜▐╜.model3.json"
+        "/live2d/huohuo/藿藿.model3.json"
       ],
       "message": "我是藿藿，尾巴先生在这里~"
+    },
+    {
+      "name": "妮可",
+      "paths": [
+        "/live2d/nicole/Nicole.model3.json"
+      ],
+      "message": "我是妮可，狡兔屋的老板~"
     },
     {
       "name": "知更鸟",

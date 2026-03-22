@@ -374,59 +374,14 @@
             this._startGazeTracking();
           },
 
-          // ========== 视线跟随 ==========
+          // ========== 视线跟随（已禁用）==========
           _startGazeTracking() {
-            let mouseX = window.innerWidth / 2;
-            let mouseY = window.innerHeight / 2;
-            // 当前平滑值
-            let currentAngleX = 0, currentAngleY = 0;
-            let currentEyeX = 0, currentEyeY = 0;
-            let currentBodyX = 0;
             const self = this;
-
-            document.addEventListener('mousemove', (e) => {
-              mouseX = e.clientX;
-              mouseY = e.clientY;
-            });
-
             const animate = () => {
-              if (!self.gazeEnabled || !self.coreModel) {
+              if (!self.coreModel) {
                 requestAnimationFrame(animate);
                 return;
               }
-
-              const waifu = document.getElementById('waifu');
-              if (!waifu) { requestAnimationFrame(animate); return; }
-
-              const rect = waifu.getBoundingClientRect();
-              const centerX = rect.left + rect.width / 2;
-              const centerY = rect.top + rect.height * 0.35; // 脸部大致位置
-
-              // 计算鼠标相对于看板娘脸部的归一化偏移 (-1 ~ 1)
-              const dx = (mouseX - centerX) / (window.innerWidth * 0.5);
-              const dy = (mouseY - centerY) / (window.innerHeight * 0.5);
-
-              // 目标参数值
-              const targetAngleX = Math.max(-30, Math.min(30, dx * 25));
-              const targetAngleY = Math.max(-30, Math.min(30, dy * 15));
-              const targetEyeX = Math.max(-1, Math.min(1, dx * 0.9));
-              const targetEyeY = Math.max(-1, Math.min(1, dy * 0.6));
-              const targetBodyX = Math.max(-10, Math.min(10, dx * 6));
-
-              // lerp 平滑过渡 (越小越平滑)
-              const lerp = 0.08;
-              currentAngleX += (targetAngleX - currentAngleX) * lerp;
-              currentAngleY += (targetAngleY - currentAngleY) * lerp;
-              currentEyeX += (targetEyeX - currentEyeX) * lerp;
-              currentEyeY += (targetEyeY - currentEyeY) * lerp;
-              currentBodyX += (targetBodyX - currentBodyX) * lerp;
-
-              // 设置覆盖（不覆盖说话参数）
-              self.setParam('ParamAngleX', currentAngleX);
-              self.setParam('ParamAngleY', currentAngleY);
-              self.setParam('ParamEyeBallX', currentEyeX);
-              self.setParam('ParamEyeBallY', currentEyeY);
-              self.setParam('ParamBodyAngleX', currentBodyX);
 
               // 情绪表情 lerp 过渡
               if (self.emotionTarget) {
@@ -531,6 +486,7 @@
 
         // 暴露到全局供聊天脚本调用
         window.__waifuModelCtrl = modelCtrl;
+        window.__fuxuanActions = fuxuanActions;
 
         // ========== 拖拽管理器 ==========
         const dragManager = {
@@ -628,6 +584,62 @@
           }
         };
 
+        // ========== 符玄专属动作 ==========
+        const fuxuanActions = {
+          // 占卜动作：双手合十
+          divination() {
+            // 临时禁用视线跟随
+            modelCtrl.gazeEnabled = false;
+
+            modelCtrl.setParam('ParamAngleY', -15);
+            modelCtrl.setParam('ParamBodyAngleY', -8);
+            modelCtrl.setParam('ParamArmRA', 8);
+            modelCtrl.setParam('ParamArmLA', -8);
+            modelCtrl.setParam('ParamEyeLOpen', 0.3);
+            modelCtrl.setParam('ParamEyeROpen', 0.3);
+
+            setTimeout(() => {
+              Object.keys(modelCtrl.paramOverrides).forEach(k => {
+                if (k.includes('Arm') || k.includes('Angle') || k.includes('Eye')) {
+                  delete modelCtrl.paramOverrides[k];
+                }
+              });
+              // 恢复视线跟随
+              modelCtrl.gazeEnabled = true;
+            }, 3000);
+          },
+
+          // 预言姿态：仰望天空
+          prophecy() {
+            modelCtrl.setParam('ParamAngleY', 25);
+            modelCtrl.setParam('ParamAngleX', 10);
+            modelCtrl.setParam('ParamEyeBallY', 0.8);
+            modelCtrl.setParam('ParamMouthForm', 0.5);
+            setTimeout(() => {
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamAngleY')];
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamAngleX')];
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamEyeBallY')];
+            }, 4000);
+          },
+
+          // 神秘微笑
+          mysteriousSmile() {
+            modelCtrl.setParam('ParamEyeLSmile', 0.8);
+            modelCtrl.setParam('ParamEyeRSmile', 0.8);
+            modelCtrl.setParam('ParamMouthForm', 1);
+            modelCtrl.setParam('ParamAngleX', -8);
+            setTimeout(() => {
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamEyeLSmile')];
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamEyeRSmile')];
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamMouthForm')];
+              delete modelCtrl.paramOverrides[modelCtrl.getParamName('ParamAngleX')];
+            }, 2500);
+          }
+        };
+
+        // 暴露到全局供测试
+        window.__fuxuanActions = fuxuanActions;
+
         // ========== 初始化 ==========
         function waitForCanvas() {
           const check = () => {
@@ -635,6 +647,14 @@
             if (canvas) {
               modelCtrl.init();
               dragManager.init(canvas);
+
+              // 符玄加载后3秒执行占卜动作
+              setTimeout(() => {
+                if (typeof showMessage === 'function') {
+                  showMessage('让我为你占卜一卦...', 3000);
+                }
+                fuxuanActions.divination();
+              }, 3000);
             } else {
               setTimeout(check, 300);
             }
@@ -651,6 +671,12 @@
       #waifu {
         left: auto;
         right: 0;
+        width: 400px !important;
+        height: 500px !important;
+      }
+      #waifu #live2d {
+        width: 400px !important;
+        height: 500px !important;
       }
       #waifu-toggle {
         left: auto !important;
