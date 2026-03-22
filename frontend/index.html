@@ -53,6 +53,45 @@
         });
       })();
     </script>
+    <!-- 动态添加 Rice 模型 -->
+    <script>
+      (function() {
+        function waitForLoadlive2d() {
+          return new Promise(resolve => {
+            const check = () => {
+              if (window.loadlive2d) return resolve();
+              setTimeout(check, 200);
+            };
+            check();
+          });
+        }
+
+        waitForLoadlive2d().then(() => {
+          // 劫持 loadlive2d 函数，添加 Rice 模型到模型列表
+          const origLoadlive2d = window.loadlive2d;
+          window.loadlive2d = function(id, modelPath) {
+            // 调用原始函数
+            const result = origLoadlive2d.call(this, id, modelPath);
+
+            // 注入 Rice 模型到切换列表（仅执行一次）
+            if (!window.__riceModelInjected) {
+              window.__riceModelInjected = true;
+              setTimeout(() => {
+                if (window.live2d_settings && window.live2d_settings.model) {
+                  window.live2d_settings.model.push({
+                    name: 'Rice',
+                    message: '我是 Rice，腿部动作更丰富哦~',
+                    path: 'https://fastly.jsdelivr.net/gh/evrstr/live2d-widget-models@master/packages/live2d-widget-model-rice/assets/rice.model.json'
+                  });
+                }
+              }, 1000);
+            }
+
+            return result;
+          };
+        });
+      })();
+    </script>
     <!-- 看板娘聊天功能 -->
     <script>
       (function() {
@@ -504,6 +543,7 @@
         const roamManager = {
           state: 'idle',
           idleTimer: null,
+          restTimer: null,
           position: { x: 0 },
           target: { x: 0 },
           direction: 1,
@@ -538,11 +578,9 @@
           },
 
           pickNewTarget() {
-            const waifu = document.getElementById('waifu');
-            if (!waifu) return;
             const minX = 100;
             const maxX = window.innerWidth - 200;
-            this.target.x = minX + Math.random() * (maxX - minX) - waifu.getBoundingClientRect().left;
+            this.target.x = minX + Math.random() * (maxX - minX);
           },
 
           animateWalk() {
@@ -550,11 +588,18 @@
             const waifu = document.getElementById('waifu');
             if (!waifu) return;
 
-            const dx = this.target.x - this.position.x;
+            const currentX = waifu.getBoundingClientRect().left;
+            const dx = this.target.x - currentX;
+
             if (Math.abs(dx) < 5) {
-              setTimeout(() => {
-                if (this.state === 'roaming') this.pickNewTarget();
-              }, 2000 + Math.random() * 3000);
+              if (!this.restTimer) {
+                this.restTimer = setTimeout(() => {
+                  this.restTimer = null;
+                  if (this.state === 'roaming') {
+                    this.pickNewTarget();
+                  }
+                }, 2000 + Math.random() * 3000);
+              }
               this.animFrame = requestAnimationFrame(() => this.animateWalk());
               return;
             }
@@ -566,7 +611,7 @@
             }
 
             this.position.x += Math.sign(dx) * this.SPEED;
-            waifu.style.left = `calc(var(--waifu-home-left, auto) + ${this.position.x}px)`;
+            waifu.style.left = this.position.x + 'px';
 
             const walkPhase = Date.now() * 0.008;
             waifu.style.marginBottom = Math.sin(walkPhase * Math.PI * 4) * 3 + 'px';
@@ -580,11 +625,14 @@
             const waifu = document.getElementById('waifu');
             if (!waifu) return;
             if (this.animFrame) cancelAnimationFrame(this.animFrame);
+
+            const homeLeft = parseInt(getComputedStyle(waifu).right) || 0;
+            this.position.x = window.innerWidth - homeLeft - waifu.offsetWidth;
+
             waifu.style.transition = 'left 0.8s ease-in-out';
-            waifu.style.left = '';
+            waifu.style.left = this.position.x + 'px';
             waifu.style.transform = '';
             waifu.style.marginBottom = '';
-            this.position.x = 0;
             this.direction = 1;
             delete modelCtrl.paramOverrides['ParamBodyAngleX'];
             setTimeout(() => {
