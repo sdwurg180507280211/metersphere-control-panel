@@ -143,7 +143,6 @@
           forceVisible();
 
           // 拦截 live2d-widgets 的 showMessage：劫持 innerHTML setter
-          // 当 chatMode 为 true 时，阻止外部代码覆盖 tips 的内容
           if (!tips._origInnerHTMLDescriptor) {
             tips._origInnerHTMLDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
           }
@@ -155,7 +154,6 @@
               return origDesc.get.call(this);
             },
             set(val) {
-              // 如果处于聊天模式，且新值不包含聊天容器，说明是 live2d-widgets 在覆盖内容 → 忽略
               if (chatMode && !val.includes('waifu-chat-container')) {
                 forceVisible();
                 return;
@@ -164,7 +162,7 @@
             }
           });
 
-          // 同样拦截 style 变更
+          // 拦截 style 变更
           if (!tips._chatStyleObserver) {
             tips._chatStyleObserver = new MutationObserver(() => {
               if (chatMode) forceVisible();
@@ -179,13 +177,11 @@
             input.addEventListener('input', autoResizeInput);
           }
 
-          // 高亮聊天图标
           const chatIcon = document.querySelector('#waifu-tool span[data-tool="chat"]');
           if (chatIcon) chatIcon.classList.add('waifu-chat-active');
         }
 
         function exitChatMode(tips) {
-          // 保存当前聊天消息历史，以便下次进入时恢复
           const messagesEl = document.getElementById('waifu-chat-messages');
           if (messagesEl) {
             chatMessagesHTML = tips.innerHTML;
@@ -193,18 +189,15 @@
 
           tips.classList.remove('waifu-chat-mode');
 
-          // 断开 style observer
           if (tips._chatStyleObserver) {
             tips._chatStyleObserver.disconnect();
             tips._chatStyleObserver = null;
           }
 
-          // 移除 innerHTML 拦截，恢复原生行为
           if (tips._origInnerHTMLDescriptor) {
             delete tips.innerHTML;
           }
 
-          // 恢复原始状态
           if (tips._originalHTML !== undefined) {
             tips.innerHTML = tips._originalHTML;
           }
@@ -237,15 +230,16 @@
           const messagesEl = document.getElementById('waifu-chat-messages');
           if (!messagesEl) return;
 
-          // 显示用户消息
           appendMessage(messagesEl, message, 'user');
-
-          // 显示加载状态
           const loadingEl = appendMessage(messagesEl, '思考中...', 'ai loading');
 
-          // 禁用输入
           const input = document.getElementById('waifu-chat-input');
           if (input) input.disabled = true;
+
+          // 聊天时触发说话动画
+          if (window.__waifuModelCtrl) {
+            window.__waifuModelCtrl.startSpeaking();
+          }
 
           try {
             const res = await fetch('/api/chat/message', {
@@ -254,12 +248,14 @@
               body: JSON.stringify({ message, sessionId })
             });
             const data = await res.json();
-
-            // 移除加载状态
             loadingEl.remove();
 
             if (data.success) {
               appendMessage(messagesEl, data.data.reply, 'ai');
+              // 收到回复时播放说话动画
+              if (window.__waifuModelCtrl) {
+                window.__waifuModelCtrl.speakForDuration(data.data.reply.length * 80);
+              }
             } else {
               appendMessage(messagesEl, '出错了: ' + (data.error?.message || '未知错误'), 'ai error');
             }
@@ -267,6 +263,9 @@
             loadingEl.remove();
             appendMessage(messagesEl, '网络错误，请检查后端服务~', 'ai error');
           } finally {
+            if (window.__waifuModelCtrl) {
+              window.__waifuModelCtrl.stopSpeaking();
+            }
             if (input) {
               input.disabled = false;
               input.focus();
@@ -284,10 +283,491 @@
           return div;
         }
 
-        // 初始化：等待看板娘加载后注入聊天按钮
         waitForWaifu().then(({ tool }) => {
           createChatIcon(tool);
         });
+      })();
+    </script>
+    <!-- 看板娘互动增强：视线跟随 + 点击弹跳 + 说话动画 -->
+    <script>
+      (function() {
+        // ========== 情绪表情预设 ==========
+        const EMOTIONS = {
+          happy: { ParamEyeLSmile: 1, ParamEyeRSmile: 1, ParamMouthForm: 1, ParamMouthOpenY: 0.3, ParamCheek: 0.5 },
+          surprise: { ParamEyeLOpen: 1.2, ParamEyeROpen: 1.2, ParamBrowLY: 1, ParamBrowRY: 1, ParamMouthOpenY: 0.8, ParamMouthForm: 0 },
+          shy: { ParamAngleX: -10, ParamAngleY: -5, ParamCheek: 1, ParamEyeLOpen: 0.6, ParamEyeROpen: 0.6, ParamEyeBallX: -0.5, ParamEyeBallY: -0.3 },
+          worried: { ParamBrowLY: -0.5, ParamBrowRY: -0.5, ParamMouthForm: -1, ParamEyeLOpen: 0.8, ParamEyeROpen: 0.8 },
+          angry: { ParamBrowLAngle: -1, ParamBrowRAngle: -1, ParamBrowLY: -1, ParamBrowRY: -1, ParamMouthForm: -2 }
+        };
+
+        // ========== 模型控制器 ==========
+        const modelCtrl = {
+          coreModel: null,
+          paramOverrides: {},
+          gazeEnabled: true,
+          speaking: false,
+          speakTimer: null,
+          bouncing: false,
+          emotionTarget: null,
+          emotionEndTime: 0,
+          emotionCurrent: {},
+
+          // 捕获 CubismCore 模型实例
+          init() {
+            this._waitForModel();
+          },
+
+          _waitForModel() {
+            const check = () => {
+              if (!window.Live2DCubismCore || !window.Live2DCubismCore.Model) {
+                return setTimeout(check, 500);
+              }
+              // Patch update 方法捕获模型实例
+              const origUpdate = Live2DCubismCore.Model.prototype.update;
+              const self = this;
+              Live2DCubismCore.Model.prototype.update = function() {
+                if (!self.coreModel) {
+                  self.coreModel = this;
+                  self._installOverrideHook();
+                }
+                return origUpdate.call(this);
+              };
+              // 一帧后恢复原始 update（仅用于捕获）
+              requestAnimationFrame(() => {
+                setTimeout(() => {
+                  Live2DCubismCore.Model.prototype.update = origUpdate;
+                }, 100);
+              });
+            };
+            check();
+          },
+
+          // 在模型 update 后注入参数覆盖
+          _installOverrideHook() {
+            const model = this.coreModel;
+            const params = model.parameters;
+            const origUpdate = model.update.bind(model);
+            const self = this;
+
+            model.update = function() {
+              const result = origUpdate();
+              // 应用参数覆盖
+              for (const [paramId, value] of Object.entries(self.paramOverrides)) {
+                const idx = params.ids.indexOf(paramId);
+                if (idx >= 0) params.values[idx] = value;
+              }
+              return result;
+            };
+
+            // 启动视线跟随
+            this._startGazeTracking();
+          },
+
+          // ========== 视线跟随 ==========
+          _startGazeTracking() {
+            let mouseX = window.innerWidth / 2;
+            let mouseY = window.innerHeight / 2;
+            // 当前平滑值
+            let currentAngleX = 0, currentAngleY = 0;
+            let currentEyeX = 0, currentEyeY = 0;
+            let currentBodyX = 0;
+            const self = this;
+
+            document.addEventListener('mousemove', (e) => {
+              mouseX = e.clientX;
+              mouseY = e.clientY;
+            });
+
+            const animate = () => {
+              if (!self.gazeEnabled || !self.coreModel) {
+                requestAnimationFrame(animate);
+                return;
+              }
+
+              const waifu = document.getElementById('waifu');
+              if (!waifu) { requestAnimationFrame(animate); return; }
+
+              const rect = waifu.getBoundingClientRect();
+              const centerX = rect.left + rect.width / 2;
+              const centerY = rect.top + rect.height * 0.35; // 脸部大致位置
+
+              // 计算鼠标相对于看板娘脸部的归一化偏移 (-1 ~ 1)
+              const dx = (mouseX - centerX) / (window.innerWidth * 0.5);
+              const dy = (mouseY - centerY) / (window.innerHeight * 0.5);
+
+              // 目标参数值
+              const targetAngleX = Math.max(-30, Math.min(30, dx * 25));
+              const targetAngleY = Math.max(-30, Math.min(30, dy * 15));
+              const targetEyeX = Math.max(-1, Math.min(1, dx * 0.9));
+              const targetEyeY = Math.max(-1, Math.min(1, dy * 0.6));
+              const targetBodyX = Math.max(-10, Math.min(10, dx * 6));
+
+              // lerp 平滑过渡 (越小越平滑)
+              const lerp = 0.08;
+              currentAngleX += (targetAngleX - currentAngleX) * lerp;
+              currentAngleY += (targetAngleY - currentAngleY) * lerp;
+              currentEyeX += (targetEyeX - currentEyeX) * lerp;
+              currentEyeY += (targetEyeY - currentEyeY) * lerp;
+              currentBodyX += (targetBodyX - currentBodyX) * lerp;
+
+              // 设置覆盖（不覆盖说话参数）
+              self.paramOverrides['ParamAngleX'] = currentAngleX;
+              self.paramOverrides['ParamAngleY'] = currentAngleY;
+              self.paramOverrides['ParamEyeBallX'] = currentEyeX;
+              self.paramOverrides['ParamEyeBallY'] = currentEyeY;
+              self.paramOverrides['ParamBodyAngleX'] = currentBodyX;
+
+              // 情绪表情 lerp 过渡
+              if (self.emotionTarget) {
+                const now = Date.now();
+                const isActive = now < self.emotionEndTime;
+                for (const [param, targetVal] of Object.entries(self.emotionTarget)) {
+                  if (!self.emotionCurrent[param]) self.emotionCurrent[param] = 0;
+                  const target = isActive ? targetVal : 0;
+                  self.emotionCurrent[param] += (target - self.emotionCurrent[param]) * 0.1;
+                  self.paramOverrides[param] = self.emotionCurrent[param];
+                }
+                if (!isActive && Math.abs(self.emotionCurrent[Object.keys(self.emotionTarget)[0]]) < 0.01) {
+                  self.emotionTarget = null;
+                  self.emotionCurrent = {};
+                }
+              }
+
+              requestAnimationFrame(animate);
+            };
+            animate();
+          },
+
+          // ========== 点击弹跳 ==========
+          triggerBounce() {
+            if (this.bouncing) return;
+            this.bouncing = true;
+            const waifu = document.getElementById('waifu');
+            if (!waifu) { this.bouncing = false; return; }
+            waifu.classList.add('waifu-bounce');
+            // 弹跳时配合表情
+            this.paramOverrides['ParamEyeLSmile'] = 1;
+            this.paramOverrides['ParamEyeRSmile'] = 1;
+            this.paramOverrides['ParamMouthForm'] = 1;
+            setTimeout(() => {
+              waifu.classList.remove('waifu-bounce');
+              delete this.paramOverrides['ParamEyeLSmile'];
+              delete this.paramOverrides['ParamEyeRSmile'];
+              delete this.paramOverrides['ParamMouthForm'];
+              this.bouncing = false;
+            }, 600);
+          },
+
+          // ========== 说话动画 ==========
+          startSpeaking() {
+            this.speaking = true;
+            this._animateMouth();
+          },
+
+          stopSpeaking() {
+            this.speaking = false;
+            if (this.speakTimer) {
+              cancelAnimationFrame(this.speakTimer);
+              this.speakTimer = null;
+            }
+            delete this.paramOverrides['ParamMouthOpenY'];
+          },
+
+          // 按回复文字长度说话
+          speakForDuration(ms) {
+            this.startSpeaking();
+            setTimeout(() => this.stopSpeaking(), Math.min(ms, 5000));
+          },
+
+          _animateMouth() {
+            if (!this.speaking) return;
+            const t = Date.now() * 0.015;
+            // 随机节奏的嘴巴开合，模拟说话
+            const openness = Math.abs(Math.sin(t)) * (0.3 + Math.random() * 0.4);
+            this.paramOverrides['ParamMouthOpenY'] = openness;
+            this.speakTimer = requestAnimationFrame(() => this._animateMouth());
+          },
+
+          // ========== 情绪表情 ==========
+          showEmotion(name, durationMs = 3000) {
+            if (!EMOTIONS[name]) return;
+            this.emotionTarget = EMOTIONS[name];
+            this.emotionEndTime = Date.now() + durationMs;
+            this.emotionCurrent = {};
+          }
+        };
+
+        // 暴露到全局供聊天脚本调用
+        window.__waifuModelCtrl = modelCtrl;
+
+        // ========== 自由漫游管理器 ==========
+        const roamManager = {
+          state: 'idle',
+          idleTimer: null,
+          position: { x: 0 },
+          target: { x: 0 },
+          direction: 1,
+          animFrame: null,
+          IDLE_TIMEOUT: 30000,
+          SPEED: 2,
+
+          start() {
+            this.resetIdleTimer();
+            ['mousemove', 'mousedown', 'keydown', 'scroll'].forEach(evt =>
+              document.addEventListener(evt, () => this.onUserActivity(), { passive: true })
+            );
+          },
+
+          resetIdleTimer() {
+            clearTimeout(this.idleTimer);
+            this.idleTimer = setTimeout(() => this.enterRoaming(), this.IDLE_TIMEOUT);
+          },
+
+          onUserActivity() {
+            if (this.state === 'roaming') this.returnHome();
+            this.resetIdleTimer();
+          },
+
+          enterRoaming() {
+            if (dndToggle.enabled) return;
+            const chatMode = document.querySelector('#waifu-tips.waifu-chat-mode');
+            if (chatMode) return;
+            this.state = 'roaming';
+            this.pickNewTarget();
+            this.animateWalk();
+          },
+
+          pickNewTarget() {
+            const waifu = document.getElementById('waifu');
+            if (!waifu) return;
+            const minX = 100;
+            const maxX = window.innerWidth - 200;
+            this.target.x = minX + Math.random() * (maxX - minX) - waifu.getBoundingClientRect().left;
+          },
+
+          animateWalk() {
+            if (this.state !== 'roaming') return;
+            const waifu = document.getElementById('waifu');
+            if (!waifu) return;
+
+            const dx = this.target.x - this.position.x;
+            if (Math.abs(dx) < 5) {
+              setTimeout(() => {
+                if (this.state === 'roaming') this.pickNewTarget();
+              }, 2000 + Math.random() * 3000);
+              this.animFrame = requestAnimationFrame(() => this.animateWalk());
+              return;
+            }
+
+            const newDir = dx > 0 ? 1 : -1;
+            if (newDir !== this.direction) {
+              this.direction = newDir;
+              waifu.style.transform = newDir < 0 ? 'scaleX(-1)' : '';
+            }
+
+            this.position.x += Math.sign(dx) * this.SPEED;
+            waifu.style.left = `calc(var(--waifu-home-left, auto) + ${this.position.x}px)`;
+
+            const walkPhase = Date.now() * 0.008;
+            waifu.style.marginBottom = Math.sin(walkPhase * Math.PI * 4) * 3 + 'px';
+            modelCtrl.paramOverrides['ParamBodyAngleX'] = Math.sin(walkPhase * Math.PI * 4) * 5;
+
+            this.animFrame = requestAnimationFrame(() => this.animateWalk());
+          },
+
+          returnHome() {
+            this.state = 'returning';
+            const waifu = document.getElementById('waifu');
+            if (!waifu) return;
+            if (this.animFrame) cancelAnimationFrame(this.animFrame);
+            waifu.style.transition = 'left 0.8s ease-in-out';
+            waifu.style.left = '';
+            waifu.style.transform = '';
+            waifu.style.marginBottom = '';
+            this.position.x = 0;
+            this.direction = 1;
+            delete modelCtrl.paramOverrides['ParamBodyAngleX'];
+            setTimeout(() => {
+              waifu.style.transition = '';
+              this.state = 'idle';
+              this.resetIdleTimer();
+            }, 800);
+          }
+        };
+
+        // ========== 拖拽管理器 ==========
+        const dragManager = {
+          dragging: false,
+          longPressTimer: null,
+          startPos: { x: 0, y: 0 },
+          LONG_PRESS_MS: 150,
+
+          init(canvas) {
+            canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+            document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+            document.addEventListener('mouseup', () => this.onMouseUp());
+            canvas.addEventListener('click', (e) => {
+              if (!this.dragging && !this.longPressTimer) modelCtrl.triggerBounce();
+            });
+          },
+
+          onMouseDown(e) {
+            this.startPos = { x: e.clientX, y: e.clientY };
+            this.longPressTimer = setTimeout(() => this.enterDrag(), this.LONG_PRESS_MS);
+          },
+
+          enterDrag() {
+            this.dragging = true;
+            if (roamManager.state === 'roaming') roamManager.returnHome();
+            modelCtrl.gazeEnabled = false;
+            modelCtrl.showEmotion('surprise', 2000);
+            const waifu = document.getElementById('waifu');
+            if (waifu) {
+              waifu.style.cursor = 'grabbing';
+              waifu.style.transition = 'none';
+            }
+          },
+
+          onMouseMove(e) {
+            if (!this.dragging) return;
+            const dx = e.clientX - this.startPos.x;
+            const dy = e.clientY - this.startPos.y;
+            const waifu = document.getElementById('waifu');
+            if (waifu) waifu.style.transform = `translate(${dx}px, ${dy}px)`;
+          },
+
+          onMouseUp() {
+            clearTimeout(this.longPressTimer);
+            if (!this.dragging) return;
+            this.dragging = false;
+            const waifu = document.getElementById('waifu');
+            if (waifu) {
+              waifu.style.cursor = '';
+            }
+            modelCtrl.gazeEnabled = true;
+          }
+        };
+
+        // ========== 勿扰模式 ==========
+        const dndToggle = {
+          enabled: false,
+          STORAGE_KEY: 'waifu-dnd-mode',
+
+          init(toolBar) {
+            this.enabled = localStorage.getItem(this.STORAGE_KEY) === 'true';
+            this.createIcon(toolBar);
+            if (this.enabled) this.apply();
+          },
+
+          toggle() {
+            this.enabled = !this.enabled;
+            localStorage.setItem(this.STORAGE_KEY, this.enabled);
+            this.apply();
+          },
+
+          apply() {
+            const icon = document.querySelector('#waifu-tool span[data-tool="dnd"]');
+            if (this.enabled) {
+              if (icon) icon.classList.add('waifu-dnd-active');
+              if (roamManager.state === 'roaming') roamManager.returnHome();
+            } else {
+              if (icon) icon.classList.remove('waifu-dnd-active');
+              roamManager.resetIdleTimer();
+            }
+          },
+
+          createIcon(toolBar) {
+            const icon = document.createElement('span');
+            icon.dataset.tool = 'dnd';
+            icon.title = '勿扰模式';
+            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M283.2 35.6C191.5 43.4 118.4 120.5 118.4 214.4c0 100.3 81.3 181.6 181.6 181.6 93.9 0 171-73.1 178.8-164.8-18.4 27.9-50.1 46.4-86.4 46.4-57.4 0-104-46.6-104-104 0-36.3 18.5-68 46.4-86.4-.8-.1-34.2-7.2-51.6-51.6z"/></svg>';
+            icon.addEventListener('click', () => this.toggle());
+            const quitIcon = toolBar.querySelector('span[data-tool="quit"]');
+            if (quitIcon) toolBar.insertBefore(icon, quitIcon);
+            else toolBar.appendChild(icon);
+            if (this.enabled) icon.classList.add('waifu-dnd-active');
+          }
+        };
+
+        // ========== 智能出现模式 ==========
+        const smartAppearance = {
+          cooldowns: {},
+          COOLDOWN_MS: 30000,
+
+          init() {
+            this.trackIdleTime();
+          },
+
+          canTrigger(eventType) {
+            if (dndToggle.enabled) return false;
+            if (document.querySelector('#waifu-tips.waifu-chat-mode')) return false;
+            const last = this.cooldowns[eventType] || 0;
+            return Date.now() - last > this.COOLDOWN_MS;
+          },
+
+          trigger(eventType, message, emotion, durationMs = 5000) {
+            if (!this.canTrigger(eventType)) return;
+            this.cooldowns[eventType] = Date.now();
+            if (typeof showMessage === 'function') showMessage(message, durationMs);
+            if (emotion) modelCtrl.showEmotion(emotion, durationMs);
+          },
+
+          trackIdleTime() {
+            let idleTimer;
+            const messages = [
+              '主人，还在吗？(◕ᴗ◕✿)',
+              '要不要休息一下？眼睛会累的哦~',
+              '好安静呀...主人在思考什么呢？',
+              '无聊的话可以跟我聊天哦！点击 💬 按钮~'
+            ];
+            const resetTimer = () => {
+              clearTimeout(idleTimer);
+              idleTimer = setTimeout(() => {
+                const msg = messages[Math.floor(Math.random() * messages.length)];
+                this.trigger('idle', msg, 'shy');
+                resetTimer();
+              }, 60000);
+            };
+            document.addEventListener('mousemove', resetTimer, { passive: true });
+            document.addEventListener('keydown', resetTimer, { passive: true });
+            resetTimer();
+          }
+        };
+
+        // ========== 初始化 ==========
+        function waitForCanvas() {
+          const check = () => {
+            const canvas = document.getElementById('live2d');
+            if (canvas) {
+              modelCtrl.init();
+              dragManager.init(canvas);
+            } else {
+              setTimeout(check, 300);
+            }
+          };
+          check();
+        }
+
+        function waitForWaifuTools() {
+          const check = () => {
+            const tool = document.getElementById('waifu-tool');
+            if (tool) {
+              dndToggle.init(tool);
+            } else {
+              setTimeout(check, 300);
+            }
+          };
+          check();
+        }
+
+        waitForCanvas();
+        waitForWaifuTools();
+        roamManager.start();
+        smartAppearance.init();
+
+        // 暴露管理器到全局（用于测试）
+        window.__waifuRoamManager = roamManager;
+        window.__waifuDndToggle = dndToggle;
       })();
     </script>
     <!-- 看板娘位置调整：移到右下角，避开左侧 Sidebar -->
@@ -321,6 +801,17 @@
       }
       #waifu-tips span {
         color: #60a5fa !important;
+      }
+
+      /* 点击弹跳动画 */
+      @keyframes waifu-bounce-anim {
+        0%, 100% { transform: translateY(0) scale(1); }
+        30% { transform: translateY(-15px) scale(1.03); }
+        50% { transform: translateY(-5px) scale(0.98); }
+        70% { transform: translateY(-8px) scale(1.01); }
+      }
+      #waifu.waifu-bounce {
+        animation: waifu-bounce-anim 0.6s ease !important;
       }
 
       /* 聊天模式样式 */
@@ -419,6 +910,24 @@
       /* 聊天图标激活状态 */
       #waifu-tool span.waifu-chat-active {
         color: #60a5fa !important;
+      }
+
+      /* 勿扰模式图标 */
+      #waifu-tool span[data-tool="dnd"] svg {
+        fill: currentColor;
+        width: 16px;
+        height: 16px;
+      }
+      #waifu-tool span.waifu-dnd-active {
+        color: #fbbf24 !important;
+      }
+
+      /* 拖拽光标 */
+      #waifu.waifu-dragging {
+        cursor: grabbing !important;
+      }
+      #waifu.waifu-dragging canvas {
+        cursor: grabbing !important;
       }
     </style>
   </body>
