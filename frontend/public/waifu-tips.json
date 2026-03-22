@@ -562,6 +562,48 @@
       "message": "我是符玄，云骑将军~"
     },
     {
+      "name": "卡芙卡",
+      "paths": [
+        "/live2d/kafka/kafuka1.model3.json"
+      ],
+      "message": "我是卡芙卡，星核猎手~"
+    },
+    {
+      "name": "镜流",
+      "paths": [
+        "/live2d/jingliu/镜流.model3.json"
+      ],
+      "message": "我是镜流，剑首~"
+    },
+    {
+      "name": "藿藿",
+      "paths": [
+        "/live2d/huohuo/▐╜▐╜.model3.json"
+      ],
+      "message": "我是藿藿，尾巴先生在这里~"
+    },
+    {
+      "name": "知更鸟",
+      "paths": [
+        "/live2d/robin/知更鸟.model3.json"
+      ],
+      "message": "我是知更鸟，来自匹诺康尼~"
+    },
+    {
+      "name": "秧秧",
+      "paths": [
+        "/live2d/yangyang/秧秧.model3.json"
+      ],
+      "message": "我是秧秧，今州城的巡逻员~"
+    },
+    {
+      "name": "简",
+      "paths": [
+        "/live2d/jian/简.model3.json"
+      ],
+      "message": "我是简，星际和平公司的员工~"
+    },
+    {
       "name": "Potion-Maker/Pio",
       "paths": [
         "https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Potion-Maker/Pio/index.json"

@@ -584,47 +584,6 @@
           }
         };
 
-        // ========== 勿扰模式 ==========
-        const dndToggle = {
-          enabled: false,
-          STORAGE_KEY: 'waifu-dnd-mode',
-
-          init(toolBar) {
-            this.enabled = localStorage.getItem(this.STORAGE_KEY) === 'true';
-            this.createIcon(toolBar);
-            if (this.enabled) this.apply();
-          },
-
-          toggle() {
-            this.enabled = !this.enabled;
-            localStorage.setItem(this.STORAGE_KEY, this.enabled);
-            this.apply();
-          },
-
-          apply() {
-            const icon = document.querySelector('#waifu-tool span[data-tool="dnd"]');
-            if (this.enabled) {
-              if (icon) icon.classList.add('waifu-dnd-active');
-              if (roamManager.state === 'roaming') roamManager.returnHome();
-            } else {
-              if (icon) icon.classList.remove('waifu-dnd-active');
-              roamManager.resetIdleTimer();
-            }
-          },
-
-          createIcon(toolBar) {
-            const icon = document.createElement('span');
-            icon.dataset.tool = 'dnd';
-            icon.title = '勿扰模式';
-            icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M283.2 35.6C191.5 43.4 118.4 120.5 118.4 214.4c0 100.3 81.3 181.6 181.6 181.6 93.9 0 171-73.1 178.8-164.8-18.4 27.9-50.1 46.4-86.4 46.4-57.4 0-104-46.6-104-104 0-36.3 18.5-68 46.4-86.4-.8-.1-34.2-7.2-51.6-51.6z"/></svg>';
-            icon.addEventListener('click', () => this.toggle());
-            const quitIcon = toolBar.querySelector('span[data-tool="quit"]');
-            if (quitIcon) toolBar.insertBefore(icon, quitIcon);
-            else toolBar.appendChild(icon);
-            if (this.enabled) icon.classList.add('waifu-dnd-active');
-          }
-        };
-
         // ========== 智能出现模式 ==========
         const smartAppearance = {
           cooldowns: {},
@@ -635,7 +594,6 @@
           },
 
           canTrigger(eventType) {
-            if (dndToggle.enabled) return false;
             if (document.querySelector('#waifu-tips.waifu-chat-mode')) return false;
             const last = this.cooldowns[eventType] || 0;
             return Date.now() - last > this.COOLDOWN_MS;
@@ -684,24 +642,8 @@
           check();
         }
 
-        function waitForWaifuTools() {
-          const check = () => {
-            const tool = document.getElementById('waifu-tool');
-            if (tool) {
-              dndToggle.init(tool);
-            } else {
-              setTimeout(check, 300);
-            }
-          };
-          check();
-        }
-
         waitForCanvas();
-        waitForWaifuTools();
         smartAppearance.init();
-
-        // 暴露管理器到全局（用于测试）
-        window.__waifuDndToggle = dndToggle;
       })();
     </script>
     <!-- 看板娘位置调整：移到右下角，避开左侧 Sidebar -->
@@ -844,16 +786,6 @@
       /* 聊天图标激活状态 */
       #waifu-tool span.waifu-chat-active {
         color: #60a5fa !important;
-      }
-
-      /* 勿扰模式图标 */
-      #waifu-tool span[data-tool="dnd"] svg {
-        fill: currentColor;
-        width: 16px;
-        height: 16px;
-      }
-      #waifu-tool span.waifu-dnd-active {
-        color: #fbbf24 !important;
       }
 
       /* 拖拽光标 */
