@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MeterSphere 控制面板</title>
+    <style>
+      /* 看板娘容器 */
+      #waifu {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        width: 280px;
+        height: 350px;
+        z-index: 9999;
+        pointer-events: none;
+      }
+      #waifu canvas {
+        width: 100%;
+        height: 100%;
+        pointer-events: auto;
+      }
+      /* 工具栏 */
+      #waifu-tool {
+        position: fixed;
+        bottom: 20px;
+        right: 290px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10000;
+      }
+      #waifu-tool button {
+        width: 36px;
+        height: 36px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(20, 30, 60, 0.85);
+        color: #e2e8f0;
+        cursor: pointer;
+        font-size: 16px;
+        transition: all 0.3s;
+      }
+      #waifu-tool button:hover {
+        background: rgba(96, 165, 250, 0.9);
+        transform: scale(1.1);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- 看板娘容器 -->
+    <div id="waifu">
+      <canvas id="live2d-canvas"></canvas>
+    </div>
+
+    <!-- 工具栏 -->
+    <div id="waifu-tool">
+      <button id="chat-btn" title="AI 聊天">💬</button>
+      <button id="dnd-btn" title="勿扰模式">🌙</button>
+    </div>
+
+    <!-- Cubism SDK -->
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+
+  </body>
+</html>

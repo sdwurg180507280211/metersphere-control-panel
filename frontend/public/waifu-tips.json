@@ -555,6 +555,13 @@
   },
   "models": [
     {
+      "name": "符玄",
+      "paths": [
+        "/live2d/fuxuan/符玄.model3.json"
+      ],
+      "message": "我是符玄，云骑将军~"
+    },
+    {
       "name": "Potion-Maker/Pio",
       "paths": [
         "https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/model/Potion-Maker/Pio/index.json"
@@ -607,13 +614,6 @@
         "/live2d/rice/Rice.model3.json"
       ],
       "message": "我是 Rice，来和我一起玩吧~"
-    },
-    {
-      "name": "符玄",
-      "paths": [
-        "/live2d/fuxuan/符玄.model3.json"
-      ],
-      "message": "我是符玄，云骑将军~"
     }
   ]
 }
