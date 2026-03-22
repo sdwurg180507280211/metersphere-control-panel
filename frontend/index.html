@@ -323,7 +323,7 @@
               if (!window.Live2DCubismCore || !window.Live2DCubismCore.Model) {
                 return setTimeout(check, 500);
               }
-              // Patch update 方法捕获模型实例
+              // Patch update 方法捕获模型实例（永久生效）
               const origUpdate = Live2DCubismCore.Model.prototype.update;
               const self = this;
               Live2DCubismCore.Model.prototype.update = function() {
@@ -337,12 +337,6 @@
                 }
                 return origUpdate.call(this);
               };
-              // 一帧后恢复原始 update（仅用于捕获）
-              requestAnimationFrame(() => {
-                setTimeout(() => {
-                  Live2DCubismCore.Model.prototype.update = origUpdate;
-                }, 100);
-              });
             };
             check();
           },
