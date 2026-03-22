@@ -611,7 +611,7 @@
     {
       "name": "符玄",
       "paths": [
-        "/models/fuxuan/符玄/符玄.model3.json"
+        "/live2d/fuxuan/符玄.model3.json"
       ],
       "message": "我是符玄，云骑将军~"
     }
