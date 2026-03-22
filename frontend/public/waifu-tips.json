@@ -604,7 +604,7 @@
     {
       "name": "Rice",
       "paths": [
-        "https://cdn.jsdelivr.net/gh/evrstr/live2d-widget-models@master/live2d_evrstr/rice/model.json"
+        "/live2d/rice/Rice.model3.json"
       ],
       "message": "我是 Rice，来和我一起玩吧~"
     },
