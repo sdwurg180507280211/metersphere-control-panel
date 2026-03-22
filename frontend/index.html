@@ -311,6 +311,7 @@
           emotionTarget: null,
           emotionEndTime: 0,
           emotionCurrent: {},
+          modelType: null, // 'cubism2' or 'cubism5'
 
           // 捕获 CubismCore 模型实例
           init() {
@@ -326,7 +327,11 @@
               const origUpdate = Live2DCubismCore.Model.prototype.update;
               const self = this;
               Live2DCubismCore.Model.prototype.update = function() {
-                if (!self.coreModel) {
+                // 检测模型切换
+                if (self.coreModel && self.coreModel !== this) {
+                  self._resetOnModelChange();
+                }
+                if (!self.coreModel || self.coreModel !== this) {
                   self.coreModel = this;
                   self._installOverrideHook();
                 }
@@ -342,12 +347,24 @@
             check();
           },
 
+          _resetOnModelChange() {
+            this.paramOverrides = {};
+            this.gazeEnabled = true;
+            this.speaking = false;
+            this.bouncing = false;
+            this.emotionTarget = null;
+            this.modelType = null;
+          },
+
           // 在模型 update 后注入参数覆盖
           _installOverrideHook() {
             const model = this.coreModel;
             const params = model.parameters;
             const origUpdate = model.update.bind(model);
             const self = this;
+
+            // 检测模型类型：Cubism 2 用 PARAM_*，Cubism 3/5 用 Param*
+            self.modelType = params.ids.some(id => id.startsWith('PARAM_')) ? 'cubism2' : 'cubism3+';
 
             model.update = function() {
               const result = origUpdate();
@@ -411,11 +428,11 @@
               currentBodyX += (targetBodyX - currentBodyX) * lerp;
 
               // 设置覆盖（不覆盖说话参数）
-              self.paramOverrides['ParamAngleX'] = currentAngleX;
-              self.paramOverrides['ParamAngleY'] = currentAngleY;
-              self.paramOverrides['ParamEyeBallX'] = currentEyeX;
-              self.paramOverrides['ParamEyeBallY'] = currentEyeY;
-              self.paramOverrides['ParamBodyAngleX'] = currentBodyX;
+              self.setParam('ParamAngleX', currentAngleX);
+              self.setParam('ParamAngleY', currentAngleY);
+              self.setParam('ParamEyeBallX', currentEyeX);
+              self.setParam('ParamEyeBallY', currentEyeY);
+              self.setParam('ParamBodyAngleX', currentBodyX);
 
               // 情绪表情 lerp 过渡
               if (self.emotionTarget) {
@@ -425,7 +442,8 @@
                   if (!self.emotionCurrent[param]) self.emotionCurrent[param] = 0;
                   const target = isActive ? targetVal : 0;
                   self.emotionCurrent[param] += (target - self.emotionCurrent[param]) * 0.1;
-                  self.paramOverrides[param] = self.emotionCurrent[param];
+                  const mappedParam = self.getParamName(param);
+                  self.paramOverrides[mappedParam] = self.emotionCurrent[param];
                 }
                 if (!isActive && Math.abs(self.emotionCurrent[Object.keys(self.emotionTarget)[0]]) < 0.01) {
                   self.emotionTarget = null;
@@ -446,14 +464,14 @@
             if (!waifu) { this.bouncing = false; return; }
             waifu.classList.add('waifu-bounce');
             // 弹跳时配合表情
-            this.paramOverrides['ParamEyeLSmile'] = 1;
-            this.paramOverrides['ParamEyeRSmile'] = 1;
-            this.paramOverrides['ParamMouthForm'] = 1;
+            this.setParam('ParamEyeLSmile', 1);
+            this.setParam('ParamEyeRSmile', 1);
+            this.setParam('ParamMouthForm', 1);
             setTimeout(() => {
               waifu.classList.remove('waifu-bounce');
-              delete this.paramOverrides['ParamEyeLSmile'];
-              delete this.paramOverrides['ParamEyeRSmile'];
-              delete this.paramOverrides['ParamMouthForm'];
+              delete this.paramOverrides[this.getParamName('ParamEyeLSmile')];
+              delete this.paramOverrides[this.getParamName('ParamEyeRSmile')];
+              delete this.paramOverrides[this.getParamName('ParamMouthForm')];
               this.bouncing = false;
             }, 600);
           },
@@ -470,7 +488,7 @@
               cancelAnimationFrame(this.speakTimer);
               this.speakTimer = null;
             }
-            delete this.paramOverrides['ParamMouthOpenY'];
+            delete this.paramOverrides[this.getParamName('ParamMouthOpenY')];
           },
 
           // 按回复文字长度说话
@@ -484,7 +502,7 @@
             const t = Date.now() * 0.015;
             // 随机节奏的嘴巴开合，模拟说话
             const openness = Math.abs(Math.sin(t)) * (0.3 + Math.random() * 0.4);
-            this.paramOverrides['ParamMouthOpenY'] = openness;
+            this.setParam('ParamMouthOpenY', openness);
             this.speakTimer = requestAnimationFrame(() => this._animateMouth());
           },
 
@@ -494,6 +512,26 @@
             this.emotionTarget = EMOTIONS[name];
             this.emotionEndTime = Date.now() + durationMs;
             this.emotionCurrent = {};
+          },
+
+          // ========== 参数映射 ==========
+          getParamName(baseName) {
+            // Cubism 2 使用 PARAM_*，Cubism 3/5 使用 Param*
+            if (this.modelType === 'cubism2') {
+              return 'PARAM_' + baseName.replace('Param', '').replace(/([A-Z])/g, '_$1').toUpperCase().replace(/^_/, '');
+            }
+            return baseName;
+          },
+
+          setParam(baseName, value) {
+            const paramName = this.getParamName(baseName);
+            this.paramOverrides[paramName] = value;
+          },
+
+          hasParam(baseName) {
+            if (!this.coreModel) return false;
+            const paramName = this.getParamName(baseName);
+            return this.coreModel.parameters.ids.indexOf(paramName) >= 0;
           }
         };
 
@@ -509,11 +547,14 @@
           target: { x: 0 },
           direction: 1,
           animFrame: null,
-          IDLE_TIMEOUT: 30000,
-          SPEED: 2,
+          IDLE_TIMEOUT: 0,
+          SPEED: 4,
 
           start() {
-            this.resetIdleTimer();
+            // 延迟 2 秒后启动漫游，确保模型已加载
+            setTimeout(() => {
+              this.enterRoaming();
+            }, 2000);
             ['mousemove', 'mousedown', 'keydown', 'scroll'].forEach(evt =>
               document.addEventListener(evt, () => this.onUserActivity(), { passive: true })
             );
@@ -533,14 +574,22 @@
             if (dndToggle.enabled) return;
             const chatMode = document.querySelector('#waifu-tips.waifu-chat-mode');
             if (chatMode) return;
+            // 检测模型是否支持腿部动作
+            if (!modelCtrl.hasParam('ParamLegR') && !modelCtrl.hasParam('ParamLeg')) return;
             this.state = 'roaming';
+            const waifu = document.getElementById('waifu');
+            if (waifu) {
+              waifu.style.right = 'auto';
+              waifu.style.left = waifu.getBoundingClientRect().left + 'px';
+              this.position.x = waifu.getBoundingClientRect().left;
+            }
             this.pickNewTarget();
             this.animateWalk();
           },
 
           pickNewTarget() {
-            const minX = 100;
-            const maxX = window.innerWidth - 200;
+            const minX = window.innerWidth * 0.1;
+            const maxX = window.innerWidth * 0.9;
             this.target.x = minX + Math.random() * (maxX - minX);
           },
 
@@ -549,8 +598,7 @@
             const waifu = document.getElementById('waifu');
             if (!waifu) return;
 
-            const currentX = waifu.getBoundingClientRect().left;
-            const dx = this.target.x - currentX;
+            const dx = this.target.x - this.position.x;
 
             if (Math.abs(dx) < 5) {
               if (!this.restTimer) {
@@ -576,7 +624,18 @@
 
             const walkPhase = Date.now() * 0.008;
             waifu.style.marginBottom = Math.sin(walkPhase * Math.PI * 4) * 3 + 'px';
-            modelCtrl.paramOverrides['ParamBodyAngleX'] = Math.sin(walkPhase * Math.PI * 4) * 5;
+            modelCtrl.setParam('ParamBodyAngleX', Math.sin(walkPhase * Math.PI * 4) * 5);
+
+            // Rice 模型腿部动作（左右腿交替）
+            if (modelCtrl.hasParam('ParamLegR')) {
+              const legPhase = walkPhase * Math.PI * 4;
+              modelCtrl.setParam('ParamLegR', Math.sin(legPhase) * 0.5);
+              modelCtrl.setParam('ParamLegRUpDw', Math.abs(Math.sin(legPhase)) * 0.3);
+              // 左腿相位相反
+              if (modelCtrl.hasParam('ParamLegL')) {
+                modelCtrl.setParam('ParamLegL', Math.sin(legPhase + Math.PI) * 0.5);
+              }
+            }
 
             this.animFrame = requestAnimationFrame(() => this.animateWalk());
           },
@@ -587,17 +646,17 @@
             if (!waifu) return;
             if (this.animFrame) cancelAnimationFrame(this.animFrame);
 
-            const homeLeft = parseInt(getComputedStyle(waifu).right) || 0;
-            this.position.x = window.innerWidth - homeLeft - waifu.offsetWidth;
-
             waifu.style.transition = 'left 0.8s ease-in-out';
-            waifu.style.left = this.position.x + 'px';
+            waifu.style.left = (window.innerWidth - 280) + 'px';
             waifu.style.transform = '';
             waifu.style.marginBottom = '';
             this.direction = 1;
-            delete modelCtrl.paramOverrides['ParamBodyAngleX'];
+            const bodyParam = modelCtrl.getParamName('ParamBodyAngleX');
+            delete modelCtrl.paramOverrides[bodyParam];
             setTimeout(() => {
               waifu.style.transition = '';
+              waifu.style.left = '';
+              waifu.style.right = '0';
               this.state = 'idle';
               this.resetIdleTimer();
             }, 800);
