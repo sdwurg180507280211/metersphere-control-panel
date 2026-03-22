@@ -547,35 +547,31 @@
           target: { x: 0 },
           direction: 1,
           animFrame: null,
-          IDLE_TIMEOUT: 0,
-          SPEED: 4,
+          IDLE_TIMEOUT: 30000,
+          SPEED: 2,
+          MIN_DISTANCE: 200,
 
           start() {
-            // 延迟 2 秒后启动漫游，确保模型已加载
+            // 延迟2秒后启动漫游，确保模型已加载
             setTimeout(() => {
               this.enterRoaming();
             }, 2000);
-            ['mousemove', 'mousedown', 'keydown', 'scroll'].forEach(evt =>
-              document.addEventListener(evt, () => this.onUserActivity(), { passive: true })
-            );
           },
 
           resetIdleTimer() {
-            clearTimeout(this.idleTimer);
-            this.idleTimer = setTimeout(() => this.enterRoaming(), this.IDLE_TIMEOUT);
+            // 不再使用空闲计时器
           },
 
           onUserActivity() {
-            if (this.state === 'roaming') this.returnHome();
-            this.resetIdleTimer();
+            // 用户操作不影响漫游
           },
 
           enterRoaming() {
             if (dndToggle.enabled) return;
             const chatMode = document.querySelector('#waifu-tips.waifu-chat-mode');
             if (chatMode) return;
-            // 检测模型是否支持腿部动作
-            if (!modelCtrl.hasParam('ParamLegR') && !modelCtrl.hasParam('ParamLeg')) return;
+            // 只有 Rice 模型支持漫游（有腿部参数）
+            if (!modelCtrl.hasParam('ParamLegR')) return;
             this.state = 'roaming';
             const waifu = document.getElementById('waifu');
             if (waifu) {
@@ -588,9 +584,13 @@
           },
 
           pickNewTarget() {
-            const minX = window.innerWidth * 0.1;
-            const maxX = window.innerWidth * 0.9;
-            this.target.x = minX + Math.random() * (maxX - minX);
+            const minX = 0;
+            const maxX = window.innerWidth - 300;
+            let newTarget;
+            do {
+              newTarget = minX + Math.random() * (maxX - minX);
+            } while (Math.abs(newTarget - this.position.x) < this.MIN_DISTANCE);
+            this.target.x = newTarget;
           },
 
           animateWalk() {
@@ -623,17 +623,16 @@
             waifu.style.left = this.position.x + 'px';
 
             const walkPhase = Date.now() * 0.008;
-            waifu.style.marginBottom = Math.sin(walkPhase * Math.PI * 4) * 3 + 'px';
-            modelCtrl.setParam('ParamBodyAngleX', Math.sin(walkPhase * Math.PI * 4) * 5);
+            waifu.style.marginBottom = Math.sin(walkPhase * Math.PI * 4) * 1 + 'px';
+            modelCtrl.setParam('ParamBodyAngleX', Math.sin(walkPhase * Math.PI * 4) * 2);
 
-            // Rice 模型腿部动作（左右腿交替）
+            // Rice 模型腿部动作
             if (modelCtrl.hasParam('ParamLegR')) {
               const legPhase = walkPhase * Math.PI * 4;
-              modelCtrl.setParam('ParamLegR', Math.sin(legPhase) * 0.5);
-              modelCtrl.setParam('ParamLegRUpDw', Math.abs(Math.sin(legPhase)) * 0.3);
-              // 左腿相位相反
-              if (modelCtrl.hasParam('ParamLegL')) {
-                modelCtrl.setParam('ParamLegL', Math.sin(legPhase + Math.PI) * 0.5);
+              modelCtrl.setParam('ParamLegR', Math.sin(legPhase) * 0.3);
+              modelCtrl.setParam('ParamLegRUpDw', Math.abs(Math.sin(legPhase)) * 0.2);
+              if (modelCtrl.hasParam('ParamLegKnee')) {
+                modelCtrl.setParam('ParamLegKnee', Math.abs(Math.sin(legPhase)) * 0.15);
               }
             }
 
@@ -841,8 +840,8 @@
     <!-- 看板娘位置调整：移到右下角，避开左侧 Sidebar -->
     <style>
       #waifu {
-        left: auto !important;
-        right: 0 !important;
+        left: auto;
+        right: 0;
       }
       #waifu-toggle {
         left: auto !important;

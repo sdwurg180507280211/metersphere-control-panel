@@ -604,9 +604,16 @@
     {
       "name": "Rice",
       "paths": [
-        "https://raw.githubusercontent.com/evrstr/live2d-widget-models/master/live2d_evrstr/rice/model.json"
+        "https://cdn.jsdelivr.net/gh/evrstr/live2d-widget-models@master/live2d_evrstr/rice/model.json"
       ],
       "message": "我是 Rice，来和我一起玩吧~"
+    },
+    {
+      "name": "符玄",
+      "paths": [
+        "/models/fuxuan/符玄/符玄.model3.json"
+      ],
+      "message": "我是符玄，云骑将军~"
     }
   ]
 }
