@@ -44,51 +44,12 @@
           loadExternalResource(live2d_path + 'waifu-tips.js', 'js')
         ]);
         initWidget({
-          waifuPath: live2d_path + 'waifu-tips.json',
+          waifuPath: '/waifu-tips.json',
           cubism2Path: live2d_path + 'live2d.min.js',
           cubism5Path: 'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js',
           tools: ['hitokoto', 'asteroids', 'switch-model', 'switch-texture', 'photo', 'info', 'chat', 'quit'],
           logLevel: 'warn',
           drag: true,
-        });
-      })();
-    </script>
-    <!-- 动态添加 Rice 模型 -->
-    <script>
-      (function() {
-        function waitForLoadlive2d() {
-          return new Promise(resolve => {
-            const check = () => {
-              if (window.loadlive2d) return resolve();
-              setTimeout(check, 200);
-            };
-            check();
-          });
-        }
-
-        waitForLoadlive2d().then(() => {
-          // 劫持 loadlive2d 函数，添加 Rice 模型到模型列表
-          const origLoadlive2d = window.loadlive2d;
-          window.loadlive2d = function(id, modelPath) {
-            // 调用原始函数
-            const result = origLoadlive2d.call(this, id, modelPath);
-
-            // 注入 Rice 模型到切换列表（仅执行一次）
-            if (!window.__riceModelInjected) {
-              window.__riceModelInjected = true;
-              setTimeout(() => {
-                if (window.live2d_settings && window.live2d_settings.model) {
-                  window.live2d_settings.model.push({
-                    name: 'Rice',
-                    message: '我是 Rice，腿部动作更丰富哦~',
-                    path: 'https://fastly.jsdelivr.net/gh/evrstr/live2d-widget-models@master/packages/live2d-widget-model-rice/assets/rice.model.json'
-                  });
-                }
-              }, 1000);
-            }
-
-            return result;
-          };
         });
       })();
     </script>
