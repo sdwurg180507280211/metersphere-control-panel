@@ -14,6 +14,7 @@
 			"Idle": [
 				{
 					"File": "Scene1 复制 复制.motion3.json",
+					"Name": "待机",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				}
@@ -21,31 +22,37 @@
 			"Custom": [
 				{
 					"File": "haoqi.motion3.json",
+					"Name": "好奇",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				},
 				{
 					"File": "keshui.motion3.json",
+					"Name": "瞌睡",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				},
 				{
 					"File": "linghun.motion3.json",
+					"Name": "灵魂",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				},
 				{
 					"File": "qizi.motion3.json",
+					"Name": "拿旗子",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				},
 				{
 					"File": "yaotou.motion3.json",
+					"Name": "摇头",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				},
 				{
 					"File": "zhentou.motion3.json",
+					"Name": "振头",
 					"FadeInTime": 0.5,
 					"FadeOutTime": 0.5
 				}

@@ -10,12 +10,12 @@
 		"DisplayInfo": "Rice.cdi3.json",
 		"Motions": {
 			"Idle": [
-				{ "File": "motions/idle.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
+				{ "File": "motions/idle.motion3.json", "Name": "待机", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
 			],
 			"TapBody": [
-				{ "File": "motions/mtn_01.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
-				{ "File": "motions/mtn_02.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
-				{ "File": "motions/mtn_03.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
+				{ "File": "motions/mtn_01.motion3.json", "Name": "点击动作 1", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
+				{ "File": "motions/mtn_02.motion3.json", "Name": "点击动作 2", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
+				{ "File": "motions/mtn_03.motion3.json", "Name": "点击动作 3", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
 			]
 		}
 	},
@@ -37,7 +37,7 @@
 	"HitAreas": [
 		{
 			"Id": "HitAreaBody",
-			"Name": "Body"
+			"Name": "身体"
 		}
 	]
 }

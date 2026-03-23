@@ -12,13 +12,13 @@ Live2DModel.registerTicker(PIXI.Ticker);
 const MODELS = {
   rice: {
     path: '/live2d/rice/Rice.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 500 }
+    scale: 0.33,
+    position: { x: 170, y: 350 }
   },
   fuxuan: {
     path: '/live2d/fuxuan/符玄.model3.json',
     scale: 0.11,
-    position: { x: 400, y: 500 }
+    position: { x: 400, y: 440 }
   },
   huohuo: {
     path: '/live2d/huohuo/藿藿.model3.json',
@@ -33,17 +33,17 @@ const MODELS = {
   yangyang: {
     path: '/live2d/yangyang/秧秧.model3.json',
     scale: 0.12,
-    position: { x: 400, y: 480 }
+    position: { x: 400, y: 450 }
   },
   jingliu: {
     path: '/live2d/jingliu/镜流.model3.json',
-    scale: 0.13,
-    position: { x: 400, y: 500 }
+    scale: 0.33,
+    position: { x: 400, y: 560 }
   },
   kafka: {
     path: '/live2d/kafka/kafuka1.model3.json',
-    scale: 0.13,
-    position: { x: 400, y: 500 }
+    scale: 0.21,
+    position: { x: 400, y: 540 }
   },
   robin: {
     path: '/live2d/robin/知更鸟.model3.json',
@@ -52,8 +52,8 @@ const MODELS = {
   },
   nicole: {
     path: '/live2d/nicole/Nicole.model3.json',
-    scale: 0.13,
-    position: { x: 400, y: 500 }
+    scale: 0.17,
+    position: { x: 400, y: 530 }
   }
 };
 
@@ -203,8 +203,8 @@ function getAvailableMotions(): Array<{ group: string, index: number, name: stri
   for (const [group, groupMotions] of Object.entries(definitions)) {
     if (groupMotions && Array.isArray(groupMotions)) {
       groupMotions.forEach((motion: any, index: number) => {
-        const fileName = motion.File || motion.file || '';
-        const motionName = fileName.replace('.motion3.json', '').replace('.mtn', '');
+        // 优先使用 Name 属性（支持中文），如果没有则从文件名提取
+        const motionName = motion.Name || motion.name || (motion.File || motion.file || '').replace('.motion3.json', '').replace('.mtn', '');
         motions.push({
           group,
           index,
@@ -215,6 +215,19 @@ function getAvailableMotions(): Array<{ group: string, index: number, name: stri
   }
 
   return motions;
+}
+
+// 动作分组中文映射（分组名如 Idle/Custom 等）
+function getMotionGroupName(group: string): string {
+  const mapping: Record<string, string> = {
+    'Idle': '待机',
+    'TapBody': '点击',
+    'Custom': '自定义',
+    'Hit': '被击中',
+    'FlickHead': '拂头',
+    'Special': '特殊'
+  };
+  return mapping[group] || group;
 }
 
 // 更新动作按钮
@@ -257,10 +270,11 @@ function updateMotionButtons() {
     let html = '';
     for (const [group, groupMotions] of Object.entries(motionsByGroup)) {
       html += `<div class="motion-section">`;
-      html += `<div class="motion-section-title">${group}</div>`;
+      html += `<div class="motion-section-title">${getMotionGroupName(group)}</div>`;
       html += `<div class="motion-list">`;
       groupMotions.forEach((m, i) => {
         const globalIndex = motions.findIndex(motion => motion.group === m.group && motion.index === m.index);
+        // m.name 现在直接从 model3.json 的 Name 属性读取，已经是中文
         html += `
           <div class="motion-item" data-motion-index="${globalIndex}" onclick="playCustomMotion(${globalIndex})">
             <span class="motion-icon">${getMotionEmoji(m.name)}</span>
@@ -314,9 +328,10 @@ function updateExpressionList(modelId: string) {
     return;
   }
 
+  // 使用 model3.json 中定义的 Name 属性（中文名称）
   availableExpressions = expressions.map((expr: any, i: number) => ({
     file: expr.File || expr.file,
-    name: (expr.File || expr.file).replace('.exp.json', '').replace('.exp3.json', '')
+    name: expr.Name || expr.name || (expr.File || expr.file).replace('.exp.json', '').replace('.exp3.json', '')
   }));
 
   // 更新 window 对象上的引用
@@ -327,7 +342,7 @@ function updateExpressionList(modelId: string) {
   }
 
   const buttonsHtml = availableExpressions.map((expr, i) =>
-    `<button class="expression-btn ${i === expressionIndex ? 'active' : ''}" onclick="setExpression(${i})">${expr.name}</button>`
+    `<button class="expression-btn ${i === expressionIndex ? 'active' : ''}" onclick="setExpressionByName('${expr.name}')">${expr.name}</button>`
   ).join('');
 
   expressionContainer.innerHTML = buttonsHtml;
@@ -601,6 +616,20 @@ function setExpression(index: number) {
   updateExpressionList(currentModelId!);
 }
 
+// 通过表情名称设置表情（用于 HTML onclick）
+function setExpressionByName(name: string) {
+  if (!currentModel) {
+    setStatus('请先加载模型', 'error');
+    return;
+  }
+  setStatus(`设置表情：${name}`);
+  currentModel.expression(name);
+  // 更新激活状态
+  const index = availableExpressions.findIndex(expr => expr.name === name);
+  if (index >= 0) expressionIndex = index;
+  updateExpressionList(currentModelId!);
+}
+
 function resetExpression() {
   if (!currentModel) {
     setStatus('请先加载模型', 'error');
@@ -672,6 +701,7 @@ function resetModel() {
 (window as any).playRandomParam = playRandomParam;
 (window as any).toggleExpression = toggleExpression;
 (window as any).setExpression = setExpression;
+(window as any).setExpressionByName = setExpressionByName;
 (window as any).resetExpression = resetExpression;
 (window as any).resetModel = resetModel;
 
