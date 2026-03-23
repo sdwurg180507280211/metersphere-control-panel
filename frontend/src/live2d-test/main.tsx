@@ -8,16 +8,16 @@ config.cubism4.supportMoreMaskDivisions = true;
 // 注册 Ticker
 Live2DModel.registerTicker(PIXI.Ticker);
 
-// 模型配置 - 增大的缩放比例
+// 模型配置 - 统一缩放比例和位置，使所有模型大小匀称、居中
 const MODELS = {
   rice: {
     path: '/live2d/rice/Rice.model3.json',
-    scale: 0.15,
-    position: { x: 400, y: 480 }
+    scale: 0.12,
+    position: { x: 400, y: 500 }
   },
   fuxuan: {
     path: '/live2d/fuxuan/符玄.model3.json',
-    scale: 0.15,
+    scale: 0.11,
     position: { x: 400, y: 500 }
   },
   huohuo: {
@@ -37,23 +37,23 @@ const MODELS = {
   },
   jingliu: {
     path: '/live2d/jingliu/镜流.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
+    scale: 0.13,
+    position: { x: 400, y: 500 }
   },
   kafka: {
     path: '/live2d/kafka/kafuka1.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
+    scale: 0.13,
+    position: { x: 400, y: 500 }
   },
   robin: {
     path: '/live2d/robin/知更鸟.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
+    scale: 0.13,
+    position: { x: 400, y: 500 }
   },
   nicole: {
     path: '/live2d/nicole/Nicole.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
+    scale: 0.13,
+    position: { x: 400, y: 500 }
   }
 };
 
