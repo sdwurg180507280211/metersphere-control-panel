@@ -6,10 +6,15 @@ class Live2DRenderer {
 
   attach(model) {
     const app = this.stage.getApp()
-    if (!app) return
+    if (!app) {
+      console.warn('[Live2D] App not ready yet, skipping attach (may be StrictMode cleanup)')
+      return
+    }
 
+    console.log('[Live2D] Attaching model to stage:', app.stage)
     this.currentModel = model
     app.stage.addChild(model)
+    console.log('[Live2D] Model added to stage, children count:', app.stage.children.length)
   }
 
   detach(model) {

@@ -10,7 +10,11 @@ Live2DModel.registerTicker(PIXI.Ticker)
 class Live2DModelLoader {
   async load(modelId, modelConfig) {
     try {
-      const model = await Live2DModel.from(modelConfig.path)
+      const model = await Live2DModel.from(modelConfig.path, {
+        autoUpdate: true
+      })
+      // 设置锚点居中，与测试页面保持一致
+      model.anchor.set(0.5)
       return model
     } catch (error) {
       console.error(`Failed to load model ${modelId}:`, error)

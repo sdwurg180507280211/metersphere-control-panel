@@ -10,17 +10,29 @@ class Live2DStage {
     if (this.app) return
 
     this.container = container
+
+    // 清理容器中已有的 canvas（防止 StrictMode 双渲染导致的问题）
+    const existingCanvas = container.querySelector('canvas')
+    if (existingCanvas) {
+      existingCanvas.remove()
+    }
+
+    // 固定 800x800 画布尺寸
     this.app = new PIXI.Application({
       backgroundAlpha: 0,
-      width: container.offsetWidth,
-      height: container.offsetHeight,
+      width: 800,
+      height: 800,
       antialias: true,
       resolution: window.devicePixelRatio || 1
     })
 
+    // PixiJS v7: use app.view
     const canvas = this.app.view
-    canvas.style.width = container.offsetWidth + 'px'
-    canvas.style.height = container.offsetHeight + 'px'
+    canvas.style.width = '800px'
+    canvas.style.height = '800px'
+    canvas.style.display = 'block'
+    // 确保 canvas 可以接收鼠标事件（虽然父容器设置了 pointerEvents: none）
+    canvas.style.pointerEvents = 'auto'
     container.appendChild(canvas)
   }
 
