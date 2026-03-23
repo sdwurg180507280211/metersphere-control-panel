@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Live2DController from '../controller/Live2DController'
+import { WAIFU_MODELS } from '../config/waifuModels.js'
 
 const WaifuRoot = () => {
   const containerRef = useRef(null)
@@ -47,6 +48,22 @@ const WaifuRoot = () => {
 
         // 暴露到全局以便调试
         window.__waifuController = controller
+
+        // 暴露切换模型方法到全局
+        window.switchWaifuModel = (modelId) => {
+          if (!WAIFU_MODELS[modelId]) {
+            console.error(`[Waifu] 模型 "${modelId}" 不存在`)
+            console.log('[Waifu] 可用模型:', Object.keys(WAIFU_MODELS))
+            return false
+          }
+          return controller.loadModel(modelId)
+        }
+
+        // 暴露获取可用模型列表方法
+        window.getWaifuModels = () => {
+          return Object.values(WAIFU_MODELS).map(m => ({ id: m.id, name: m.name }))
+        }
+
         console.log('[Live2D] Controller initialized:', {
           instanceId,
           controller,
@@ -59,6 +76,11 @@ const WaifuRoot = () => {
           modelScale: controller.currentModel?.scale?.x,
           modelVisible: controller.currentModel?.visible
         })
+
+        console.log('[Waifu] 使用方式:')
+        console.log('  - switchWaifuModel("rice") - 切换到指定模型')
+        console.log('  - getWaifuModels() - 获取可用模型列表')
+        console.log('  - 可用模型 ID:', Object.keys(WAIFU_MODELS).join(', '))
       } catch (error) {
         console.error('Failed to initialize Live2D:', error)
       }
