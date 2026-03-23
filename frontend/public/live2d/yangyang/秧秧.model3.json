@@ -8,7 +8,22 @@
 			"秧秧.4096/texture_02.png"
 		],
 		"Physics": "秧秧.physics3.json",
-		"DisplayInfo": "秧秧.cdi3.json"
+		"DisplayInfo": "秧秧.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{
+					"File": "animations/Scene1.motion3.json",
+					"FadeInTime": 0.5,
+					"FadeOutTime": 0.5
+				}
+			]
+		},
+		"Expressions": [
+			{ "File": "脸黑.exp3.json", "Name": "脸黑" },
+			{ "File": "眼泪.exp3.json", "Name": "眼泪" },
+			{ "File": "反绑 x.exp3.json", "Name": "反绑" },
+			{ "File": "悲.exp3.json", "Name": "悲" }
+		]
 	},
 	"Groups": [
 		{

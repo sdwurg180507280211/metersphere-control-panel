@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live2D 模型测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2rem;
+    }
+
+    .info {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      color: #e2e8f0;
+    }
+
+    .info h2 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      color: #60a5fa;
+    }
+
+    .info ul {
+      margin-left: 20px;
+    }
+
+    .info li {
+      margin: 5px 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+
+    .controls button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: #2563eb;
+    }
+
+    .controls button:disabled {
+      background: #6b7280;
+      cursor: not-allowed;
+    }
+
+    #canvas-container {
+      width: 600px;
+      height: 600px;
+      margin: 0 auto;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 16px;
+      border: 2px solid rgba(96, 165, 250, 0.3);
+      overflow: hidden;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    .status {
+      text-align: center;
+      color: #60a5fa;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    .model-select {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .model-select button {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .model-select button.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .model-select button:hover {
+      background: rgba(59, 130, 246, 0.4);
+    }
+  </style>
+
+  <!-- Cubism Core (Cubism 3/4/5) -->
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+  <!-- PixiJS v7.4.3 UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.3/dist/pixi.min.js"></script>
+  <!-- pixi-live2d-display UMD (Cubism 4 only) -->
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.5.0-beta/dist/cubism4.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🎭 Live2D 模型测试</h1>
+
+    <div class="info">
+      <h2>测试信息</h2>
+      <ul>
+        <li>使用 <strong>pixi-live2d-display</strong> (0.5.0-beta) + <strong>PixiJS v7</strong></li>
+        <li>已启用 <strong>supportMoreMaskDivisions</strong> 支持复杂遮罩</li>
+        <li>Rice 模型：4500x3000，推荐缩放 0.06</li>
+        <li>符玄模型：复杂遮罩 (51 个)</li>
+      </ul>
+    </div>
+
+    <div class="model-select">
+      <button onclick="loadModel('rice')" id="btn-rice" class="active">Rice</button>
+      <button onclick="loadModel('fuxuan')" id="btn-fuxuan">符玄</button>
+    </div>
+
+    <div class="controls">
+      <button onclick="playMotion('idle')" id="btn-idle">待机动作</button>
+      <button onclick="playMotion('tap_body')" id="btn-tap">点击身体</button>
+      <button onclick="toggleExpression()" id="btn-expr">切换表情</button>
+      <button onclick="resetModel()" id="btn-reset">重置模型</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div class="status" id="status">正在初始化...</div>
+  </div>
+
+  <script>
+    // 使用 UMD 版本 (Cubism 4 only)
+    const { Live2DModel, config } = PIXI.live2d;
+
+    // 启用高级遮罩支持
+    if (config && config.cubism4) {
+      config.cubism4.supportMoreMaskDivisions = true;
+    }
+
+    // 模型配置
+    const MODELS = {
+      rice: {
+        path: '/live2d/rice/Rice.model3.json',
+        scale: 0.06,
+        position: { x: 300, y: 300 }
+      },
+      fuxuan: {
+        path: '/live2d/fuxuan/符玄.model3.json',
+        scale: 0.06,
+        position: { x: 300, y: 350 }
+      }
+    };
+
+    let app = null;
+    let currentModel = null;
+    let currentModelId = null;
+
+    // 更新状态
+    function setStatus(msg) {
+      document.getElementById('status').textContent = msg;
+      console.log('[Status]', msg);
+    }
+
+    // 初始化 PixiJS Application
+    async function initApp() {
+      const container = document.getElementById('canvas-container');
+
+      app = new PIXI.Application({
+        width: 600,
+        height: 600,
+        backgroundAlpha: 0,
+        antialias: true,
+        resolution: window.devicePixelRatio || 1
+      });
+
+      container.appendChild(app.view);
+      setStatus('PixiJS Application 初始化完成');
+
+      // 加载默认模型
+      await loadModel('rice');
+    }
+
+    // 加载模型
+    window.loadModel = async function(modelId) {
+      const modelConfig = MODELS[modelId];
+      if (!modelConfig) {
+        setStatus('模型配置未找到：' + modelId);
+        return;
+      }
+
+      setStatus(`正在加载 ${modelId}...`);
+
+      // 更新按钮状态
+      document.querySelectorAll('.model-select button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById(`btn-${modelId}`).classList.add('active');
+
+      // 移除旧模型
+      if (currentModel) {
+        app.stage.removeChild(currentModel);
+        currentModel.destroy();
+        currentModel = null;
+      }
+
+      try {
+        // 加载新模型
+        currentModel = await Live2DModel.from(modelConfig.path, {
+          autoUpdate: true
+        });
+
+        // 设置位置和缩放
+        currentModel.x = modelConfig.position.x;
+        currentModel.y = modelConfig.position.y;
+        currentModel.scale.set(modelConfig.scale);
+        currentModel.anchor.set(0.5);
+
+        // 添加到 stage
+        app.stage.addChild(currentModel);
+
+        // 添加互动
+        setupInteraction(currentModel);
+
+        setStatus(`${modelId} 加载完成！`);
+        currentModelId = modelId;
+
+      } catch (error) {
+        setStatus(`加载失败：${error.message}`);
+        console.error('Load error:', error);
+      }
+    }
+
+    // 设置互动
+    function setupInteraction(model) {
+      model.interactive = true;
+      model.on('pointerdown', () => {
+        console.log('Model clicked!');
+        model.motion('tap_body');
+      });
+    }
+
+    // 播放动作
+    window.playMotion = function(motionName) {
+      if (!currentModel) {
+        setStatus('请先加载模型');
+        return;
+      }
+
+      setStatus(`播放动作：${motionName}`);
+
+      try {
+        currentModel.motion(motionName);
+      } catch (error) {
+        setStatus(`动作播放失败：${error.message}`);
+      }
+    }
+
+    // 切换表情
+    let expressionIndex = 0;
+    window.toggleExpression = function() {
+      if (!currentModel) {
+        setStatus('请先加载模型');
+        return;
+      }
+
+      const expressions = currentModel.internalModel.settings.expressions;
+      if (!expressions || expressions.length === 0) {
+        setStatus('没有可用表情');
+        return;
+      }
+
+      expressionIndex = (expressionIndex + 1) % expressions.length;
+      const exprName = expressions[expressionIndex].File;
+
+      setStatus(`切换表情：${exprName}`);
+      currentModel.expression(exprName);
+    }
+
+    // 重置模型
+    window.resetModel = function() {
+      if (currentModel) {
+        currentModel.x = MODELS[currentModelId].position.x;
+        currentModel.y = MODELS[currentModelId].position.y;
+        currentModel.scale.set(MODELS[currentModelId].scale);
+        currentModel.angle = 0;
+        currentModel.motion('idle');
+        setStatus('模型已重置');
+      }
+    }
+
+    // 启动
+    initApp();
+  </script>
+</body>
+</html>

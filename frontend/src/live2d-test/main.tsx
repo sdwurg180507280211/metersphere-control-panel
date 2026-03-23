@@ -14,11 +14,31 @@ const MODELS = {
     path: '/live2d/rice/Rice.model3.json',
     scale: 0.15,
     position: { x: 400, y: 480 }
+    // Rice 没有预定义动作
   },
   fuxuan: {
     path: '/live2d/fuxuan/符玄.model3.json',
     scale: 0.15,
     position: { x: 400, y: 500 }
+    // 符玄没有预定义动作
+  },
+  huohuo: {
+    path: '/live2d/huohuo/藿藿.model3.json',
+    scale: 0.12,
+    position: { x: 400, y: 480 }
+    // 动作定义在 model3.json 中
+  },
+  jian: {
+    path: '/live2d/jian/简.model3.json',
+    scale: 0.12,
+    position: { x: 400, y: 480 }
+    // 动作定义在 model3.json 中
+  },
+  yangyang: {
+    path: '/live2d/yangyang/秧秧.model3.json',
+    scale: 0.12,
+    position: { x: 400, y: 480 }
+    // 动作定义在 model3.json 中
   }
 };
 
@@ -26,6 +46,8 @@ let app: PIXI.Application | null = null;
 let currentModel: any = null;
 let currentModelId: string | null = null;
 let expressionIndex = 0;
+let availableMotions: Array<{ group: string, index: number, name: string }> = [];
+let availableExpressions: Array<{ file: string, name: string }> = [];
 
 // 状态标志
 let autoBlink = true;
@@ -44,7 +66,18 @@ function setStatus(msg: string, type: 'normal' | 'loading' | 'error' = 'normal')
 
 function updateCurrentModelDisplay(modelId: string) {
   const el = document.getElementById('current-model-display');
-  if (el) el.textContent = modelId === 'rice' ? 'Rice' : '符玄';
+  if (el) el.textContent = getModelDisplayName(modelId);
+}
+
+function getModelDisplayName(modelId: string): string {
+  const names: Record<string, string> = {
+    rice: 'Rice',
+    fuxuan: '符玄',
+    huohuo: '藿藿',
+    jian: '简',
+    yangyang: '秧秧'
+  };
+  return names[modelId] || modelId;
 }
 
 // 更新滑块值显示
@@ -135,6 +168,147 @@ function initSliders() {
   }
 }
 
+// 获取模型可用的动作列表（从 motionManager 读取）
+function getAvailableMotions(): Array<{ group: string, index: number, name: string }> {
+  if (!currentModel?.internalModel?.motionManager) {
+    return [];
+  }
+
+  const motionManager = currentModel.internalModel.motionManager;
+  const motions: Array<{ group: string, index: number, name: string }> = [];
+
+  // 从 motionManager 读取动作定义
+  const definitions = motionManager.definitions;
+  for (const [group, groupMotions] of Object.entries(definitions)) {
+    if (groupMotions && Array.isArray(groupMotions)) {
+      groupMotions.forEach((motion: any, index: number) => {
+        const fileName = motion.File || motion.file || '';
+        const motionName = fileName.replace('.motion3.json', '').replace('.mtn', '');
+        motions.push({
+          group,
+          index,
+          name: motionName
+        });
+      });
+    }
+  }
+
+  return motions;
+}
+
+// 更新动作按钮
+function updateMotionButtons() {
+  const motionButtonsContainer = document.getElementById('motion-buttons');
+  const motionCountEl = document.getElementById('motion-count');
+  if (!motionButtonsContainer) return;
+
+  const motions = getAvailableMotions();
+  availableMotions = motions;
+
+  // 更新计数
+  if (motionCountEl) {
+    motionCountEl.textContent = motions.length.toString();
+  }
+
+  if (motions.length === 0) {
+    // 没有预定义动作，显示基础交互按钮
+    motionButtonsContainer.innerHTML = `
+      <div class="motion-item" onclick="playTapMotion()">
+        <span class="motion-icon">👆</span>
+        <span class="motion-name">点击测试</span>
+      </div>
+      <div class="motion-item" onclick="playRandomParam()">
+        <span class="motion-icon">🎲</span>
+        <span class="motion-name">随机参数</span>
+      </div>
+    `;
+    setStatus(`${getModelDisplayName(currentModelId || 'unknown')} 没有预定义动作文件`);
+  } else {
+    // 有动作，按分组显示
+    const motionsByGroup: Record<string, Array<{ group: string, index: number, name: string }>> = {};
+    motions.forEach(m => {
+      if (!motionsByGroup[m.group]) {
+        motionsByGroup[m.group] = [];
+      }
+      motionsByGroup[m.group].push(m);
+    });
+
+    let html = '';
+    for (const [group, groupMotions] of Object.entries(motionsByGroup)) {
+      html += `<div class="motion-section">`;
+      html += `<div class="motion-section-title">${group}</div>`;
+      html += `<div class="motion-list">`;
+      groupMotions.forEach((m, i) => {
+        const globalIndex = motions.findIndex(motion => motion.group === m.group && motion.index === m.index);
+        html += `
+          <div class="motion-item" data-motion-index="${globalIndex}" onclick="playCustomMotion(${globalIndex})">
+            <span class="motion-icon">${getMotionEmoji(m.name)}</span>
+            <span class="motion-name">${m.name}</span>
+          </div>
+        `;
+      });
+      html += `</div></div>`;
+    }
+    motionButtonsContainer.innerHTML = html;
+    setStatus(`${getModelDisplayName(currentModelId || 'unknown')} 加载完成，${motions.length} 个可用动作`);
+  }
+}
+
+function getMotionEmoji(motionName: string): string {
+  const emojis: Record<string, string> = {
+    '待机': '🎬',
+    '点击': '👆',
+    '好奇': '🤔',
+    '瞌睡': '😴',
+    '灵魂': '👻',
+    '摇头': '💫',
+    '振头': '🔄',
+    '拿旗子': '🚩'
+  };
+  for (const [key, emoji] of Object.entries(emojis)) {
+    if (motionName.includes(key)) return emoji;
+  }
+  return '✨';
+}
+
+// 更新表情列表
+function updateExpressionList(modelId: string) {
+  const expressionContainer = document.getElementById('expression-buttons');
+  const expressionCountEl = document.getElementById('expression-count');
+  if (!expressionContainer) return;
+
+  // 需要等模型加载后才有表情数据
+  if (!currentModel?.internalModel?.settings?.expressions) {
+    availableExpressions = [];
+    if (expressionCountEl) expressionCountEl.textContent = '0';
+    expressionContainer.innerHTML = '<div class="empty-state">暂无可用表情</div>';
+    return;
+  }
+
+  const expressions = currentModel.internalModel.settings.expressions;
+  if (!expressions || expressions.length === 0) {
+    availableExpressions = [];
+    if (expressionCountEl) expressionCountEl.textContent = '0';
+    expressionContainer.innerHTML = '<div class="empty-state">暂无可用表情</div>';
+    return;
+  }
+
+  availableExpressions = expressions.map((expr: any, i: number) => ({
+    file: expr.File || expr.file,
+    name: (expr.File || expr.file).replace('.exp.json', '').replace('.exp3.json', '')
+  }));
+
+  if (expressionCountEl) {
+    expressionCountEl.textContent = availableExpressions.length.toString();
+  }
+
+  const buttonsHtml = availableExpressions.map((expr, i) =>
+    `<button class="expression-btn ${i === expressionIndex ? 'active' : ''}" onclick="setExpression(${i})">${expr.name}</button>`
+  ).join('');
+
+  expressionContainer.innerHTML = buttonsHtml;
+}
+
 async function initApp() {
   const container = document.getElementById('canvas-container');
   if (!container) return;
@@ -154,7 +328,40 @@ async function initApp() {
   // 初始化滑块
   initSliders();
 
+  // 初始化模型选择按钮
+  initModelSelectButtons();
+
+  // 更新模型选择下拉框
+  updateModelSelect();
+
   await loadModel('rice');
+}
+
+function initModelSelectButtons() {
+  // 绑定模型选择按钮事件
+  document.querySelectorAll('#model-select .model-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      const modelId = target.getAttribute('data-model');
+      if (modelId) loadModel(modelId);
+    });
+  });
+}
+
+function updateModelSelect() {
+  const container = document.getElementById('model-select');
+  if (!container) return;
+
+  const buttons = Object.entries(MODELS).map(([id, config]) => {
+    const displayName = getModelDisplayName(id);
+    const activeClass = currentModelId === id ? 'active' : (id === 'rice' && !currentModelId ? 'active' : '');
+    return `<button data-model="${id}" class="model-btn ${activeClass}">${displayName}</button>`;
+  }).join('');
+
+  container.innerHTML = buttons;
+
+  // 重新绑定事件
+  initModelSelectButtons();
 }
 
 async function loadModel(modelId: string) {
@@ -164,15 +371,16 @@ async function loadModel(modelId: string) {
     return;
   }
 
-  setStatus(`正在加载 ${modelId}...`, 'loading');
+  setStatus(`正在加载 ${getModelDisplayName(modelId)}...`, 'loading');
   updateCurrentModelDisplay(modelId);
 
   // 更新按钮状态
-  document.querySelectorAll('.model-select button').forEach(btn => {
+  document.querySelectorAll('#model-select .model-btn').forEach(btn => {
     btn.classList.remove('active');
+    if (btn.getAttribute('data-model') === modelId) {
+      btn.classList.add('active');
+    }
   });
-  const activeBtn = document.getElementById(`btn-${modelId}`);
-  if (activeBtn) activeBtn.classList.add('active');
 
   // 移除旧模型
   if (currentModel && app) {
@@ -219,7 +427,12 @@ async function loadModel(modelId: string) {
 
     setupInteraction(currentModel);
 
-    setStatus(`${modelId} 加载完成！`, 'normal');
+    // 更新动作按钮（等模型加载完成后读取 motionManager）
+    setTimeout(() => {
+      updateMotionButtons();
+      updateExpressionList(currentModelId!);
+    }, 100);
+
     currentModelId = modelId;
     expressionIndex = 0;
   } catch (error: any) {
@@ -233,8 +446,12 @@ function setupInteraction(model: any) {
 
   model.on('pointerdown', () => {
     console.log('Model clicked!');
-    if (hitTestEnabled) {
-      model.motion('tap_body');
+    if (hitTestEnabled && availableMotions.length === 0) {
+      // 没有预定义动作时，播放随机参数
+      playRandomParam();
+    } else if (hitTestEnabled) {
+      // 有预定义动作时，播放点击动作
+      playTapMotion();
     }
   });
 
@@ -249,17 +466,81 @@ function setupInteraction(model: any) {
   }
 }
 
-function playMotion(motionName: string) {
+// 播放点击动作
+function playTapMotion() {
   if (!currentModel) {
     setStatus('请先加载模型', 'error');
     return;
   }
-  setStatus(`播放动作：${motionName}`);
+  setStatus('播放点击动作');
   try {
-    currentModel.motion(motionName);
+    // 尝试播放 tap_body 动作，如果没有则随机播放
+    currentModel.motion('tap_body').catch(() => {
+      // 如果没有 tap_body，播放 Idle 动作
+      if (availableMotions.length > 0) {
+        const idleMotion = availableMotions.find(m => m.group === 'Idle');
+        if (idleMotion) {
+          currentModel.motion('Idle', idleMotion.index);
+        }
+      }
+    });
   } catch (error: any) {
     setStatus(`动作播放失败：${error.message}`, 'error');
   }
+}
+
+// 播放自定义动作
+function playCustomMotion(index: number) {
+  if (!currentModel || !availableMotions[index]) {
+    setStatus('请先加载模型', 'error');
+    return;
+  }
+  const motion = availableMotions[index];
+  setStatus(`播放动作：${motion.name}`);
+  try {
+    currentModel.motion(motion.group, motion.index);
+  } catch (error: any) {
+    setStatus(`动作播放失败：${error.message}`, 'error');
+  }
+}
+
+// 播放随机参数（用于没有动作文件的模型）
+function playRandomParam() {
+  if (!currentModel) {
+    setStatus('请先加载模型', 'error');
+    return;
+  }
+  setStatus('播放随机参数变化');
+
+  const internalModel = currentModel.internalModel;
+  if (!internalModel?.coreModel) return;
+
+  // 随机设置一些参数
+  const paramIds = [
+    'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
+    'ParamEyeLOpen', 'ParamEyeROpen',
+    'ParamMouthOpenY', 'ParamMouthForm'
+  ];
+
+  paramIds.forEach(paramId => {
+    const paramValue = Math.random() * 2 - 1; // -1 to 1
+    try {
+      internalModel.coreModel.setParameterValueById(paramId, paramValue);
+    } catch (e) {
+      // 参数不存在，忽略
+    }
+  });
+
+  // 2 秒后恢复
+  setTimeout(() => {
+    if (currentModel?.internalModel?.coreModel) {
+      paramIds.forEach(paramId => {
+        try {
+          currentModel.internalModel.coreModel.setParameterValueById(paramId, 0);
+        } catch (e) {}
+      });
+    }
+  }, 2000);
 }
 
 function toggleExpression() {
@@ -276,6 +557,19 @@ function toggleExpression() {
   const exprName = expressions[expressionIndex].File;
   setStatus(`切换表情：${exprName}`);
   currentModel.expression(exprName);
+  updateExpressionList(currentModelId!);
+}
+
+function setExpression(index: number) {
+  if (!currentModel || !availableExpressions[index]) {
+    setStatus('请先加载模型', 'error');
+    return;
+  }
+  const expr = availableExpressions[index];
+  setStatus(`设置表情：${expr.name}`);
+  currentModel.expression(expr.file);
+  expressionIndex = index;
+  updateExpressionList(currentModelId!);
 }
 
 function resetExpression() {
@@ -286,6 +580,7 @@ function resetExpression() {
   setStatus('重置表情');
   currentModel.expression(0);
   expressionIndex = 0;
+  updateExpressionList(currentModelId!);
 }
 
 function resetModel() {
@@ -295,7 +590,21 @@ function resetModel() {
     currentModel.y = cfg.position.y;
     currentModel.scale.set(cfg.scale);
     currentModel.angle = 0;
-    currentModel.motion('idle');
+
+    // 重置参数
+    if (currentModel.internalModel?.coreModel) {
+      // 重置所有参数为默认值
+      const paramIds = [
+        'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
+        'ParamEyeLOpen', 'ParamEyeROpen',
+        'ParamMouthOpenY', 'ParamMouthForm'
+      ];
+      paramIds.forEach(paramId => {
+        try {
+          currentModel.internalModel.coreModel.setParameterValueById(paramId, 0);
+        } catch (e) {}
+      });
+    }
 
     // 重置滑块
     const scaleSlider = document.getElementById('scale-slider') as HTMLInputElement;
@@ -326,8 +635,11 @@ function resetModel() {
 
 // 暴露到全局
 (window as any).loadModel = loadModel;
-(window as any).playMotion = playMotion;
+(window as any).playCustomMotion = playCustomMotion;
+(window as any).playTapMotion = playTapMotion;
+(window as any).playRandomParam = playRandomParam;
 (window as any).toggleExpression = toggleExpression;
+(window as any).setExpression = setExpression;
 (window as any).resetExpression = resetExpression;
 (window as any).resetModel = resetModel;
 

@@ -12,14 +12,13 @@
       --success-color: #10b981;
       --warning-color: #f59e0b;
       --danger-color: #ef4444;
-      --bg-gradient-start: #0f0f1a;
-      --bg-gradient-mid: #1a1a2e;
-      --bg-gradient-end: #16213e;
-      --card-bg: rgba(255, 255, 255, 0.05);
-      --card-border: rgba(99, 102, 241, 0.3);
+      --bg-color: #0f0f1a;
+      --sidebar-bg: rgba(15, 15, 26, 0.95);
+      --sidebar-border: rgba(99, 102, 241, 0.2);
       --text-primary: #f8fafc;
       --text-secondary: #94a3b8;
-      --accent-glow: rgba(99, 102, 241, 0.5);
+      --accent-glow: rgba(99, 102, 241, 0.3);
+      --drawer-width: 380px;
     }
 
     * {
@@ -29,198 +28,305 @@
     }
 
     body {
-      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
+      background: var(--bg-color);
       min-height: 100vh;
-      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       color: var(--text-primary);
-      overflow-x: hidden;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle at 50% 50%, var(--accent-glow) 0%, transparent 50%);
-      opacity: 0.1;
-      pointer-events: none;
-      animation: glow 15s ease-in-out infinite;
-    }
-
-    @keyframes glow {
-      0%, 100% { transform: scale(1) rotate(0deg); }
-      50% { transform: scale(1.1) rotate(180deg); }
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 40px 20px;
-      position: relative;
-      z-index: 1;
-    }
-
-    h1 {
-      color: var(--text-primary);
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 2.5rem;
-      font-weight: 700;
-      text-shadow: 0 0 40px var(--accent-glow);
-      letter-spacing: -0.5px;
-    }
-
-    .subtitle {
-      text-align: center;
-      color: var(--text-secondary);
-      margin-bottom: 30px;
-      font-size: 0.95rem;
-    }
-
-    /* 主布局 */
-    .main-layout {
-      display: grid;
-      grid-template-columns: 1fr 400px;
-      gap: 30px;
-      align-items: start;
-    }
-
-    @media (max-width: 1200px) {
-      .main-layout {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* Canvas 容器 */
-    .canvas-wrapper {
-      position: relative;
-      background: var(--card-bg);
-      border-radius: 24px;
-      border: 1px solid var(--card-border);
-      padding: 20px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-    }
-
-    #canvas-container {
-      width: 100%;
-      aspect-ratio: 1;
-      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
-      border-radius: 16px;
       overflow: hidden;
-      position: relative;
+    }
+
+    /* Canvas 全屏显示 */
+    #canvas-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
     }
 
     #canvas-container canvas {
       display: block;
-      width: 100% !important;
-      height: 100% !important;
+      width: 100%;
+      height: 100%;
     }
 
-    /* 控制面板 */
-    .control-panel {
+    /* 侧边栏抽屉 */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--drawer-width);
+      height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      z-index: 100;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      transition: transform 0.3s ease;
+      backdrop-filter: blur(20px);
     }
 
-    .panel-section {
-      background: var(--card-bg);
-      border-radius: 16px;
-      border: 1px solid var(--card-border);
-      padding: 20px;
-      backdrop-filter: blur(10px);
+    .sidebar.collapsed {
+      transform: translateX(calc(-1 * var(--drawer-width)));
     }
 
-    .panel-section h3 {
-      font-size: 0.85rem;
+    /* 顶部标题栏 */
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--sidebar-border);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .sidebar-title {
+      font-size: 1.1rem;
       font-weight: 600;
-      color: var(--text-secondary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 16px;
+      color: var(--text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .panel-section h3::before {
-      content: '';
-      width: 3px;
-      height: 16px;
-      background: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
-      border-radius: 2px;
-    }
-
-    /* 模型选择 */
-    .model-select {
+    .header-actions {
       display: flex;
       gap: 8px;
-      flex-wrap: wrap;
     }
 
-    .model-select button {
-      flex: 1;
-      min-width: 100px;
-      background: rgba(99, 102, 241, 0.15);
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
       color: var(--text-primary);
-      border: 1px solid var(--primary-color);
-      padding: 12px 20px;
-      border-radius: 10px;
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .model-select button:hover {
-      background: rgba(99, 102, 241, 0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px -10px var(--accent-glow);
-    }
-
-    .model-select button.active {
-      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
-      border-color: transparent;
-      box-shadow: 0 10px 30px -10px var(--accent-glow);
-    }
-
-    /* 动作按钮 */
-    .action-buttons {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-
-    .action-buttons button {
-      background: rgba(236, 72, 153, 0.15);
-      color: var(--text-primary);
-      border: 1px solid var(--secondary-color);
-      padding: 12px 16px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: all 0.2s;
     }
 
-    .action-buttons button:hover {
-      background: rgba(236, 72, 153, 0.3);
+    .icon-btn:hover {
+      background: rgba(99, 102, 241, 0.3);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* 侧边栏内容区 */
+    .sidebar-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .sidebar-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar-content::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.3);
+      border-radius: 3px;
+    }
+
+    /* 折叠面板组 */
+    .accordion-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .accordion {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      width: 100%;
+      text-align: left;
+      transition: background 0.2s;
+    }
+
+    .accordion-header:hover {
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .accordion-header .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .accordion-icon {
+      width: 20px;
+      height: 20px;
+      transition: transform 0.3s;
+    }
+
+    .accordion.open .accordion-icon {
+      transform: rotate(90deg);
+    }
+
+    .accordion-badge {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      background: rgba(99, 102, 241, 0.2);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .accordion.open .accordion-body {
+      max-height: 1000px;
+    }
+
+    .accordion-inner {
+      padding: 12px 16px 16px;
+    }
+
+    /* 模型选择按钮 */
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .model-btn {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .model-btn:hover {
+      background: rgba(99, 102, 241, 0.2);
       transform: translateY(-2px);
     }
 
-    .action-buttons button:active {
-      transform: translateY(0);
+    .model-btn.active {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      border-color: transparent;
+      box-shadow: 0 4px 15px var(--accent-glow);
     }
 
-    /* 滑块控制 */
-    .slider-group {
+    .model-btn small {
+      display: block;
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.7);
+      margin-top: 4px;
+      font-weight: normal;
+    }
+
+    /* 动作列表 */
+    .motion-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .motion-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .motion-item:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--primary-color);
+    }
+
+    .motion-item.playing {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: var(--primary-color);
+    }
+
+    .motion-item.playing::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: var(--progress, 0%);
+      background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+      opacity: 0.2;
+      transition: width 0.1s;
+    }
+
+    .motion-icon {
+      font-size: 1.1rem;
+      margin-right: 10px;
+    }
+
+    .motion-name {
+      flex: 1;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .motion-group-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    .motion-section {
+      margin-bottom: 12px;
+    }
+
+    .motion-section-title {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    /* 滑块 */
+    .slider-item {
       margin-bottom: 16px;
     }
 
-    .slider-group:last-child {
+    .slider-item:last-child {
       margin-bottom: 0;
     }
 
@@ -229,24 +335,24 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 8px;
-      font-size: 13px;
+      font-size: 0.8rem;
       color: var(--text-secondary);
     }
 
     .slider-value {
-      background: rgba(99, 102, 241, 0.2);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 12px;
+      font-size: 0.75rem;
       font-weight: 600;
       color: var(--primary-color);
+      background: rgba(99, 102, 241, 0.15);
+      padding: 3px 8px;
+      border-radius: 4px;
       min-width: 50px;
       text-align: center;
     }
 
     input[type="range"] {
       width: 100%;
-      height: 6px;
+      height: 5px;
       border-radius: 3px;
       background: rgba(255, 255, 255, 0.1);
       outline: none;
@@ -255,30 +361,117 @@
 
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
       cursor: pointer;
-      box-shadow: 0 4px 15px var(--accent-glow);
+      box-shadow: 0 2px 10px var(--accent-glow);
       transition: transform 0.2s;
     }
 
     input[type="range"]::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
+      transform: scale(1.15);
     }
 
-    /* 状态显示 */
+    /* 复选框 */
+    .checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .checkbox-item:hover {
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .checkbox-item input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+
+    /* 表情列表 */
+    .expression-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .expression-btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-primary);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .expression-btn:hover {
+      background: rgba(99, 102, 241, 0.2);
+    }
+
+    .expression-btn.active {
+      background: rgba(236, 72, 153, 0.2);
+      border-color: var(--secondary-color);
+    }
+
+    /* 重置按钮 */
+    .btn-reset {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 16px;
+    }
+
+    .btn-reset:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: var(--danger-color);
+    }
+
+    /* 状态栏 */
     .status-bar {
-      background: var(--card-bg);
+      position: fixed;
+      bottom: 20px;
+      left: calc(var(--drawer-width) + 20px);
+      background: rgba(15, 15, 26, 0.9);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--sidebar-border);
       border-radius: 12px;
-      border: 1px solid var(--card-border);
-      padding: 12px 20px;
-      font-size: 13px;
+      padding: 10px 16px;
+      font-size: 0.8rem;
       color: var(--text-secondary);
       display: flex;
       align-items: center;
       gap: 10px;
+      z-index: 50;
+      transition: left 0.3s;
+    }
+
+    .sidebar.collapsed ~ .status-bar {
+      left: 20px;
     }
 
     .status-indicator {
@@ -302,221 +495,255 @@
       50% { opacity: 0.5; box-shadow: 0 0 5px currentColor; }
     }
 
-    /* 信息卡片 */
-    .info-card {
-      background: var(--card-bg);
-      border-radius: 16px;
-      border: 1px solid var(--card-border);
-      padding: 20px;
-      backdrop-filter: blur(10px);
-      margin-bottom: 20px;
-    }
-
-    .info-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 15px;
-    }
-
-    .info-item {
-      background: rgba(255, 255, 255, 0.03);
-      border-radius: 10px;
+    /* 模型名称显示 */
+    .model-name-display {
+      text-align: center;
       padding: 12px;
-    }
-
-    .info-item-label {
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-bottom: 4px;
-    }
-
-    .info-item-value {
-      font-size: 14px;
+      border-bottom: 1px solid var(--sidebar-border);
+      font-size: 1rem;
       font-weight: 600;
       color: var(--text-primary);
+      background: rgba(99, 102, 241, 0.05);
     }
 
-    /* 复选框 */
-    .checkbox-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    .model-name-display span {
+      color: var(--primary-color);
     }
 
-    .checkbox-label {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      font-size: 13px;
+    /* 空状态提示 */
+    .empty-state {
+      text-align: center;
+      padding: 20px;
       color: var(--text-secondary);
-      padding: 8px 12px;
-      border-radius: 8px;
-      transition: background 0.2s;
+      font-size: 0.8rem;
     }
 
-    .checkbox-label:hover {
-      background: rgba(99, 102, 241, 0.1);
-    }
+    /* 响应式 */
+    @media (max-width: 768px) {
+      :root {
+        --drawer-width: 320px;
+      }
 
-    .checkbox-label input {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--primary-color);
-      cursor: pointer;
-    }
+      .sidebar {
+        transform: translateX(calc(-1 * var(--drawer-width)));
+      }
 
-    /* 重置按钮 */
-    .btn-reset {
-      width: 100%;
-      background: rgba(239, 68, 68, 0.15);
-      color: var(--text-primary);
-      border: 1px solid var(--danger-color);
-      padding: 14px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      transition: all 0.2s;
-      margin-top: 10px;
-    }
+      .sidebar.open {
+        transform: translateX(0);
+      }
 
-    .btn-reset:hover {
-      background: rgba(239, 68, 68, 0.3);
-      transform: translateY(-2px);
+      .status-bar {
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 80px;
+      }
     }
   </style>
 
-  <!-- Cubism Core (Cubism 3/4/5) -->
+  <!-- Cubism Core -->
   <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>🎭 Live2D 模型测试</h1>
-    <p class="subtitle">基于 pixi-live2d-display + PixiJS v7</p>
+  <!-- Canvas 容器 - 全屏 -->
+  <div id="canvas-container"></div>
 
-    <div class="info-card">
-      <div class="info-grid">
-        <div class="info-item">
-          <div class="info-item-label">模型数量</div>
-          <div class="info-item-value">2 个</div>
-        </div>
-        <div class="info-item">
-          <div class="info-item-label">Canvas 尺寸</div>
-          <div class="info-item-value">800x800</div>
-        </div>
-        <div class="info-item">
-          <div class="info-item-label">遮罩支持</div>
-          <div class="info-item-value">已启用</div>
-        </div>
-        <div class="info-item">
-          <div class="info-item-label">当前模型</div>
-          <div class="info-item-value" id="current-model-display">Rice</div>
-        </div>
+  <!-- 侧边栏 -->
+  <div class="sidebar" id="sidebar">
+    <!-- 顶部 -->
+    <div class="sidebar-header">
+      <div class="sidebar-title">
+        <span>🎭</span> Live2D Viewer
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" onclick="toggleSidebar()" title="切换面板">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
       </div>
     </div>
 
-    <div class="main-layout">
-      <!-- 左侧：Canvas -->
-      <div class="canvas-wrapper">
-        <div id="canvas-container"></div>
-      </div>
+    <!-- 模型名称 -->
+    <div class="model-name-display">
+      当前模型：<span id="current-model-display">Rice</span>
+    </div>
 
-      <!-- 右侧：控制面板 -->
-      <div class="control-panel">
+    <!-- 内容区 -->
+    <div class="sidebar-content">
+      <div class="accordion-group">
+
         <!-- 模型选择 -->
-        <div class="panel-section">
-          <h3>模型选择</h3>
-          <div class="model-select">
-            <button onclick="loadModel('rice')" id="btn-rice" class="active">🍚 Rice</button>
-            <button onclick="loadModel('fuxuan')" id="btn-fuxuan">✨ 符玄</button>
+        <div class="accordion open">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              模型选择
+            </div>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <div class="model-grid" id="model-select">
+                <!-- 动态生成 -->
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- 动作控制 -->
-        <div class="panel-section">
-          <h3>动作控制</h3>
-          <div class="action-buttons">
-            <button onclick="playMotion('idle')">🎬 待机动作</button>
-            <button onclick="playMotion('tap_body')">👆 点击身体</button>
-            <button onclick="playMotion('shake')">🔄 摇晃</button>
-            <button onclick="playMotion('flick_head')">💫 摇头</button>
+        <div class="accordion">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              动作控制
+            </div>
+            <span class="accordion-badge" id="motion-count">0</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <div class="motion-list" id="motion-buttons">
+                <!-- 动态生成 -->
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- 表情控制 -->
-        <div class="panel-section">
-          <h3>表情控制</h3>
-          <div class="action-buttons">
-            <button onclick="toggleExpression()">😊 切换表情</button>
-            <button onclick="resetExpression()">😐 重置表情</button>
+        <div class="accordion">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              表情控制
+            </div>
+            <span class="accordion-badge" id="expression-count">0</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <div class="expression-list" id="expression-buttons">
+                <div class="empty-state">暂无可用表情</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- 模型参数 -->
-        <div class="panel-section">
-          <h3>模型参数</h3>
-          <div class="slider-group">
-            <div class="slider-label">
-              <span>缩放</span>
-              <span class="slider-value" id="scale-value">0.15</span>
+        <!-- 显示设置 -->
+        <div class="accordion open">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              显示设置
             </div>
-            <input type="range" id="scale-slider" min="0.01" max="0.5" step="0.01" value="0.15">
-          </div>
-          <div class="slider-group">
-            <div class="slider-label">
-              <span>位置 X</span>
-              <span class="slider-value" id="pos-x-value">400</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <!-- 缩放 -->
+              <div class="slider-item">
+                <div class="slider-label">
+                  <span>缩放</span>
+                  <span class="slider-value" id="scale-value">0.15</span>
+                </div>
+                <input type="range" id="scale-slider" min="0.01" max="0.5" step="0.01" value="0.15">
+              </div>
+              <!-- 位置 X -->
+              <div class="slider-item">
+                <div class="slider-label">
+                  <span>位置 X</span>
+                  <span class="slider-value" id="pos-x-value">400</span>
+                </div>
+                <input type="range" id="pos-x-slider" min="0" max="800" step="10" value="400">
+              </div>
+              <!-- 位置 Y -->
+              <div class="slider-item">
+                <div class="slider-label">
+                  <span>位置 Y</span>
+                  <span class="slider-value" id="pos-y-value">500</span>
+                </div>
+                <input type="range" id="pos-y-slider" min="0" max="800" step="10" value="500">
+              </div>
+              <!-- 旋转 -->
+              <div class="slider-item">
+                <div class="slider-label">
+                  <span>旋转</span>
+                  <span class="slider-value" id="rotation-value">0°</span>
+                </div>
+                <input type="range" id="rotation-slider" min="-180" max="180" step="5" value="0">
+              </div>
             </div>
-            <input type="range" id="pos-x-slider" min="0" max="800" step="10" value="400">
-          </div>
-          <div class="slider-group">
-            <div class="slider-label">
-              <span>位置 Y</span>
-              <span class="slider-value" id="pos-y-value">500</span>
-            </div>
-            <input type="range" id="pos-y-slider" min="0" max="800" step="10" value="500">
-          </div>
-          <div class="slider-group">
-            <div class="slider-label">
-              <span>旋转</span>
-              <span class="slider-value" id="rotation-value">0°</span>
-            </div>
-            <input type="range" id="rotation-slider" min="-180" max="180" step="5" value="0">
           </div>
         </div>
 
         <!-- 选项 -->
-        <div class="panel-section">
-          <h3>显示选项</h3>
-          <div class="checkbox-group">
-            <label class="checkbox-label">
-              <input type="checkbox" id="auto-blink" checked>
-              自动眨眼
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="hit-test" checked>
-              点击互动
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" id="focus-control" checked>
-              鼠标跟随
-            </label>
+        <div class="accordion">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              交互选项
+            </div>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <div class="checkbox-list">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="auto-blink" checked>
+                  自动眨眼
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" id="hit-test" checked>
+                  点击互动
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" id="focus-control" checked>
+                  鼠标跟随
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- 重置 -->
-        <button class="btn-reset" onclick="resetModel()">🔄 重置模型</button>
-
-        <!-- 状态栏 -->
-        <div class="status-bar">
-          <div class="status-indicator" id="status-indicator"></div>
-          <span id="status">正在初始化...</span>
-        </div>
       </div>
+
+      <!-- 重置按钮 -->
+      <button class="btn-reset" onclick="resetModel()">🔄 重置模型</button>
     </div>
   </div>
 
+  <!-- 状态栏 -->
+  <div class="status-bar">
+    <div class="status-indicator" id="status-indicator"></div>
+    <span id="status">正在初始化...</span>
+  </div>
+
   <script type="module" src="/src/live2d-test/main.tsx"></script>
+  <script>
+    // UI 控制函数
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('collapsed');
+
+      // 移动端支持
+      if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('open');
+      }
+    }
+
+    function toggleAccordion(header) {
+      const accordion = header.closest('.accordion');
+      accordion.classList.toggle('open');
+    }
+
+    // 移动端初始化
+    if (window.innerWidth <= 768) {
+      document.getElementById('sidebar').classList.add('collapsed');
+    }
+  </script>
 </body>
 </html>
