@@ -7,7 +7,19 @@
 			"Nicole.8192/texture_01.png"
 		],
 		"Physics": "Nicole.physics3.json",
-		"DisplayInfo": "Nicole.cdi3.json"
+		"DisplayInfo": "Nicole.cdi3.json",
+		"Expressions": [
+			{ "File": "Love Hand Posture.exp3.json", "Name": "爱心手势" },
+			{ "File": "Love eye.exp3.json", "Name": "爱心眼" },
+			{ "File": "Money Hand Posture.exp3.json", "Name": "金钱手势" },
+			{ "File": "Money eye.exp3.json", "Name": "金钱眼" },
+			{ "File": "Phone Hand Posture.exp3.json", "Name": "电话手势" },
+			{ "File": "Y Hand Posture.exp3.json", "Name": "Y 手势" },
+			{ "File": "black face.exp3.json", "Name": "黑脸" },
+			{ "File": "cry.exp3.json", "Name": "哭" },
+			{ "File": "shyness.exp3.json", "Name": "害羞" },
+			{ "File": "sitting position.exp3.json", "Name": "坐姿" }
+		]
 	},
 	"Groups": [
 		{

@@ -6,7 +6,10 @@
 			"镜流.8192/texture_00.png"
 		],
 		"Physics": "镜流.physics3.json",
-		"DisplayInfo": "镜流.cdi3.json"
+		"DisplayInfo": "镜流.cdi3.json",
+		"Expressions": [
+			{ "File": "眼罩.exp3.json", "Name": "眼罩" }
+		]
 	},
 	"Groups": [
 		{

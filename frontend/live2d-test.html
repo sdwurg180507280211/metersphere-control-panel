@@ -455,7 +455,7 @@
     .status-bar {
       position: fixed;
       bottom: 20px;
-      left: calc(var(--drawer-width) + 20px);
+      right: 20px;
       background: rgba(15, 15, 26, 0.9);
       backdrop-filter: blur(20px);
       border: 1px solid var(--sidebar-border);
@@ -467,11 +467,7 @@
       align-items: center;
       gap: 10px;
       z-index: 50;
-      transition: left 0.3s;
-    }
-
-    .sidebar.collapsed ~ .status-bar {
-      left: 20px;
+      max-width: 300px;
     }
 
     .status-indicator {

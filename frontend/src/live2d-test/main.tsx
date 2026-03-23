@@ -8,39 +8,48 @@ config.cubism4.supportMoreMaskDivisions = true;
 // 注册 Ticker
 Live2DModel.registerTicker(PIXI.Ticker);
 
-// 模型配置 - 增大的缩放比例
+// 模型配置 - 统一缩放比例，模型加载后会自动计算最佳缩放
 const MODELS = {
   rice: {
     path: '/live2d/rice/Rice.model3.json',
-    scale: 0.15,
-    position: { x: 400, y: 480 }
-    // Rice 没有预定义动作
+    name: 'Rice'
   },
   fuxuan: {
     path: '/live2d/fuxuan/符玄.model3.json',
-    scale: 0.15,
-    position: { x: 400, y: 500 }
-    // 符玄没有预定义动作
+    name: '符玄'
   },
   huohuo: {
     path: '/live2d/huohuo/藿藿.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
-    // 动作定义在 model3.json 中
+    name: '藿藿'
   },
   jian: {
     path: '/live2d/jian/简.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
-    // 动作定义在 model3.json 中
+    name: '简'
   },
   yangyang: {
     path: '/live2d/yangyang/秧秧.model3.json',
-    scale: 0.12,
-    position: { x: 400, y: 480 }
-    // 动作定义在 model3.json 中
+    name: '秧秧'
+  },
+  jingliu: {
+    path: '/live2d/jingliu/镜流.model3.json',
+    name: '镜流'
+  },
+  kafka: {
+    path: '/live2d/kafka/kafuka1.model3.json',
+    name: '卡芙卡'
+  },
+  robin: {
+    path: '/live2d/robin/知更鸟.model3.json',
+    name: '知更鸟'
+  },
+  nicole: {
+    path: '/live2d/nicole/nicole.model3.json',
+    name: '妮可'
   }
 };
+
+// 默认缩放（初始值，加载后会根据模型尺寸自动调整）
+const DEFAULT_SCALE = 0.1;
 
 let app: PIXI.Application | null = null;
 let currentModel: any = null;
@@ -70,14 +79,8 @@ function updateCurrentModelDisplay(modelId: string) {
 }
 
 function getModelDisplayName(modelId: string): string {
-  const names: Record<string, string> = {
-    rice: 'Rice',
-    fuxuan: '符玄',
-    huohuo: '藿藿',
-    jian: '简',
-    yangyang: '秧秧'
-  };
-  return names[modelId] || modelId;
+  const config = MODELS[modelId as keyof typeof MODELS];
+  return config?.name || modelId;
 }
 
 // 更新滑块值显示
@@ -313,17 +316,23 @@ async function initApp() {
   const container = document.getElementById('canvas-container');
   if (!container) return;
 
-  // 创建更大的 Canvas
+  // 设置 Canvas 全屏
+  resizeCanvas();
+
   app = new PIXI.Application({
-    width: 800,
-    height: 800,
+    width: container.clientWidth,
+    height: container.clientHeight,
     backgroundAlpha: 0,
     antialias: true,
-    resolution: window.devicePixelRatio || 1
+    resolution: window.devicePixelRatio || 1,
+    autoDensity: true
   });
 
   container.appendChild(app.view);
   setStatus('PixiJS Application 初始化完成');
+
+  // 窗口大小改变时调整 Canvas
+  window.addEventListener('resize', onWindowResize);
 
   // 初始化滑块
   initSliders();
@@ -335,6 +344,31 @@ async function initApp() {
   updateModelSelect();
 
   await loadModel('rice');
+}
+
+// 调整 Canvas 尺寸
+function resizeCanvas() {
+  const container = document.getElementById('canvas-container');
+  if (container) {
+    container.style.width = '100%';
+    container.style.height = '100%';
+  }
+}
+
+// 窗口大小改变处理
+function onWindowResize() {
+  const container = document.getElementById('canvas-container');
+  if (app && container) {
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    app.renderer.resize(width, height);
+
+    // 重新调整模型位置到中心
+    if (currentModel) {
+      currentModel.x = width / 2;
+      currentModel.y = height / 2;
+    }
+  }
 }
 
 function initModelSelectButtons() {
@@ -394,36 +428,58 @@ async function loadModel(modelId: string) {
       autoUpdate: true
     });
 
-    // 设置位置 - 居中并放大
-    currentModel.x = modelConfig.position.x;
-    currentModel.y = modelConfig.position.y;
-    currentModel.scale.set(modelConfig.scale);
+    // 设置锚点为中心
     currentModel.anchor.set(0.5);
 
+    // 计算最佳缩放比例，使模型刚好适应屏幕
+    const container = document.getElementById('canvas-container');
+    if (container && app) {
+      const canvasWidth = app.screen.width;
+      const canvasHeight = app.screen.height;
+
+      // 获取模型原始尺寸
+      const modelWidth = currentModel.width;
+      const modelHeight = currentModel.height;
+
+      // 计算缩放比例（留 10% 边距）
+      const padding = 0.9;
+      const scaleX = (canvasWidth * padding) / modelWidth;
+      const scaleY = (canvasHeight * padding) / modelHeight;
+
+      // 使用较小的缩放比例，确保模型完全在屏幕内
+      const targetScale = Math.min(scaleX, scaleY) * DEFAULT_SCALE;
+
+      currentModel.scale.set(targetScale);
+
+      // 居中放置
+      currentModel.x = canvasWidth / 2;
+      currentModel.y = canvasHeight / 2;
+
+      // 更新滑块到当前值
+      const scaleSlider = document.getElementById('scale-slider') as HTMLInputElement;
+      const posXSlider = document.getElementById('pos-x-slider') as HTMLInputElement;
+      const posYSlider = document.getElementById('pos-y-slider') as HTMLInputElement;
+      const rotationSlider = document.getElementById('rotation-slider') as HTMLInputElement;
+
+      if (scaleSlider) {
+        scaleSlider.value = targetScale.toString();
+        updateSliderValue('scale-value', targetScale.toFixed(3));
+      }
+      if (posXSlider) {
+        posXSlider.value = currentModel.x.toString();
+        updateSliderValue('pos-x-value', Math.round(currentModel.x));
+      }
+      if (posYSlider) {
+        posYSlider.value = currentModel.y.toString();
+        updateSliderValue('pos-y-value', Math.round(currentModel.y));
+      }
+      if (rotationSlider) {
+        rotationSlider.value = '0';
+        updateSliderValue('rotation-value', '0°');
+      }
+    }
+
     if (app) app.stage.addChild(currentModel);
-
-    // 更新滑块到当前值
-    const scaleSlider = document.getElementById('scale-slider') as HTMLInputElement;
-    const posXSlider = document.getElementById('pos-x-slider') as HTMLInputElement;
-    const posYSlider = document.getElementById('pos-y-slider') as HTMLInputElement;
-    const rotationSlider = document.getElementById('rotation-slider') as HTMLInputElement;
-
-    if (scaleSlider) {
-      scaleSlider.value = modelConfig.scale.toString();
-      updateSliderValue('scale-value', modelConfig.scale.toFixed(2));
-    }
-    if (posXSlider) {
-      posXSlider.value = modelConfig.position.x.toString();
-      updateSliderValue('pos-x-value', modelConfig.position.x);
-    }
-    if (posYSlider) {
-      posYSlider.value = modelConfig.position.y.toString();
-      updateSliderValue('pos-y-value', modelConfig.position.y);
-    }
-    if (rotationSlider) {
-      rotationSlider.value = '0';
-      updateSliderValue('rotation-value', '0°');
-    }
 
     setupInteraction(currentModel);
 
@@ -584,51 +640,9 @@ function resetExpression() {
 }
 
 function resetModel() {
-  if (currentModel && currentModelId) {
-    const cfg = MODELS[currentModelId as keyof typeof MODELS];
-    currentModel.x = cfg.position.x;
-    currentModel.y = cfg.position.y;
-    currentModel.scale.set(cfg.scale);
-    currentModel.angle = 0;
-
-    // 重置参数
-    if (currentModel.internalModel?.coreModel) {
-      // 重置所有参数为默认值
-      const paramIds = [
-        'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
-        'ParamEyeLOpen', 'ParamEyeROpen',
-        'ParamMouthOpenY', 'ParamMouthForm'
-      ];
-      paramIds.forEach(paramId => {
-        try {
-          currentModel.internalModel.coreModel.setParameterValueById(paramId, 0);
-        } catch (e) {}
-      });
-    }
-
-    // 重置滑块
-    const scaleSlider = document.getElementById('scale-slider') as HTMLInputElement;
-    const posXSlider = document.getElementById('pos-x-slider') as HTMLInputElement;
-    const posYSlider = document.getElementById('pos-y-slider') as HTMLInputElement;
-    const rotationSlider = document.getElementById('rotation-slider') as HTMLInputElement;
-
-    if (scaleSlider) {
-      scaleSlider.value = cfg.scale.toString();
-      updateSliderValue('scale-value', cfg.scale.toFixed(2));
-    }
-    if (posXSlider) {
-      posXSlider.value = cfg.position.x.toString();
-      updateSliderValue('pos-x-value', cfg.position.x);
-    }
-    if (posYSlider) {
-      posYSlider.value = cfg.position.y.toString();
-      updateSliderValue('pos-y-value', cfg.position.y);
-    }
-    if (rotationSlider) {
-      rotationSlider.value = '0';
-      updateSliderValue('rotation-value', '0°');
-    }
-
+  if (currentModel && currentModelId && app) {
+    // 重新加载模型以重置到最佳状态
+    loadModel(currentModelId);
     setStatus('模型已重置');
   }
 }

@@ -7,7 +7,12 @@
 			"知更鸟.8192/texture_01.png"
 		],
 		"Physics": "知更鸟.physics3.json",
-		"DisplayInfo": "知更鸟.cdi3.json"
+		"DisplayInfo": "知更鸟.cdi3.json",
+		"Expressions": [
+			{ "File": "拿酒杯.exp3.json", "Name": "拿酒杯" },
+			{ "File": "捂胸.exp3.json", "Name": "捂胸" },
+			{ "File": "麦克风.exp3.json", "Name": "麦克风" }
+		]
 	},
 	"Groups": [
 		{
