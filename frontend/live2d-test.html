@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Live2D 模型测试</title>
   <style>
+    :root {
+      --primary-color: #6366f1;
+      --primary-hover: #4f46e5;
+      --secondary-color: #ec4899;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --danger-color: #ef4444;
+      --bg-gradient-start: #0f0f1a;
+      --bg-gradient-mid: #1a1a2e;
+      --bg-gradient-end: #16213e;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(99, 102, 241, 0.3);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-glow: rgba(99, 102, 241, 0.5);
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -12,119 +29,361 @@
     }
 
     body {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 50%, var(--bg-gradient-end) 100%);
       min-height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text-primary);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 50% 50%, var(--accent-glow) 0%, transparent 50%);
+      opacity: 0.1;
+      pointer-events: none;
+      animation: glow 15s ease-in-out infinite;
+    }
+
+    @keyframes glow {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      50% { transform: scale(1.1) rotate(180deg); }
     }
 
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 40px 20px;
+      position: relative;
+      z-index: 1;
     }
 
     h1 {
-      color: #fff;
+      color: var(--text-primary);
       text-align: center;
-      margin-bottom: 30px;
-      font-size: 2rem;
-    }
-
-    .info {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 30px;
-      color: #e2e8f0;
-    }
-
-    .info h2 {
-      font-size: 1.2rem;
       margin-bottom: 10px;
-      color: #60a5fa;
+      font-size: 2.5rem;
+      font-weight: 700;
+      text-shadow: 0 0 40px var(--accent-glow);
+      letter-spacing: -0.5px;
     }
 
-    .info ul {
-      margin-left: 20px;
+    .subtitle {
+      text-align: center;
+      color: var(--text-secondary);
+      margin-bottom: 30px;
+      font-size: 0.95rem;
     }
 
-    .info li {
-      margin: 5px 0;
+    /* 主布局 */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 30px;
+      align-items: start;
     }
 
-    .controls {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
-      justify-content: center;
+    @media (max-width: 1200px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
     }
 
-    .controls button {
-      background: #3b82f6;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-
-    .controls button:hover {
-      background: #2563eb;
-    }
-
-    .controls button:disabled {
-      background: #6b7280;
-      cursor: not-allowed;
+    /* Canvas 容器 */
+    .canvas-wrapper {
+      position: relative;
+      background: var(--card-bg);
+      border-radius: 24px;
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
 
     #canvas-container {
-      width: 600px;
-      height: 600px;
-      margin: 0 auto;
-      background: rgba(0, 0, 0, 0.3);
+      width: 100%;
+      aspect-ratio: 1;
+      background: radial-gradient(circle at center, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
       border-radius: 16px;
-      border: 2px solid rgba(96, 165, 250, 0.3);
       overflow: hidden;
+      position: relative;
     }
 
     #canvas-container canvas {
       display: block;
+      width: 100% !important;
+      height: 100% !important;
     }
 
-    .status {
-      text-align: center;
-      color: #60a5fa;
-      margin-top: 15px;
-      font-size: 14px;
+    /* 控制面板 */
+    .control-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
 
+    .panel-section {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      backdrop-filter: blur(10px);
+    }
+
+    .panel-section h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-section h3::before {
+      content: '';
+      width: 3px;
+      height: 16px;
+      background: linear-gradient(180deg, var(--primary-color), var(--secondary-color));
+      border-radius: 2px;
+    }
+
+    /* 模型选择 */
     .model-select {
       display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 20px;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
     .model-select button {
-      background: rgba(59, 130, 246, 0.2);
-      color: #93c5fd;
-      border: 1px solid #3b82f6;
-      padding: 8px 16px;
-      border-radius: 6px;
+      flex: 1;
+      min-width: 100px;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--text-primary);
+      border: 1px solid var(--primary-color);
+      padding: 12px 20px;
+      border-radius: 10px;
       cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .model-select button.active {
-      background: #3b82f6;
-      color: white;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .model-select button:hover {
-      background: rgba(59, 130, 246, 0.4);
+      background: rgba(99, 102, 241, 0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px -10px var(--accent-glow);
+    }
+
+    .model-select button.active {
+      background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+      border-color: transparent;
+      box-shadow: 0 10px 30px -10px var(--accent-glow);
+    }
+
+    /* 动作按钮 */
+    .action-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .action-buttons button {
+      background: rgba(236, 72, 153, 0.15);
+      color: var(--text-primary);
+      border: 1px solid var(--secondary-color);
+      padding: 12px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .action-buttons button:hover {
+      background: rgba(236, 72, 153, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .action-buttons button:active {
+      transform: translateY(0);
+    }
+
+    /* 滑块控制 */
+    .slider-group {
+      margin-bottom: 16px;
+    }
+
+    .slider-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .slider-value {
+      background: rgba(99, 102, 241, 0.2);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--primary-color);
+      min-width: 50px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      cursor: pointer;
+      box-shadow: 0 4px 15px var(--accent-glow);
+      transition: transform 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* 状态显示 */
+    .status-bar {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      padding: 12px 20px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success-color);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-indicator.loading {
+      background: var(--warning-color);
+    }
+
+    .status-indicator.error {
+      background: var(--danger-color);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; }
+      50% { opacity: 0.5; box-shadow: 0 0 5px currentColor; }
+    }
+
+    /* 信息卡片 */
+    .info-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--card-border);
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      margin-bottom: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 15px;
+    }
+
+    .info-item {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .info-item-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .info-item-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* 复选框 */
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+
+    .checkbox-label:hover {
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .checkbox-label input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+    }
+
+    /* 重置按钮 */
+    .btn-reset {
+      width: 100%;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--text-primary);
+      border: 1px solid var(--danger-color);
+      padding: 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.2s;
+      margin-top: 10px;
+    }
+
+    .btn-reset:hover {
+      background: rgba(239, 68, 68, 0.3);
+      transform: translateY(-2px);
     }
   </style>
 
@@ -134,32 +393,128 @@
 <body>
   <div class="container">
     <h1>🎭 Live2D 模型测试</h1>
+    <p class="subtitle">基于 pixi-live2d-display + PixiJS v7</p>
 
-    <div class="info">
-      <h2>测试信息</h2>
-      <ul>
-        <li>使用 <strong>pixi-live2d-display</strong> (本地源码) + <strong>PixiJS v7</strong></li>
-        <li>已启用 <strong>supportMoreMaskDivisions</strong> 支持复杂遮罩</li>
-        <li>Rice 模型：4500x3000，推荐缩放 0.06</li>
-        <li>符玄模型：复杂遮罩 (51 个)</li>
-      </ul>
+    <div class="info-card">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-item-label">模型数量</div>
+          <div class="info-item-value">2 个</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">Canvas 尺寸</div>
+          <div class="info-item-value">800x800</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">遮罩支持</div>
+          <div class="info-item-value">已启用</div>
+        </div>
+        <div class="info-item">
+          <div class="info-item-label">当前模型</div>
+          <div class="info-item-value" id="current-model-display">Rice</div>
+        </div>
+      </div>
     </div>
 
-    <div class="model-select">
-      <button onclick="loadModel('rice')" id="btn-rice" class="active">Rice</button>
-      <button onclick="loadModel('fuxuan')" id="btn-fuxuan">符玄</button>
+    <div class="main-layout">
+      <!-- 左侧：Canvas -->
+      <div class="canvas-wrapper">
+        <div id="canvas-container"></div>
+      </div>
+
+      <!-- 右侧：控制面板 -->
+      <div class="control-panel">
+        <!-- 模型选择 -->
+        <div class="panel-section">
+          <h3>模型选择</h3>
+          <div class="model-select">
+            <button onclick="loadModel('rice')" id="btn-rice" class="active">🍚 Rice</button>
+            <button onclick="loadModel('fuxuan')" id="btn-fuxuan">✨ 符玄</button>
+          </div>
+        </div>
+
+        <!-- 动作控制 -->
+        <div class="panel-section">
+          <h3>动作控制</h3>
+          <div class="action-buttons">
+            <button onclick="playMotion('idle')">🎬 待机动作</button>
+            <button onclick="playMotion('tap_body')">👆 点击身体</button>
+            <button onclick="playMotion('shake')">🔄 摇晃</button>
+            <button onclick="playMotion('flick_head')">💫 摇头</button>
+          </div>
+        </div>
+
+        <!-- 表情控制 -->
+        <div class="panel-section">
+          <h3>表情控制</h3>
+          <div class="action-buttons">
+            <button onclick="toggleExpression()">😊 切换表情</button>
+            <button onclick="resetExpression()">😐 重置表情</button>
+          </div>
+        </div>
+
+        <!-- 模型参数 -->
+        <div class="panel-section">
+          <h3>模型参数</h3>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>缩放</span>
+              <span class="slider-value" id="scale-value">0.15</span>
+            </div>
+            <input type="range" id="scale-slider" min="0.01" max="0.5" step="0.01" value="0.15">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>位置 X</span>
+              <span class="slider-value" id="pos-x-value">400</span>
+            </div>
+            <input type="range" id="pos-x-slider" min="0" max="800" step="10" value="400">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>位置 Y</span>
+              <span class="slider-value" id="pos-y-value">500</span>
+            </div>
+            <input type="range" id="pos-y-slider" min="0" max="800" step="10" value="500">
+          </div>
+          <div class="slider-group">
+            <div class="slider-label">
+              <span>旋转</span>
+              <span class="slider-value" id="rotation-value">0°</span>
+            </div>
+            <input type="range" id="rotation-slider" min="-180" max="180" step="5" value="0">
+          </div>
+        </div>
+
+        <!-- 选项 -->
+        <div class="panel-section">
+          <h3>显示选项</h3>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="auto-blink" checked>
+              自动眨眼
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="hit-test" checked>
+              点击互动
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="focus-control" checked>
+              鼠标跟随
+            </label>
+          </div>
+        </div>
+
+        <!-- 重置 -->
+        <button class="btn-reset" onclick="resetModel()">🔄 重置模型</button>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+          <div class="status-indicator" id="status-indicator"></div>
+          <span id="status">正在初始化...</span>
+        </div>
+      </div>
     </div>
-
-    <div class="controls">
-      <button onclick="playMotion('idle')" id="btn-idle">待机动作</button>
-      <button onclick="playMotion('tap_body')" id="btn-tap">点击身体</button>
-      <button onclick="toggleExpression()" id="btn-expr">切换表情</button>
-      <button onclick="resetModel()" id="btn-reset">重置模型</button>
-    </div>
-
-    <div id="canvas-container"></div>
-
-    <div class="status" id="status">正在初始化...</div>
   </div>
 
   <script type="module" src="/src/live2d-test/main.tsx"></script>
