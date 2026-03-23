@@ -319,6 +319,9 @@ function updateExpressionList(modelId: string) {
     name: (expr.File || expr.file).replace('.exp.json', '').replace('.exp3.json', '')
   }));
 
+  // 更新 window 对象上的引用
+  (window as any).availableExpressions = availableExpressions;
+
   if (expressionCountEl) {
     expressionCountEl.textContent = availableExpressions.length.toString();
   }
@@ -455,6 +458,11 @@ async function loadModel(modelId: string) {
 
     currentModelId = modelId;
     expressionIndex = 0;
+
+    // 更新 window 对象上的引用
+    (window as any).currentModel = currentModel;
+    (window as any).currentModelId = currentModelId;
+    (window as any).availableExpressions = availableExpressions;
   } catch (error: any) {
     setStatus(`加载失败：${error.message}`, 'error');
     console.error('Load error:', error);
@@ -587,7 +595,8 @@ function setExpression(index: number) {
   }
   const expr = availableExpressions[index];
   setStatus(`设置表情：${expr.name}`);
-  currentModel.expression(expr.file);
+  // 传入表情名称（Name 属性）而不是文件名，因为 pixi-live2d-display 通过 Name 匹配
+  currentModel.expression(expr.name);
   expressionIndex = index;
   updateExpressionList(currentModelId!);
 }
@@ -654,6 +663,9 @@ function resetModel() {
 }
 
 // 暴露到全局
+(window as any).currentModel = currentModel;
+(window as any).currentModelId = currentModelId;
+(window as any).availableExpressions = availableExpressions;
 (window as any).loadModel = loadModel;
 (window as any).playCustomMotion = playCustomMotion;
 (window as any).playTapMotion = playTapMotion;

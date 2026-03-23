@@ -7,7 +7,17 @@
 			"Rice.2048/texture_01.png"
 		],
 		"Physics": "Rice.physics3.json",
-		"DisplayInfo": "Rice.cdi3.json"
+		"DisplayInfo": "Rice.cdi3.json",
+		"Motions": {
+			"Idle": [
+				{ "File": "motions/idle.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
+			],
+			"TapBody": [
+				{ "File": "motions/mtn_01.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
+				{ "File": "motions/mtn_02.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 },
+				{ "File": "motions/mtn_03.motion3.json", "FadeInTime": 0.5, "FadeOutTime": 0.5 }
+			]
+		}
 	},
 	"Groups": [
 		{
