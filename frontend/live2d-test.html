@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live2D 模型测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      color: #fff;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 2rem;
+    }
+
+    .info {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 30px;
+      color: #e2e8f0;
+    }
+
+    .info h2 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      color: #60a5fa;
+    }
+
+    .info ul {
+      margin-left: 20px;
+    }
+
+    .info li {
+      margin: 5px 0;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      justify-content: center;
+    }
+
+    .controls button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: #2563eb;
+    }
+
+    .controls button:disabled {
+      background: #6b7280;
+      cursor: not-allowed;
+    }
+
+    #canvas-container {
+      width: 600px;
+      height: 600px;
+      margin: 0 auto;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 16px;
+      border: 2px solid rgba(96, 165, 250, 0.3);
+      overflow: hidden;
+    }
+
+    #canvas-container canvas {
+      display: block;
+    }
+
+    .status {
+      text-align: center;
+      color: #60a5fa;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    .model-select {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .model-select button {
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+      border: 1px solid #3b82f6;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .model-select button.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .model-select button:hover {
+      background: rgba(59, 130, 246, 0.4);
+    }
+  </style>
+
+  <!-- Cubism Core (Cubism 3/4/5) -->
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🎭 Live2D 模型测试</h1>
+
+    <div class="info">
+      <h2>测试信息</h2>
+      <ul>
+        <li>使用 <strong>pixi-live2d-display</strong> (本地源码) + <strong>PixiJS v7</strong></li>
+        <li>已启用 <strong>supportMoreMaskDivisions</strong> 支持复杂遮罩</li>
+        <li>Rice 模型：4500x3000，推荐缩放 0.06</li>
+        <li>符玄模型：复杂遮罩 (51 个)</li>
+      </ul>
+    </div>
+
+    <div class="model-select">
+      <button onclick="loadModel('rice')" id="btn-rice" class="active">Rice</button>
+      <button onclick="loadModel('fuxuan')" id="btn-fuxuan">符玄</button>
+    </div>
+
+    <div class="controls">
+      <button onclick="playMotion('idle')" id="btn-idle">待机动作</button>
+      <button onclick="playMotion('tap_body')" id="btn-tap">点击身体</button>
+      <button onclick="toggleExpression()" id="btn-expr">切换表情</button>
+      <button onclick="resetModel()" id="btn-reset">重置模型</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div class="status" id="status">正在初始化...</div>
+  </div>
+
+  <script type="module" src="/src/live2d-test/main.tsx"></script>
+</body>
+</html>
