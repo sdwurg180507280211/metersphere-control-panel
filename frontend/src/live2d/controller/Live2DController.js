@@ -13,6 +13,8 @@ class Live2DController {
     this.isInitialized = false
     this.availableMotions = []
     this.availableExpressions = []
+    this.autoPlayTimer = null
+    this.autoPlayInterval = [5000, 12000] // 随机间隔范围：5~12秒
   }
 
   async init(container) {
@@ -134,7 +136,7 @@ class Live2DController {
   }
 
   /**
-   * 播放点击动作（tap_body）
+   * 播放点击动作 - 随机播放所有非 Idle 动作
    */
   playTapMotion() {
     if (!this.currentModel) {
@@ -142,19 +144,20 @@ class Live2DController {
       return
     }
 
-    // 优先查找 TapBody 动作组
-    const tapBodyMotions = this.availableMotions.filter(m => m.group === 'TapBody')
+    // 排除 Idle（待机）动作，随机播放所有其它动作
+    // 包括 TapBody、FlickHead、Custom 等所有自定义动作都能被触发
+    const nonIdleMotions = this.availableMotions.filter(m => m.group !== 'Idle')
 
-    if (tapBodyMotions.length > 0) {
-      // 随机选择一个 TapBody 动作
-      const randomIndex = Math.floor(Math.random() * tapBodyMotions.length)
-      const motion = tapBodyMotions[randomIndex]
-      console.log('[Live2D] Playing TapBody:', motion.name)
+    if (nonIdleMotions.length > 0) {
+      // 随机选择一个动作
+      const randomIndex = Math.floor(Math.random() * nonIdleMotions.length)
+      const motion = nonIdleMotions[randomIndex]
+      console.log('[Live2D] Playing random non-Idle motion:', motion.group, motion.name)
       this.playMotion(motion.group, motion.index)
       return
     }
 
-    // 如果没有 TapBody 动作，尝试播放随机 Idle 动作
+    // 如果只有 Idle 动作，尝试播放随机 Idle
     const idleMotions = this.availableMotions.filter(m => m.group === 'Idle')
     if (idleMotions.length > 0) {
       const randomIdle = idleMotions[Math.floor(Math.random() * idleMotions.length)]
