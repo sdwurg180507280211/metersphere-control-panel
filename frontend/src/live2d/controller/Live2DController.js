@@ -15,6 +15,7 @@ class Live2DController {
     this.availableExpressions = []
     this.autoPlayTimer = null
     this.autoPlayInterval = [5000, 12000] // 随机间隔范围：5~12秒
+    this.nonIdleActionTimer = null // 每5秒播放非待机动作的定时器
   }
 
   async init(container) {
@@ -34,6 +35,9 @@ class Live2DController {
       // 设置交互
       this.setupInteraction()
       console.log('[Live2D] Interaction setup complete')
+
+      // 启动每5秒播放非待机动作的定时器
+      this.startNonIdleActionTimer()
 
       this.isInitialized = true
     } catch (error) {
@@ -321,6 +325,9 @@ class Live2DController {
   }
 
   destroy() {
+    // 清理定时器
+    this.stopNonIdleActionTimer()
+
     if (this.currentModel) {
       this.renderer?.detach(this.currentModel)
       this.loader.destroy(this.currentModel)
@@ -329,6 +336,79 @@ class Live2DController {
     this.stage.destroy()
     this.renderer = null
     this.isInitialized = false
+  }
+
+  /**
+   * 启动每5秒播放非待机动作的定时器
+   * 随机播放动作或表情
+   */
+  startNonIdleActionTimer() {
+    if (this.nonIdleActionTimer) return
+
+    console.log('[Live2D] Starting non-idle action timer (every 5s)')
+    this.nonIdleActionTimer = setInterval(() => {
+      this.playRandomActionOrExpression()
+    }, 5000)
+  }
+
+  /**
+   * 随机播放动作或表情
+   * 50% 概率播放非待机动作，50% 概率播放随机表情
+   */
+  playRandomActionOrExpression() {
+    const hasMotions = this.availableMotions.length > 0
+    const hasExpressions = this.availableExpressions.length > 0
+
+    // 如果没有动作和表情，什么都不做
+    if (!hasMotions && !hasExpressions) {
+      console.log('[Live2D] No motions or expressions available')
+      return
+    }
+
+    // 如果没有表情，只播放动作
+    if (!hasExpressions) {
+      this.playTapMotion()
+      return
+    }
+
+    // 如果没有动作，只播放表情
+    if (!hasMotions) {
+      this.playRandomExpression()
+      return
+    }
+
+    // 随机决定播放动作还是表情 (50% 概率)
+    if (Math.random() < 0.5) {
+      this.playTapMotion()
+    } else {
+      this.playRandomExpression()
+    }
+  }
+
+  /**
+   * 随机播放一个表情
+   */
+  playRandomExpression() {
+    if (!this.currentModel || this.availableExpressions.length === 0) {
+      console.warn('[Live2D] No expressions available')
+      return
+    }
+
+    const randomIndex = Math.floor(Math.random() * this.availableExpressions.length)
+    const expression = this.availableExpressions[randomIndex]
+    console.log('[Live2D] Playing random expression:', expression.name)
+    this.setExpression(expression.name)
+  }
+
+  /**
+   * 停止非待机动作定时器
+   */
+  stopNonIdleActionTimer() {
+    if (this.nonIdleActionTimer) {
+      clearInterval(this.nonIdleActionTimer)
+      this.nonIdleActionTimer = null
+      console.log('[Live2D] Stopped non-idle action timer')
+    }
   }
 }
 
