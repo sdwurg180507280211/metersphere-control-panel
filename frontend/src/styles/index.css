@@ -61,6 +61,8 @@ body,
 }
 
 body {
+  min-height: 100vh;
+  min-width: 100vw;
   font-family: var(--font-family, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
   background:
     radial-gradient(circle at top left, rgba(124, 58, 237, 0.22), transparent 32%),
@@ -82,7 +84,7 @@ button {
 }
 
 #root {
-  isolation: isolate;
+  /* 移除 isolation 以允许 position: fixed 相对于 viewport 定位 */
 }
 
 a {

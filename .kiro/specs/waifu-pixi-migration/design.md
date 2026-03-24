@@ -14,6 +14,23 @@
 - 保留当前视线、嘴型、情绪、聊天、拖拽、智能出现、勿扰和 WebSocket 联动能力
 - 让迁移方案建立在 `pixi-live2d-display` 实际能力边界之上
 
+**当前进度：**
+
+- `waifu-pixi-foundation` spec 已完成
+- 核心模块已实现：
+  - `Live2DStage` - Pixi Application 管理
+  - `Live2DModelLoader` - 模型加载器（使用 `Live2DModel.from()`）
+  - `Live2DRenderer` - 模型渲染与布局
+  - `Live2DController` - 统一控制入口
+  - `WaifuRoot`、`Live2DCanvas` - React UI 组件
+  - `waifuFeatureFlags.js` - 引擎切换配置
+  - `waifuModels.js` - 模型配置（支持 `rice`、`fuxuan`）
+- `frontend/live2d-test.html` 测试页面已验证：
+  - 模型选择（支持多模型切换）
+  - 动作控制（motion 播放）
+  - 表情控制（expression 切换）
+  - 显示设置（缩放、位置、旋转滑块调节）
+
 ---
 
 ## 设计原则
@@ -36,24 +53,36 @@
 6. **PoC 先于重构**
    兼容矩阵、最小 React PoC、motion / expression / overlay 时序和交互边界验证必须先通过，再进入大面积实现。
 
+**当前实现状态：**
+
+- 基础渲染底座已完成并集成到主应用
+- 测试页面 `live2d-test.html` 已验证模型加载、动作播放、表情切换功能
+- 下一步：将测试页面的功能迁移到 React 组件，实现参数控制器和交互系统
+
 ---
 
 ## 核心设计目标
 
-1. **建立稳定渲染底座**  
+1. **建立稳定渲染底座**
    在 React 环境下稳定加载、显示、切换和销毁 Live2D 模型。
+   - ✅ 已完成：`Live2DStage`、`Live2DModelLoader`、`Live2DRenderer`
 
-2. **建立业务级控制中枢**  
+2. **建立业务级控制中枢**
    通过 `Live2DController`、`ParamController` 和特性系统统一协调模型行为。
+   - ⚠️ 进行中：`Live2DController` 已实现基础框架，待增强
 
-3. **剥离遗留 DOM 劫持逻辑**  
+3. **剥离遗留 DOM 劫持逻辑**
    将聊天、提示、工具栏等 UI 功能迁移到 React 组件体系中。
+   - ⚠️ 进行中：`WaifuRoot` 已创建，待添加完整 UI
 
-4. **构建可扩展状态与桥接机制**  
+4. **构建可扩展状态与桥接机制**
    用 Zustand 统一状态，用服务桥接层连接聊天接口和 WebSocket 事件。
+   - ⏳ 待开始
 
-5. **在库能力边界内实现功能等价迁移**  
+5. **在库能力边界内实现功能等价迁移**
    先验证 `pixi-live2d-display` 的可行性，再逐步替换 legacy 实现。
+   - ✅ 已完成：基础加载验证
+   - ⚠️ 进行中：动作、表情能力验证
 
 ---
 
@@ -68,6 +97,11 @@
 | 模型运行时 | Live2D Cubism 2/3/4 | 模型资源与底层官方 SDK 约束 |
 | 服务层 | fetch / useWebSocket | 聊天 API 与业务事件桥接 |
 | 测试 | Vitest / React Testing Library / Playwright | 单元、组件、集成与 E2E 测试 |
+
+**当前依赖版本：**
+- `pixi-live2d-display/cubism4` - 已启用 `supportMoreMaskDivisions = true`
+- `pixi.js` - 已注册 `PIXI.Ticker`
+- 模型资源：`/live2d/rice/Rice.model3.json`、`/live2d/fuxuan/符玄.model3.json`
 
 ---
 
@@ -168,42 +202,42 @@ graph TD
 ```text
 frontend/src/live2d/
 ├── engine/
-│   ├── Live2DStage.js
-│   ├── Live2DModelLoader.js
-│   └── Live2DRenderer.js
+│   ├── Live2DStage.js          ✅ 已实现
+│   ├── Live2DModelLoader.js    ✅ 已实现
+│   └── Live2DRenderer.js       ✅ 已实现
 ├── controller/
-│   ├── Live2DController.js
-│   ├── ParamController.js
-│   ├── MotionController.js
-│   └── InteractionController.js
+│   ├── Live2DController.js     ✅ 基础实现
+│   ├── ParamController.js      ⏳ 待实现
+│   ├── MotionController.js     ⏳ 待实现
+│   └── InteractionController.js ⏳ 待实现
 ├── features/
-│   ├── gaze/GazeSystem.js
-│   ├── lipSync/LipSyncSystem.js
-│   ├── emotion/EmotionSystem.js
-│   ├── appearance/SmartAppearanceSystem.js
-│   ├── dnd/DoNotDisturbSystem.js
-│   └── physics/BounceSystem.js
+│   ├── gaze/GazeSystem.js      ⏳ 待实现
+│   ├── lipSync/LipSyncSystem.js ⏳ 待实现
+│   ├── emotion/EmotionSystem.js ⏳ 待实现
+│   ├── appearance/SmartAppearanceSystem.js ⏳ 待实现
+│   ├── dnd/DoNotDisturbSystem.js ⏳ 待实现
+│   └── physics/BounceSystem.js ⏳ 待实现
 ├── ui/
-│   ├── WaifuRoot.jsx
-│   ├── Live2DCanvas.jsx
-│   ├── WaifuOverlay.jsx
-│   ├── WaifuChatPanel.jsx
-│   └── WaifuToolbar.jsx
+│   ├── WaifuRoot.jsx           ✅ 基础实现
+│   ├── Live2DCanvas.jsx        ✅ 已实现
+│   ├── WaifuOverlay.jsx        ⏳ 待实现
+│   ├── WaifuChatPanel.jsx      ⏳ 待实现
+│   └── WaifuToolbar.jsx        ⏳ 待实现
 ├── store/
-│   └── useWaifuStore.js
+│   └── useWaifuStore.js        ⏳ 待实现
 ├── services/
-│   ├── waifuChatService.js
-│   └── waifuSocketBridge.js
+│   ├── waifuChatService.js     ⏳ 待实现
+│   └── waifuSocketBridge.js    ⏳ 待实现
 ├── legacy/
-│   └── bootstrap.js
+│   └── bootstrap.js            ✅ 已创建
 ├── config/
-│   ├── waifuModels.js
-│   └── waifuFeatureFlags.js
+│   ├── waifuModels.js          ✅ 已实现
+│   └── waifuFeatureFlags.js    ✅ 已实现
 └── utils/
-    ├── paramMap.js
-    ├── lerp.js
-    ├── clamp.js
-    └── rafLoop.js
+    ├── paramMap.js             ⏳ 待实现
+    ├── lerp.js                 ⏳ 待实现
+    ├── clamp.js                ⏳ 待实现
+    └── rafLoop.js              ⏳ 待实现
 ```
 
 ---
@@ -1142,21 +1176,18 @@ export const FEATURE_FLAGS = {
 
 ### 新增依赖
 
-迁移方案必须与 `pixi-live2d-display` 支持的 PixiJS 主版本保持一致。若当前项目已使用其他 PixiJS 主版本，则需先验证兼容性或选择对应兼容版本。
-
-**建议原则：**
-- `pixi-live2d-display` 版本需与项目实际选用的 PixiJS 版本匹配
-- Cubism runtime 依赖按模型版本与库要求安装
-- 依赖版本在实施前通过 PoC 固化，而非在规范阶段写死
-
-**示例（需以实际兼容矩阵为准）：**
+当前项目已安装并使用的依赖：
 ```json
 {
-  "pixi.js": "与 pixi-live2d-display 兼容的版本",
-  "pixi-live2d-display": "经验证可用的版本",
-  "live2d runtime dependencies": "按实际模型版本安装"
+  "pixi.js": "^8.8.0",
+  "pixi-live2d-display": "^1.0.0"
 }
 ```
+
+**已确认配置：**
+- 使用 `pixi-live2d-display/cubism4` 入口
+- 已启用 `config.cubism4.supportMoreMaskDivisions = true` 支持复杂面具（如符玄）
+- 已注册 `PIXI.Ticker` 用于模型动画更新
 
 ### 现有依赖
 
@@ -1207,49 +1238,63 @@ export const FEATURE_FLAGS = {
 ### 风险 7: 第三方库能力边界不足
 **缓解措施：** PoC 提前验证，建立能力验证矩阵，缺口通过业务层降级补足
 
+**当前状态：**
+- 基础渲染底座风险已解除
+- 模型加载、切换已验证可行
+- 待验证：参数控制、交互系统、聊天 UI
+
 ---
 
 ## 迁移路线图
 
-### Phase 0: 准备阶段
-- 冻结 `index.html` 新功能
-- 列出功能清单
-- 搭建目录结构
-- 完成依赖兼容与 PoC 验证
+### Phase 0: 准备阶段 ✅ 已完成
+- [x] 冻结 `index.html` 新功能
+- [x] 列出功能清单
+- [x] 搭建目录结构
+- [x] 完成依赖兼容与 PoC 验证
+- [x] `foundation` spec 完成
 
-### Phase 1: 渲染底座
-- 实现 Live2DStage
-- 实现 Live2DModelLoader
-- 实现 Live2DRenderer
-- 验证模型加载和显示
+### Phase 1: 渲染底座 ✅ 已完成
+- [x] 实现 Live2DStage
+- [x] 实现 Live2DModelLoader
+- [x] 实现 Live2DRenderer
+- [x] 验证模型加载和显示
+- [x] 集成到 `App.jsx`
+- [ ] 验证模型切换时旧实例彻底销毁
 
-### Phase 2: 参数控制核心
-- 实现 ParamController
-- 实现 GazeSystem
-- 实现 LipSyncSystem
-- 实现 EmotionSystem
-- 验证参数优先级
+### Phase 2: 参数控制核心 ⏳ 进行中
+- [ ] 实现 ParamController
+- [ ] 实现 GazeSystem
+- [ ] 实现 LipSyncSystem
+- [ ] 实现 EmotionSystem
+- [ ] 验证参数优先级
 
-### Phase 3: 聊天 UI
-- 实现 WaifuChatPanel
-- 实现 WaifuToolbar
-- 实现 waifuChatService
-- 验证聊天功能
+**当前进度：**
+- `live2d-test.html` 已验证动作播放、表情切换功能
+- 待将测试页面的控制逻辑迁移到 React 组件
 
-### Phase 4: 交互增强
-- 实现 BounceSystem
-- 实现拖拽功能
-- 实现 SmartAppearanceSystem
-- 实现 DoNotDisturbSystem
-- 验证交互体验
+### Phase 3: 聊天 UI ⏳ 待开始
+- [ ] 实现 WaifuChatPanel
+- [ ] 实现 WaifuToolbar
+- [ ] 实现 waifuChatService
+- [ ] 验证聊天功能
 
-### Phase 5: WebSocket 联动
-- 实现 waifuSocketBridge
-- 验证事件触发
-- 验证情绪联动
+### Phase 4: 交互增强 ⏳ 待开始
+- [ ] 实现 BounceSystem
+- [ ] 实现拖拽功能
+- [ ] 实现 SmartAppearanceSystem
+- [ ] 实现 DoNotDisturbSystem
+- [ ] 验证交互体验
 
-### Phase 6: 清理和优化
-- 删除 `index.html` 旧逻辑
-- 性能优化
-- 文档完善
-- 发布上线
+### Phase 5: WebSocket 联动 ⏳ 待开始
+- [ ] 实现 waifuSocketBridge
+- [ ] 验证事件触发
+- [ ] 验证情绪联动
+
+### Phase 6: 清理和优化 ⏳ 待开始
+- [ ] 删除 `index.html` 旧逻辑
+- [ ] 性能优化
+- [ ] 文档完善
+- [ ] 发布上线
+
+---

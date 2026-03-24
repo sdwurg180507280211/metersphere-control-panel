@@ -8,11 +8,12 @@ const Live2DCanvas = React.forwardRef((props, ref) => {
         position: 'fixed',
         bottom: 0,
         right: 0,
-        width: '280px',
-        height: '280px',
+        width: '800px',
+        height: '800px',
         zIndex: 9999,
-        border: '2px solid red' // 调试用
+        pointerEvents: 'none'
       }}
+      data-live2d-canvas="true"
     />
   )
 })

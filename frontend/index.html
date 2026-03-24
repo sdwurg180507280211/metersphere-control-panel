@@ -8,9 +8,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Cubism 5 Core (for Cubism 3+ models) -->
+    <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
     <script type="module" src="/src/main.jsx"></script>
-    <!-- Live2D 看板娘 -->
+    <!-- Live2D 看板娘 (Legacy - 已禁用，由 React 接管) -->
     <script>
+      // Legacy engine disabled - controlled by waifuFeatureFlags.js
+      if (false) {
       const live2d_path = 'https://fastly.jsdelivr.net/npm/live2d-widgets@1.0.0/dist/';
       function loadExternalResource(url, type) {
         return new Promise((resolve, reject) => {
@@ -52,9 +56,11 @@
           drag: true,
         });
       })();
+      } // end if (false)
     </script>
-    <!-- 看板娘聊天功能 -->
+    <!-- 看板娘聊天功能 (Legacy - 已禁用) -->
     <script>
+      if (false) {
       (function() {
         let chatMode = false;
         let sessionId = 'waifu-' + Date.now();
@@ -287,9 +293,11 @@
           createChatIcon(tool);
         });
       })();
+      } // end if (false)
     </script>
-    <!-- 看板娘互动增强：视线跟随 + 点击弹跳 + 说话动画 -->
+    <!-- 看板娘互动增强：视线跟随 + 点击弹跳 + 说话动画 (Legacy - 已禁用) -->
     <script>
+      if (false) {
       (function() {
         // ========== 情绪表情预设 ==========
         const EMOTIONS = {
@@ -665,6 +673,7 @@
         waitForCanvas();
         smartAppearance.init();
       })();
+      } // end if (false)
     </script>
     <!-- 看板娘位置调整：移到右下角，避开左侧 Sidebar -->
     <style>

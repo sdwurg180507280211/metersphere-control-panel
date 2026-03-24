@@ -12,6 +12,8 @@ import SqlTab from './components/SqlTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
+import WaifuRoot from './live2d/ui/WaifuRoot'
+import { WAIFU_FEATURE_FLAGS } from './live2d/config/waifuFeatureFlags'
 import './styles/App.css'
 
 const TAB_ITEMS = [
@@ -230,6 +232,8 @@ function App() {
         onClearLogs={handleClearLogs}
         onFocusSearch={handleFocusSearch}
       />
+
+      {WAIFU_FEATURE_FLAGS.engine === 'pixi' && <WaifuRoot />}
     </div>
   )
 }
