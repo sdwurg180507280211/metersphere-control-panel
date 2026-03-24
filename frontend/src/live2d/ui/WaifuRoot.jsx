@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Live2DController from '../controller/Live2DController'
-import { WAIFU_MODELS } from '../config/waifuModels.js'
+import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
 
 const WaifuRoot = () => {
   const containerRef = useRef(null)
@@ -12,11 +12,15 @@ const WaifuRoot = () => {
     resizeHandle: null,
     startX: 0,
     startY: 0,
-    startWidth: 0,
-    startHeight: 0,
+    startContainerWidth: 0,
+    startContainerHeight: 0,
+    startModelScale: 0,
+    startModelX: 0,
+    startModelY: 0,
     startLeft: 0,
     startTop: 0
   })
+  const currentModelConfigRef = useRef(null)
 
   useEffect(() => {
     const instanceId = instanceIdRef.current
@@ -138,7 +142,7 @@ const WaifuRoot = () => {
       document.removeEventListener('mouseup', onDragEnd)
     }
 
-    // 缩放逻辑
+    // 缩放逻辑 - 同时调整容器和模型 scale
     const onResizeStart = (e) => {
       e.stopPropagation()
       const state = dragStateRef.current
@@ -148,10 +152,17 @@ const WaifuRoot = () => {
       state.startY = e.clientY
 
       const rect = div.getBoundingClientRect()
-      state.startWidth = rect.width
-      state.startHeight = rect.height
+      state.startContainerWidth = rect.width
+      state.startContainerHeight = rect.height
       state.startLeft = rect.left
       state.startTop = rect.top
+
+      // 保存当前模型的状态
+      if (controllerRef.current && controllerRef.current.currentModel) {
+        state.startModelScale = controllerRef.current.currentModel.scale.x
+        state.startModelX = controllerRef.current.currentModel.x
+        state.startModelY = controllerRef.current.currentModel.y
+      }
 
       // 改用 left/top 定位
       div.style.right = 'auto'
@@ -171,58 +182,83 @@ const WaifuRoot = () => {
       const dy = e.clientY - state.startY
       const handle = state.resizeHandle
 
-      let newWidth = state.startWidth
-      let newHeight = state.startHeight
+      let newContainerWidth = state.startContainerWidth
+      let newContainerHeight = state.startContainerHeight
       let newLeft = state.startLeft
       let newTop = state.startTop
 
-      // 保持宽高比
-      const aspectRatio = state.startWidth / state.startHeight
+      // 计算缩放比例
+      let scaleChange = 1
 
       if (handle.includes('right')) {
-        newWidth = Math.max(300, state.startWidth + dx)
-        newHeight = newWidth / aspectRatio
+        newContainerWidth = Math.max(300, state.startContainerWidth + dx)
+        scaleChange = newContainerWidth / state.startContainerWidth
       }
       if (handle.includes('left')) {
-        newWidth = Math.max(300, state.startWidth - dx)
-        newHeight = newWidth / aspectRatio
-        newLeft = state.startLeft + state.startWidth - newWidth
+        newContainerWidth = Math.max(300, state.startContainerWidth - dx)
+        scaleChange = newContainerWidth / state.startContainerWidth
+        newLeft = state.startLeft + state.startContainerWidth - newContainerWidth
       }
       if (handle.includes('bottom')) {
-        newHeight = Math.max(300, state.startHeight + dy)
-        newWidth = newHeight * aspectRatio
+        newContainerHeight = Math.max(300, state.startContainerHeight + dy)
+        if (!handle.includes('left') && !handle.includes('right')) {
+          scaleChange = newContainerHeight / state.startContainerHeight
+        }
       }
       if (handle.includes('top')) {
-        newHeight = Math.max(300, state.startHeight - dy)
-        newWidth = newHeight * aspectRatio
-        newTop = state.startTop + state.startHeight - newHeight
+        newContainerHeight = Math.max(300, state.startContainerHeight - dy)
+        if (!handle.includes('left') && !handle.includes('right')) {
+          scaleChange = newContainerHeight / state.startContainerHeight
+        }
+        newTop = state.startTop + state.startContainerHeight - newContainerHeight
       }
 
       // 限制最大尺寸
       const maxSize = 1200
-      if (newWidth > maxSize) {
-        newWidth = maxSize
-        newHeight = newWidth / aspectRatio
+      if (newContainerWidth > maxSize) {
+        newContainerWidth = maxSize
+        scaleChange = newContainerWidth / state.startContainerWidth
       }
-      if (newHeight > maxSize) {
-        newHeight = maxSize
-        newWidth = newHeight * aspectRatio
+      if (newContainerHeight > maxSize) {
+        newContainerHeight = maxSize
+        if (!handle.includes('left') && !handle.includes('right')) {
+          scaleChange = newContainerHeight / state.startContainerHeight
+        }
       }
 
-      div.style.width = newWidth + 'px'
-      div.style.height = newHeight + 'px'
+      // 更新容器尺寸和位置
+      div.style.width = newContainerWidth + 'px'
+      div.style.height = newContainerHeight + 'px'
       div.style.left = newLeft + 'px'
       div.style.top = newTop + 'px'
 
-      // 通知 PIXI 应用 resize
+      // 更新 PIXI 渲染器尺寸
       if (controllerRef.current && controllerRef.current.stage) {
-        controllerRef.current.stage.resize(newWidth, newHeight)
-        // 同时更新 canvas 样式
+        controllerRef.current.stage.resize(newContainerWidth, newContainerHeight)
         const canvas = div.querySelector('canvas')
         if (canvas) {
-          canvas.style.width = newWidth + 'px'
-          canvas.style.height = newHeight + 'px'
+          canvas.style.width = newContainerWidth + 'px'
+          canvas.style.height = newContainerHeight + 'px'
         }
+      }
+
+      // 更新模型 scale 和位置
+      if (controllerRef.current && controllerRef.current.currentModel && controllerRef.current.renderer) {
+        const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
+        const baseScale = modelConfig.scale
+        const baseX = modelConfig.position.x
+        const baseY = modelConfig.position.y
+
+        // 基于初始配置计算新的 scale 和位置
+        const newModelScale = baseScale * scaleChange
+        const newModelX = baseX * scaleChange
+        const newModelY = baseY * scaleChange
+
+        controllerRef.current.renderer.setLayout({
+          scale: newModelScale,
+          x: newModelX,
+          y: newModelY
+        })
       }
     }
 
@@ -251,6 +287,9 @@ const WaifuRoot = () => {
         controllerRef.current = controller
         await controller.init(div)
 
+        // 保存当前模型配置
+        currentModelConfigRef.current = WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
+
         // 暴露到全局以便调试
         window.__waifuController = controller
 
@@ -261,6 +300,7 @@ const WaifuRoot = () => {
             console.log('[Waifu] 可用模型:', Object.keys(WAIFU_MODELS))
             return false
           }
+          currentModelConfigRef.current = WAIFU_MODELS[modelId]
           return controller.loadModel(modelId)
         }
 
