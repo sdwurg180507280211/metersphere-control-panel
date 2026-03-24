@@ -14,6 +14,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
 import WaifuRoot from './live2d/ui/WaifuRoot'
 import { WAIFU_FEATURE_FLAGS } from './live2d/config/waifuFeatureFlags'
+import { WAIFU_MODELS } from './live2d/config/waifuModels'
 import './styles/App.css'
 
 const TAB_ITEMS = [
@@ -232,6 +233,27 @@ function App() {
         onClearLogs={handleClearLogs}
         onFocusSearch={handleFocusSearch}
       />
+
+      {/* 不明显的看板娘模型切换下拉框 */}
+      {WAIFU_FEATURE_FLAGS.engine === 'pixi' && (
+        <div className="waifu-model-selector">
+          <select
+            className="waifu-select"
+            onChange={(e) => {
+              if (window.switchWaifuModel) {
+                window.switchWaifuModel(e.target.value)
+              }
+            }}
+            title="切换看板娘"
+          >
+            {Object.values(WAIFU_MODELS).map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {WAIFU_FEATURE_FLAGS.engine === 'pixi' && <WaifuRoot />}
     </div>
