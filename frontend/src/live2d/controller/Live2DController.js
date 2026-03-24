@@ -78,6 +78,9 @@ class Live2DController {
 
     // 分析模型可用的动作和表情
     this.analyzeModel()
+
+    // 设置交互
+    this.setupInteraction()
   }
 
   async reloadModel() {

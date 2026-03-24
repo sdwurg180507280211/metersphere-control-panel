@@ -63,6 +63,14 @@ const TAB_ITEMS = [
 function App() {
   const { activeTab, setActiveTab, syncHash } = useUiStore()
   const searchInputRef = useRef(null)
+  const selectorRef = useRef(null)
+  const dragStateRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    startTop: 0
+  })
 
   const { fetchServices, fetchCatalog } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
@@ -167,6 +175,63 @@ function App() {
     window.dispatchEvent(new CustomEvent('focusSearch', { detail: activeTab }))
   }, [activeTab])
 
+  // 模型选择器拖拽逻辑
+  useEffect(() => {
+    if (!WAIFU_FEATURE_FLAGS.engine === 'pixi') return
+
+    const selectorDiv = selectorRef.current
+    if (!selectorDiv) return
+
+    const onDragStart = (e) => {
+      // 如果点击的是 select 元素本身，不触发拖拽
+      if (e.target.tagName === 'SELECT') return
+
+      e.stopPropagation()
+      const state = dragStateRef.current
+      state.isDragging = true
+      state.startX = e.clientX
+      state.startY = e.clientY
+
+      const rect = selectorDiv.getBoundingClientRect()
+      state.startLeft = rect.left
+      state.startTop = rect.top
+
+      // 移除 right/bottom，改用 left/top 定位
+      selectorDiv.style.right = 'auto'
+      selectorDiv.style.bottom = 'auto'
+      selectorDiv.style.left = rect.left + 'px'
+      selectorDiv.style.top = rect.top + 'px'
+
+      document.addEventListener('mousemove', onDragMove)
+      document.addEventListener('mouseup', onDragEnd)
+    }
+
+    const onDragMove = (e) => {
+      const state = dragStateRef.current
+      if (!state.isDragging) return
+
+      const dx = e.clientX - state.startX
+      const dy = e.clientY - state.startY
+
+      selectorDiv.style.left = (state.startLeft + dx) + 'px'
+      selectorDiv.style.top = (state.startTop + dy) + 'px'
+    }
+
+    const onDragEnd = () => {
+      dragStateRef.current.isDragging = false
+      document.removeEventListener('mousemove', onDragMove)
+      document.removeEventListener('mouseup', onDragEnd)
+    }
+
+    selectorDiv.addEventListener('mousedown', onDragStart)
+
+    return () => {
+      selectorDiv.removeEventListener('mousedown', onDragStart)
+      document.removeEventListener('mousemove', onDragMove)
+      document.removeEventListener('mouseup', onDragEnd)
+    }
+  }, [])
+
   return (
     <div className="app">
       <Toaster
@@ -234,24 +299,26 @@ function App() {
         onFocusSearch={handleFocusSearch}
       />
 
-      {/* 不明显的看板娘模型切换下拉框 */}
+      {/* 不明显的看板娘模型切换下拉框 - 支持拖拽 */}
       {WAIFU_FEATURE_FLAGS.engine === 'pixi' && (
-        <div className="waifu-model-selector">
-          <select
-            className="waifu-select"
-            onChange={(e) => {
-              if (window.switchWaifuModel) {
-                window.switchWaifuModel(e.target.value)
-              }
-            }}
-            title="切换看板娘"
-          >
-            {Object.values(WAIFU_MODELS).map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
+        <div ref={selectorRef} className="waifu-model-selector">
+          <div className="selector-wrapper">
+            <select
+              className="waifu-select"
+              onChange={(e) => {
+                if (window.switchWaifuModel) {
+                  window.switchWaifuModel(e.target.value)
+                }
+              }}
+              title="切换看板娘"
+            >
+              {Object.values(WAIFU_MODELS).map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

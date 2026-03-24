@@ -198,7 +198,27 @@
   bottom: 40px;
   right: 40px;
   z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 拖拽区域 - 一个比按钮大的透明方块 */
+  width: 100px;
+  height: 100px;
+  cursor: move;
 }
+
+.waifu-model-selector .selector-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.waifu-model-selector .selector-wrapper select {
+  pointer-events: auto;
+}
+
+
 
 .waifu-select {
   background: rgba(100, 150, 255, 0.08);
@@ -215,7 +235,9 @@
   background-repeat: no-repeat;
   background-position: center;
   transition: all 0.2s ease;
+  pointer-events: auto;
 }
+
 
 .waifu-select:hover {
   background: rgba(100, 150, 255, 0.15);
@@ -229,8 +251,26 @@
 }
 
 .waifu-select option {
-  background: #0f172a;
+  background-color: #0a132d;
   color: #f8fafc;
   font-size: 12px;
-  padding: 8px;
+  padding: 8px 12px;
 }
+
+.waifu-select option:hover,
+.waifu-select option:focus,
+.waifu-select option:active {
+  background-color: #1a234d;
+}
+
+/* 下拉列表整体样式 */
+select.waifu-select {
+  color-scheme: dark;
+}
+
+
+/* 下拉列表整体样式 */
+select.waifu-select {
+  color-scheme: dark;
+}
+
