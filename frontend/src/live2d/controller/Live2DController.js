@@ -339,16 +339,16 @@ class Live2DController {
   }
 
   /**
-   * 启动每5秒播放非待机动作的定时器
+   * 启动每10秒播放非待机动作的定时器
    * 随机播放动作或表情
    */
   startNonIdleActionTimer() {
     if (this.nonIdleActionTimer) return
 
-    console.log('[Live2D] Starting non-idle action timer (every 5s)')
+    console.log('[Live2D] Starting non-idle action timer (every 10s)')
     this.nonIdleActionTimer = setInterval(() => {
       this.playRandomActionOrExpression()
-    }, 5000)
+    }, 10000)
   }
 
   /**
