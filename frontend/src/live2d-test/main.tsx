@@ -66,10 +66,11 @@ let expressionIndex = 0;
 let availableMotions: Array<{ group: string, index: number, name: string }> = [];
 let availableExpressions: Array<{ file: string, name: string }> = [];
 
+// 当前模型的 cdi3.json 数据（包含中文参数名和分组信息）
+let currentCdiData: any = null;
+
 // 状态标志
-let autoBlink = true;
-let hitTestEnabled = true;
-let focusControlEnabled = true;
+let heartbeatRAFId: number | null = null;
 
 function setStatus(msg: string, type: 'normal' | 'loading' | 'error' = 'normal') {
   const el = document.getElementById('status');
@@ -99,6 +100,19 @@ function getModelDisplayName(modelId: string): string {
     nicole: '妮可'
   };
   return names[modelId] || modelId;
+}
+
+// 心跳 - 保持 ticker 运行
+function startHeartbeat() {
+  if (heartbeatRAFId !== null) {
+    cancelAnimationFrame(heartbeatRAFId);
+  }
+
+  const tick = () => {
+    heartbeatRAFId = requestAnimationFrame(tick);
+  };
+
+  heartbeatRAFId = requestAnimationFrame(tick);
 }
 
 // 更新滑块值显示
@@ -157,36 +171,6 @@ function initSliders() {
     });
   }
 
-  // 复选框
-  const autoBlinkCheckbox = document.getElementById('auto-blink') as HTMLInputElement;
-  if (autoBlinkCheckbox) {
-    autoBlinkCheckbox.addEventListener('change', (e) => {
-      autoBlink = (e.target as HTMLInputElement).checked;
-      if (currentModel && currentModel.internalModel) {
-        currentModel.internalModel.autoBlink = autoBlink;
-      }
-    });
-  }
-
-  const hitTestCheckbox = document.getElementById('hit-test') as HTMLInputElement;
-  if (hitTestCheckbox) {
-    hitTestCheckbox.addEventListener('change', (e) => {
-      hitTestEnabled = (e.target as HTMLInputElement).checked;
-      if (currentModel) {
-        currentModel.interactive = hitTestEnabled;
-      }
-    });
-  }
-
-  const focusCheckbox = document.getElementById('focus-control') as HTMLInputElement;
-  if (focusCheckbox) {
-    focusCheckbox.addEventListener('change', (e) => {
-      focusControlEnabled = (e.target as HTMLInputElement).checked;
-      if (currentModel && currentModel.internalModel) {
-        currentModel.internalModel.focusControl.enabled = focusControlEnabled;
-      }
-    });
-  }
 }
 
 // 获取模型可用的动作列表（从 motionManager 读取）
@@ -245,17 +229,8 @@ function updateMotionButtons() {
   }
 
   if (motions.length === 0) {
-    // 没有预定义动作，显示基础交互按钮
-    motionButtonsContainer.innerHTML = `
-      <div class="motion-item" onclick="playTapMotion()">
-        <span class="motion-icon">👆</span>
-        <span class="motion-name">点击测试</span>
-      </div>
-      <div class="motion-item" onclick="playRandomParam()">
-        <span class="motion-icon">🎲</span>
-        <span class="motion-name">随机参数</span>
-      </div>
-    `;
+    // 没有预定义动作
+    motionButtonsContainer.innerHTML = '';
     setStatus(`${getModelDisplayName(currentModelId || 'unknown')} 没有预定义动作文件`);
   } else {
     // 有动作，按分组显示
@@ -348,6 +323,224 @@ function updateExpressionList(modelId: string) {
   expressionContainer.innerHTML = buttonsHtml;
 }
 
+// 更新参数滑块列表 - 根据当前模型所有参数动态生成
+function updateParameterSliders() {
+  const container = document.getElementById('parameter-sliders');
+  const countEl = document.getElementById('param-count');
+  if (!container) return;
+
+  let coreModel: any = null;
+
+  if (currentModel?.internalModel?.coreModel) {
+    coreModel = currentModel.internalModel.coreModel;
+  } else if (currentModel?.coreModel) {
+    coreModel = currentModel.coreModel;
+  }
+
+  if (!coreModel) {
+    container.innerHTML = '<div class="empty-state">模型未加载完成</div>';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  // 所有参数数据，按分组组织
+  let groupedParams: Record<string, Array<{id: string, name: string}>> = {};
+  let totalParamCount = 0;
+
+  if (currentCdiData && currentCdiData.Parameters && currentCdiData.Parameters.length > 0) {
+    // 有 cdi3.json 数据，使用它来获取中文参数名和分组
+    const paramMap = new Map<string, {name: string, groupId: string}>();
+    currentCdiData.Parameters.forEach((p: any) => {
+      paramMap.set(p.Id, {name: p.Name, groupId: p.GroupId || ''});
+    });
+
+    // 构建分组映射
+    const groupNameMap = new Map<string, string>();
+    if (currentCdiData.ParameterGroups) {
+      currentCdiData.ParameterGroups.forEach((g: any) => {
+        groupNameMap.set(g.Id, g.Name);
+      });
+    }
+
+    // 验证参数是否存在，并按分组组织
+    currentCdiData.Parameters.forEach((p: any) => {
+      try {
+        const val = coreModel.getParameterValueById(p.Id);
+        if (typeof val === 'number') {
+          const groupId = p.GroupId || 'other';
+          if (!groupedParams[groupId]) {
+            groupedParams[groupId] = [];
+          }
+          groupedParams[groupId].push({id: p.Id, name: p.Name});
+          totalParamCount++;
+        }
+      } catch (e) {
+        // 参数不存在，跳过
+      }
+    });
+  }
+
+  // 如果没有 cdi3.json 数据或没有找到参数，回退到标准参数
+  if (totalParamCount === 0) {
+    const standardParams = [
+      'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
+      'ParamEyeLOpen', 'ParamEyeROpen', 'ParamEyeBallX', 'ParamEyeBallY',
+      'ParamMouthOpenY', 'ParamMouthForm',
+      'ParamBodyAngleX', 'ParamBodyAngleY', 'ParamBodyAngleZ',
+      'ParamBreath',
+      'ParamBrowLY', 'ParamBrowRY', 'ParamBrowLX', 'ParamBrowRX',
+      'ParamBrowLForm', 'ParamBrowRForm', 'ParamBrowLAngle', 'ParamBrowRAngle',
+      'ParamCheek', 'ParamSmile'
+    ];
+    groupedParams['标准参数'] = [];
+    standardParams.forEach(id => {
+      try {
+        const val = coreModel.getParameterValueById(id);
+        if (typeof val === 'number') {
+          groupedParams['标准参数'].push({id, name: id});
+          totalParamCount++;
+        }
+      } catch (e) {}
+    });
+  }
+
+  if (totalParamCount === 0) {
+    container.innerHTML = '<div class="empty-state">未找到参数列表</div>';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+
+  // 获取分组名称
+  const getGroupName = (groupId: string): string => {
+    if (groupId === '标准参数') return '标准参数';
+    if (groupId === 'other') return '其他';
+    if (currentCdiData && currentCdiData.ParameterGroups) {
+      const group = currentCdiData.ParameterGroups.find((g: any) => g.Id === groupId);
+      if (group) return group.Name;
+    }
+    return groupId;
+  };
+
+  // 生成 HTML - 按分组显示，使用折叠面板
+  let html = '';
+  let globalIndex = 0;
+  const allParamData: Array<{id: string, index: number}> = [];
+
+  Object.keys(groupedParams).forEach((groupId) => {
+    const params = groupedParams[groupId];
+    if (params.length === 0) return;
+
+    const groupName = getGroupName(groupId);
+
+    html += `
+      <div class="accordion" style="margin-bottom: 8px;">
+        <button class="accordion-header param-accordion-header" style="padding: 10px 12px;">
+          <div class="title">
+            <svg class="accordion-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+            ${escapeHtml(groupName)}
+          </div>
+          <span class="accordion-badge">${params.length}</span>
+        </button>
+        <div class="accordion-body">
+          <div class="accordion-inner" style="padding: 8px 12px 12px;">
+    `;
+
+    params.forEach((param) => {
+      const id = param.id;
+      const name = param.name;
+
+      // 判断参数范围
+      let min = -30;
+      let max = 30;
+      let step = 1;
+
+      // 根据参数名判断范围
+      const lowerId = id.toLowerCase();
+      const lowerName = name.toLowerCase();
+      if (lowerId.includes('open') || lowerId.includes('breath') || lowerId.includes('cheek') || lowerId.includes('smile') ||
+          lowerName.includes('开闭') || lowerName.includes('呼吸') || lowerName.includes('笑')) {
+        min = 0;
+        max = 1;
+        step = 0.05;
+      } else if (lowerId.includes('form') || lowerId.includes('ball') ||
+                 lowerName.includes('变形') || lowerName.includes('眼珠')) {
+        min = -1;
+        max = 1;
+        step = 0.05;
+      } else if (lowerId.includes('angle') || lowerName.includes('角度') || lowerName.includes('旋转')) {
+        min = -30;
+        max = 30;
+        step = 1;
+      }
+
+      // 获取当前值
+      let currentValue = 0;
+      try {
+        currentValue = coreModel.getParameterValueById(id);
+      } catch (e) {}
+
+      const sliderId = `param-slider-${globalIndex}`;
+      const valueId = `param-value-${globalIndex}`;
+
+      html += `
+        <div class="slider-item" style="margin-bottom: 12px;">
+          <div class="slider-label">
+            <span>${escapeHtml(name)} <small style="opacity:0.5;font-size:0.7em;">(${id})</small></span>
+            <span class="slider-value" id="${valueId}">${currentValue.toFixed(2)}</span>
+          </div>
+          <input type="range" id="${sliderId}"
+            min="${min}" max="${max}" step="${step}" value="${currentValue}">
+        </div>
+      `;
+
+      allParamData.push({id, index: globalIndex});
+      globalIndex++;
+    });
+
+    html += `
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  if (countEl) countEl.textContent = totalParamCount.toString();
+
+  // 使用事件委托处理折叠面板点击 - 在 container 上绑定，更可靠
+  container.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const header = target.closest('.param-accordion-header');
+    if (header) {
+      const accordion = header.closest('.accordion');
+      if (accordion) {
+        accordion.classList.toggle('open');
+      }
+    }
+  });
+
+  // 绑定事件
+  allParamData.forEach(({id, index}) => {
+    const sliderId = `param-slider-${index}`;
+    const valueId = `param-value-${index}`;
+
+    const slider = document.getElementById(sliderId) as HTMLInputElement;
+    if (slider) {
+      slider.addEventListener('input', (e) => {
+        const value = parseFloat((e.target as HTMLInputElement).value);
+        updateSliderValue(valueId, value.toFixed(2));
+        try {
+          coreModel.setParameterValueById(id, value);
+        } catch (err) {
+          console.warn('Failed to set parameter', id, err);
+        }
+      });
+    }
+  });
+}
+
 async function initApp() {
   const container = document.getElementById('canvas-container');
   if (!container) return;
@@ -371,6 +564,9 @@ async function initApp() {
 
   // 更新模型选择下拉框
   updateModelSelect();
+
+  // 启动心跳（自动眨眼和呼吸）
+  startHeartbeat();
 
   await loadModel('rice');
 }
@@ -432,6 +628,19 @@ async function loadModel(modelId: string) {
       autoUpdate: true
     });
 
+    // 加载 .cdi3.json 获取中文参数名和分组信息
+    currentCdiData = null;
+    try {
+      const cdiPath = modelConfig.path.replace('.model3.json', '.cdi3.json');
+      const cdiResponse = await fetch(cdiPath);
+      if (cdiResponse.ok) {
+        currentCdiData = await cdiResponse.json();
+        console.log('Loaded cdi3.json:', currentCdiData);
+      }
+    } catch (e) {
+      console.log('No cdi3.json found or failed to load:', e);
+    }
+
     // 设置位置 - 居中并放大
     currentModel.x = modelConfig.position.x;
     currentModel.y = modelConfig.position.y;
@@ -463,12 +672,11 @@ async function loadModel(modelId: string) {
       updateSliderValue('rotation-value', '0°');
     }
 
-    setupInteraction(currentModel);
-
     // 更新动作按钮（等模型加载完成后读取 motionManager）
     setTimeout(() => {
       updateMotionButtons();
       updateExpressionList(currentModelId!);
+      updateParameterSliders();
     }, 100);
 
     currentModelId = modelId;
@@ -484,53 +692,6 @@ async function loadModel(modelId: string) {
   }
 }
 
-function setupInteraction(model: any) {
-  model.interactive = hitTestEnabled;
-
-  model.on('pointerdown', () => {
-    console.log('Model clicked!');
-    if (hitTestEnabled && availableMotions.length === 0) {
-      // 没有预定义动作时，播放随机参数
-      playRandomParam();
-    } else if (hitTestEnabled) {
-      // 有预定义动作时，播放点击动作
-      playTapMotion();
-    }
-  });
-
-  // 鼠标跟随
-  if (app && focusControlEnabled) {
-    app.stage.on('pointermove', (e: any) => {
-      if (currentModel && currentModel.internalModel) {
-        const pos = e.getLocalPosition(currentModel);
-        currentModel.internalModel.focusControl.update(pos.x, pos.y);
-      }
-    });
-  }
-}
-
-// 播放点击动作
-function playTapMotion() {
-  if (!currentModel) {
-    setStatus('请先加载模型', 'error');
-    return;
-  }
-  setStatus('播放点击动作');
-  try {
-    // 尝试播放 tap_body 动作，如果没有则随机播放
-    currentModel.motion('tap_body').catch(() => {
-      // 如果没有 tap_body，播放 Idle 动作
-      if (availableMotions.length > 0) {
-        const idleMotion = availableMotions.find(m => m.group === 'Idle');
-        if (idleMotion) {
-          currentModel.motion('Idle', idleMotion.index);
-        }
-      }
-    });
-  } catch (error: any) {
-    setStatus(`动作播放失败：${error.message}`, 'error');
-  }
-}
 
 // 播放自定义动作
 function playCustomMotion(index: number) {
@@ -547,44 +708,6 @@ function playCustomMotion(index: number) {
   }
 }
 
-// 播放随机参数（用于没有动作文件的模型）
-function playRandomParam() {
-  if (!currentModel) {
-    setStatus('请先加载模型', 'error');
-    return;
-  }
-  setStatus('播放随机参数变化');
-
-  const internalModel = currentModel.internalModel;
-  if (!internalModel?.coreModel) return;
-
-  // 随机设置一些参数
-  const paramIds = [
-    'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
-    'ParamEyeLOpen', 'ParamEyeROpen',
-    'ParamMouthOpenY', 'ParamMouthForm'
-  ];
-
-  paramIds.forEach(paramId => {
-    const paramValue = Math.random() * 2 - 1; // -1 to 1
-    try {
-      internalModel.coreModel.setParameterValueById(paramId, paramValue);
-    } catch (e) {
-      // 参数不存在，忽略
-    }
-  });
-
-  // 2 秒后恢复
-  setTimeout(() => {
-    if (currentModel?.internalModel?.coreModel) {
-      paramIds.forEach(paramId => {
-        try {
-          currentModel.internalModel.coreModel.setParameterValueById(paramId, 0);
-        } catch (e) {}
-      });
-    }
-  }, 2000);
-}
 
 function toggleExpression() {
   if (!currentModel) {
@@ -691,14 +814,476 @@ function resetModel() {
   }
 }
 
+// ========== 语音控制集成 ==========
+
+// 导入语音服务模块（相对路径调整）
+import { getTextToSpeechInstance } from '../live2d/services/TextToSpeechService.js';
+import { getSpeechRecognitionInstance } from '../live2d/services/SpeechRecognitionService.js';
+import LipSyncSystem from '../live2d/features/lipSync/LipSyncSystem.js';
+
+// 语音系统状态
+let tts = getTextToSpeechInstance({
+  lang: 'zh-CN',
+  rate: 0.9,
+  pitch: 1.1,
+  onStart: () => {
+    if (lipSync && lipSyncEnabled && currentModel) {
+      const text = (document.getElementById('tts-text') as HTMLTextAreaElement)?.value || '';
+      isSpeaking = true;
+      lipSync.start(text, 'text');
+      startLipSyncTick();
+      setVoiceStatus();
+    }
+  },
+  onEnd: () => {
+    if (lipSync) {
+      isSpeaking = false;
+      lipSync.stop();
+      stopLipSyncTick();
+      setVoiceStatus();
+    }
+  },
+  onError: () => {
+    isSpeaking = false;
+    if (lipSync) lipSync.stop();
+    stopLipSyncTick();
+    setVoiceStatus();
+  }
+});
+
+let asr = getSpeechRecognitionInstance({
+  lang: 'zh-CN',
+  continuous: false,
+  interimResults: false,
+  onResult: (transcript: string) => {
+    const resultEl = document.getElementById('asr-result');
+    if (resultEl) resultEl.textContent = transcript;
+    setStatus(`语音识别完成: ${transcript}`);
+
+    // 如果启用了 AI 对话，自动发送识别结果
+    const autoSend = (document.getElementById('asr-enabled') as HTMLInputElement)?.checked;
+    if (autoSend && transcript.trim()) {
+      sendChatMessage(transcript);
+    }
+  },
+  onStart: () => {
+    setStatus('正在录音...');
+    const resultEl = document.getElementById('asr-result');
+    if (resultEl) resultEl.textContent = '正在录音...';
+  },
+  onEnd: () => {
+    setVoiceStatus();
+  },
+  onError: (error: string) => {
+    setStatus(`语音识别错误: ${error}`, 'error');
+  }
+});
+
+// 嘴型同步
+let lipSync: LipSyncSystem | null = null;
+let lipSyncEnabled = true;
+let isSpeaking = false;
+let animationFrameId: number | null = null;
+let lastTickTime = performance.now();
+
+// 聊天历史
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+let chatHistory: ChatMessage[] = [];
+
+// 初始化 LipSync（paramController 留空，直接操作参数）
+lipSync = new LipSyncSystem(null);
+
+// 更新语音状态显示
+function setVoiceStatus() {
+  const statusEl = document.getElementById('voice-status');
+  if (!statusEl) return;
+
+  const ttsEnabled = (document.getElementById('tts-enabled') as HTMLInputElement)?.checked ?? true;
+  const asrEnabled = (document.getElementById('asr-enabled') as HTMLInputElement)?.checked ?? true;
+
+  let status = '';
+  if (!tts.isSupported() || !ttsEnabled) {
+    status += 'TTS: 关闭';
+  } else if (isSpeaking) {
+    status += 'TTS: 朗读中';
+  } else {
+    status += 'TTS: 就绪';
+  }
+
+  status += ' / ';
+
+  if (!asr.isSupported() || !asrEnabled) {
+    status += 'ASR: 关闭';
+  } else if (asr.getIsListening()) {
+    status += 'ASR: 录音中';
+  } else {
+    status += 'ASR: 就绪';
+  }
+
+  statusEl.textContent = status;
+}
+
+// 启动嘴型同步动画循环
+function startLipSyncTick() {
+  if (animationFrameId !== null) return;
+
+  lastTickTime = performance.now();
+  const tick = (currentTime: number) => {
+    const delta = currentTime - lastTickTime;
+    lastTickTime = currentTime;
+
+    if (lipSync && isSpeaking && currentModel?.internalModel?.coreModel) {
+      lipSync.tick(delta);
+
+      // 直接更新模型参数
+      const coreModel = currentModel.internalModel.coreModel;
+      const mouthOpen = lipSync.currentMouthOpen;
+      if (typeof mouthOpen === 'number') {
+        try {
+          coreModel.setParameterValueById('ParamMouthOpenY', mouthOpen);
+          const mouthForm = Math.round(mouthOpen * 2) - 1;
+          coreModel.setParameterValueById('ParamMouthForm', mouthForm);
+        } catch (e) {
+          // 参数不存在，忽略
+        }
+      }
+
+      // 更新调试显示
+      const debugEl = document.getElementById('mouth-open-value');
+      if (debugEl) {
+        debugEl.textContent = mouthOpen.toFixed(2);
+      }
+    }
+
+    if (isSpeaking) {
+      animationFrameId = requestAnimationFrame(tick);
+    }
+  };
+
+  animationFrameId = requestAnimationFrame(tick);
+}
+
+// 停止嘴型同步动画循环
+function stopLipSyncTick() {
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  // 闭合嘴巴
+  if (currentModel?.internalModel?.coreModel) {
+    try {
+      currentModel.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', 0);
+      currentModel.internalModel.coreModel.setParameterValueById('ParamMouthForm', -1);
+    } catch (e) {}
+  }
+
+  const debugEl = document.getElementById('mouth-open-value');
+  if (debugEl) {
+    debugEl.textContent = '0';
+  }
+}
+
+// 初始化语音控制 UI 事件
+function initVoiceControls() {
+  // TTS 语速滑块
+  const rateSlider = document.getElementById('tts-rate-slider') as HTMLInputElement;
+  if (rateSlider) {
+    rateSlider.addEventListener('input', (e) => {
+      const value = parseFloat((e.target as HTMLInputElement).value);
+      updateSliderValue('tts-rate-value', value.toFixed(1));
+      tts.setRate(value);
+    });
+  }
+
+  // TTS 音调滑块
+  const pitchSlider = document.getElementById('tts-pitch-slider') as HTMLInputElement;
+  if (pitchSlider) {
+    pitchSlider.addEventListener('input', (e) => {
+      const value = parseFloat((e.target as HTMLInputElement).value);
+      updateSliderValue('tts-pitch-value', value.toFixed(1));
+      tts.setPitch(value);
+    });
+  }
+
+  // 字符速率滑块（LipSync）
+  const cpsSlider = document.getElementById('cps-slider') as HTMLInputElement;
+  if (cpsSlider && lipSync) {
+    cpsSlider.addEventListener('input', (e) => {
+      const value = parseInt((e.target as HTMLInputElement).value);
+      updateSliderValue('cps-value', value.toString());
+      lipSync.setCharsPerSecond(value);
+    });
+  }
+
+  // 平滑速度滑块
+  const smoothSlider = document.getElementById('smooth-slider') as HTMLInputElement;
+  if (smoothSlider && lipSync) {
+    smoothSlider.addEventListener('input', (e) => {
+      const value = parseInt((e.target as HTMLInputElement).value);
+      updateSliderValue('smooth-value', value.toString());
+      lipSync.setSmoothSpeed(value);
+    });
+  }
+
+  // TTS 启用复选框
+  const ttsEnabledCb = document.getElementById('tts-enabled') as HTMLInputElement;
+  if (ttsEnabledCb) {
+    ttsEnabledCb.addEventListener('change', () => {
+      const enabled = ttsEnabledCb.checked;
+      if (!enabled && isSpeaking) {
+        tts.stop();
+        stopLipSyncTick();
+      }
+      setVoiceStatus();
+    });
+  }
+
+  // ASR 启用复选框
+  const asrEnabledCb = document.getElementById('asr-enabled') as HTMLInputElement;
+  if (asrEnabledCb) {
+    asrEnabledCb.addEventListener('change', () => {
+      const enabled = asrEnabledCb.checked;
+      if (!enabled && asr.getIsListening()) {
+        asr.stop();
+      }
+      setVoiceStatus();
+    });
+  }
+
+  // LipSync 启用复选框
+  const lipSyncEnabledCb = document.getElementById('lipsync-enabled') as HTMLInputElement;
+  if (lipSyncEnabledCb) {
+    lipSyncEnabledCb.addEventListener('change', () => {
+      lipSyncEnabled = lipSyncEnabledCb.checked;
+      if (!lipSyncEnabled && isSpeaking) {
+        stopLipSyncTick();
+      }
+    });
+  }
+
+  // TTS 朗读按钮
+  const btnSpeak = document.getElementById('btn-tts-speak');
+  if (btnSpeak) {
+    btnSpeak.addEventListener('click', () => {
+      if (!tts.isSupported() || !(document.getElementById('tts-enabled') as HTMLInputElement)?.checked) {
+        setStatus('TTS 不支持或已禁用', 'error');
+        return;
+      }
+
+      const textEl = document.getElementById('tts-text') as HTMLTextAreaElement;
+      const text = textEl.value.trim();
+      if (!text) {
+        setStatus('请输入要朗读的文字', 'error');
+        return;
+      }
+
+      // 停止之前的朗读
+      tts.stop();
+
+      // 开始朗读
+      const success = tts.speak(text);
+      if (success) {
+        setStatus(`开始朗读: ${text.length} 字`);
+      }
+    });
+  }
+
+  // TTS 停止按钮
+  const btnStop = document.getElementById('btn-tts-stop');
+  if (btnStop) {
+    btnStop.addEventListener('click', () => {
+      tts.stop();
+      stopLipSyncTick();
+      setStatus('朗读已停止');
+    });
+  }
+
+  // ASR 开始录音按钮
+  const btnAsrStart = document.getElementById('btn-asr-start');
+  if (btnAsrStart) {
+    btnAsrStart.addEventListener('click', () => {
+      if (!asr.isSupported() || !(document.getElementById('asr-enabled') as HTMLInputElement)?.checked) {
+        setStatus('ASR 不支持或已禁用', 'error');
+        return;
+      }
+
+      if (asr.getIsListening()) {
+        asr.stop();
+        (btnAsrStart as HTMLButtonElement).textContent = '🎤 开始录音';
+        return;
+      }
+
+      const success = asr.start();
+      if (success) {
+        (btnAsrStart as HTMLButtonElement).textContent = '⏹ 停止录音';
+        setVoiceStatus();
+      }
+    });
+  }
+
+  // 聊天发送按钮
+  const btnChatSend = document.getElementById('btn-chat-send');
+  if (btnChatSend) {
+    btnChatSend.addEventListener('click', () => {
+      const inputEl = document.getElementById('chat-input') as HTMLInputElement;
+      const message = inputEl.value.trim();
+      if (!message) {
+        setStatus('请输入消息', 'error');
+        return;
+      }
+      sendChatMessage(message);
+      inputEl.value = '';
+    });
+
+    // 回车发送
+    const inputEl = document.getElementById('chat-input') as HTMLInputElement;
+    if (inputEl) {
+      inputEl.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          const message = inputEl.value.trim();
+          if (message) {
+            sendChatMessage(message);
+            inputEl.value = '';
+          }
+        }
+      });
+    }
+  }
+
+  // 检查支持状态
+  if (!tts.isSupported()) {
+    setStatus('警告：当前浏览器不支持 Web Speech API TTS', 'error');
+  }
+  if (!asr.isSupported()) {
+    setStatus('警告：当前浏览器不支持 Web Speech API ASR', 'error');
+  }
+
+  setVoiceStatus();
+}
+
+// 发送聊天消息到后端 API
+async function sendChatMessage(message: string) {
+  const autoTts = (document.getElementById('auto-tts-reply') as HTMLInputElement)?.checked ?? true;
+
+  // 添加用户消息到历史
+  chatHistory.push({ role: 'user', content: message });
+  updateChatHistoryDisplay();
+  setStatus(`发送消息: ${message}`);
+
+  try {
+    // 调用后端 API
+    const response = await fetch('/api/chat/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, sessionId: 'live2d-test' })
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      setStatus(`AI 回复失败: ${data.message || '未知错误'}`, 'error');
+      return;
+    }
+
+    const reply = data.data.reply;
+    chatHistory.push({ role: 'assistant', content: reply });
+    updateChatHistoryDisplay();
+    setStatus('AI 回复已接收');
+
+    // 自动朗读回复
+    if (autoTts && tts.isSupported() && (document.getElementById('tts-enabled') as HTMLInputElement)?.checked) {
+      tts.stop();
+      setTimeout(() => {
+        tts.speak(reply);
+      }, 200);
+    }
+  } catch (error: any) {
+    setStatus(`请求失败: ${error.message}`, 'error');
+    console.error('Chat error:', error);
+  }
+}
+
+// 更新聊天历史显示
+function updateChatHistoryDisplay() {
+  const container = document.getElementById('chat-history');
+  if (!container) return;
+
+  let html = '';
+  chatHistory.forEach(msg => {
+    const isUser = msg.role === 'user';
+    const bg = isUser
+      ? 'rgba(99, 102, 241, 0.2)'
+      : 'rgba(255, 255, 255, 0.05)';
+    const align = isUser ? 'right' : 'left';
+    const badge = isUser ? '你' : 'AI';
+
+    html += `
+      <div style="
+        margin-bottom: 8px;
+        text-align: ${align};
+      ">
+        <div style="
+          display: inline-block;
+          max-width: 90%;
+          padding: 8px 10px;
+          border-radius: 10px;
+          background: ${bg};
+          font-size: 0.75rem;
+          text-align: left;
+        ">
+          <div style="
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            opacity: 0.8;
+          ">${badge}</div>
+          <div style="color: var(--text-primary); line-height: 1.4;">${escapeHtml(msg.content)}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  container.scrollTop = container.scrollHeight;
+}
+
+// HTML 转义
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// 在应用初始化完成后初始化语音控制
+setTimeout(() => {
+  initVoiceControls();
+}, 100);
+
+// 暴露语音控制到全局
+(window as any).tts = tts;
+(window as any).asr = asr;
+(window as any).lipSync = lipSync;
+(window as any).speakText = (text: string) => {
+  if (tts.isSupported()) {
+    tts.speak(text);
+  }
+};
+
+// ========== 结束语音控制 ==========
+
 // 暴露到全局
 (window as any).currentModel = currentModel;
 (window as any).currentModelId = currentModelId;
 (window as any).availableExpressions = availableExpressions;
 (window as any).loadModel = loadModel;
 (window as any).playCustomMotion = playCustomMotion;
-(window as any).playTapMotion = playTapMotion;
-(window as any).playRandomParam = playRandomParam;
 (window as any).toggleExpression = toggleExpression;
 (window as any).setExpression = setExpression;
 (window as any).setExpressionByName = setExpressionByName;

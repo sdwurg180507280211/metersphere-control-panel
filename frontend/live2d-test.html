@@ -680,31 +680,172 @@
           </div>
         </div>
 
-        <!-- 选项 -->
-        <div class="accordion">
+        <!-- 参数控制 -->
+        <div class="accordion open">
           <button class="accordion-header" onclick="toggleAccordion(this)">
             <div class="title">
               <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 18l6-6-6-6"/>
               </svg>
-              交互选项
+              🎚️ 参数控制
             </div>
+            <span class="accordion-badge" id="param-count">0</span>
           </button>
           <div class="accordion-body">
             <div class="accordion-inner">
-              <div class="checkbox-list">
-                <label class="checkbox-item">
-                  <input type="checkbox" id="auto-blink" checked>
-                  自动眨眼
-                </label>
-                <label class="checkbox-item">
-                  <input type="checkbox" id="hit-test" checked>
-                  点击互动
-                </label>
-                <label class="checkbox-item">
-                  <input type="checkbox" id="focus-control" checked>
-                  鼠标跟随
-                </label>
+              <div id="parameter-sliders" style="max-height: 400px; overflow-y: auto; padding-right: 4px;">
+                <div class="empty-state">加载模型后显示参数...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 语音控制 -->
+        <div class="accordion open">
+          <button class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="title">
+              <svg class="accordion-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              🎤 语音控制
+            </div>
+            <span class="accordion-badge" id="voice-status">TTS: 就绪</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-inner">
+              <!-- TTS 文字转语音 -->
+              <div class="motion-section">
+                <div class="motion-section-title">文字转语音 (TTS)</div>
+                <div class="voice-tts">
+                  <textarea id="tts-text" placeholder="输入要朗读的文字..." rows="3" style="
+                    width: 100%;
+                    box-sizing: border-box;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(99, 102, 241, 0.2);
+                    background: rgba(255, 255, 255, 0.03);
+                    color: var(--text-primary);
+                    font-size: 0.8rem;
+                    resize: vertical;
+                    margin-bottom: 8px;
+                  ">你好呀，我是看板娘小梦，很高兴见到你。</textarea>
+                  <div class="slider-item" style="margin-bottom: 12px;">
+                    <div class="slider-label">
+                      <span>语速</span>
+                      <span class="slider-value" id="tts-rate-value">0.9</span>
+                    </div>
+                    <input type="range" id="tts-rate-slider" min="0.5" max="1.5" step="0.1" value="0.9">
+                  </div>
+                  <div class="slider-item" style="margin-bottom: 12px;">
+                    <div class="slider-label">
+                      <span>音调</span>
+                      <span class="slider-value" id="tts-pitch-value">1.1</span>
+                    </div>
+                    <input type="range" id="tts-pitch-slider" min="0.5" max="2.0" step="0.1" value="1.1">
+                  </div>
+                  <div class="checkbox-list" style="margin-bottom: 10px;">
+                    <label class="checkbox-item">
+                      <input type="checkbox" id="tts-enabled" checked>
+                      启用 TTS
+                    </label>
+                  </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="model-btn" id="btn-tts-speak" style="flex: 1; padding: 8px;">
+                      🔊 朗读
+                    </button>
+                    <button class="model-btn" id="btn-tts-stop" style="flex: 1; padding: 8px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+                      ⏹ 停止
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ASR 语音识别 -->
+              <div class="motion-section">
+                <div class="motion-section-title">语音识别 (ASR)</div>
+                <div class="voice-asr">
+                  <div id="asr-result" style="
+                    min-height: 40px;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(99, 102, 241, 0.2);
+                    background: rgba(255, 255, 255, 0.03);
+                    color: var(--text-secondary);
+                    font-size: 0.8rem;
+                    margin-bottom: 8px;
+                  ">识别结果将显示在这里...</div>
+                  <div class="checkbox-list" style="margin-bottom: 10px;">
+                    <label class="checkbox-item">
+                      <input type="checkbox" id="asr-enabled" checked>
+                      启用 ASR
+                    </label>
+                  </div>
+                  <button class="model-btn" id="btn-asr-start" style="width: 100%; padding: 8px; background: rgba(236, 72, 153, 0.1); border-color: rgba(236, 72, 153, 0.3);">
+                    🎤 开始录音
+                  </button>
+                </div>
+              </div>
+
+              <!-- LipSync 调试 -->
+              <div class="motion-section">
+                <div class="motion-section-title">嘴型同步调试</div>
+                <div class="checkbox-list">
+                  <label class="checkbox-item">
+                    <input type="checkbox" id="lipsync-enabled" checked>
+                    启用嘴型同步
+                  </label>
+                </div>
+                <div class="slider-item" style="margin-top: 12px; margin-bottom: 12px;">
+                  <div class="slider-label">
+                    <span>字符速率 (字符/秒)</span>
+                    <span class="slider-value" id="cps-value">12</span>
+                  </div>
+                  <input type="range" id="cps-slider" min="5" max="20" step="1" value="12">
+                </div>
+                <div class="slider-item" style="margin-bottom: 12px;">
+                  <div class="slider-label">
+                    <span>平滑速度</span>
+                    <span class="slider-value" id="smooth-value">8</span>
+                  </div>
+                  <input type="range" id="smooth-slider" min="1" max="20" step="1" value="8">
+                </div>
+                <div style="text-align: center; font-size: 0.75rem; color: var(--text-secondary); margin-top: 8px;">
+                  当前嘴型开度: <span id="mouth-open-value">0</span>
+                </div>
+              </div>
+
+              <!-- AI 聊天 -->
+              <div class="motion-section" style="margin-top: 16px;">
+                <div class="motion-section-title">AI 对话</div>
+                <div id="chat-history" style="
+                  max-height: 150px;
+                  overflow-y: auto;
+                  padding: 8px;
+                  border-radius: 8px;
+                  border: 1px solid rgba(99, 102, 241, 0.2);
+                  background: rgba(255, 255, 255, 0.02);
+                  margin-bottom: 8px;
+                "></div>
+                <div style="display: flex; gap: 8px;">
+                  <input id="chat-input" type="text" placeholder="输入消息..." style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    border: 1px solid rgba(99, 102, 241, 0.2);
+                    background: rgba(255, 255, 255, 0.03);
+                    color: var(--text-primary);
+                    font-size: 0.8rem;
+                  ">
+                  <button class="model-btn" id="btn-chat-send" style="width: 80px; padding: 8px;">
+                    📤 发送
+                  </button>
+                </div>
+                <div style="margin-top: 8px;" class="checkbox-list">
+                  <label class="checkbox-item">
+                    <input type="checkbox" id="auto-tts-reply" checked>
+                    自动朗读 AI 回复
+                  </label>
+                </div>
               </div>
             </div>
           </div>
