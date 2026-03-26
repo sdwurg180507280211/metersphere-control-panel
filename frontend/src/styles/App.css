@@ -14,7 +14,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-lg) 0;
+  padding: 0px 0px 0px 0px;
 }
 
 .app-workspace {
@@ -29,11 +29,11 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: var(--spacing-lg);
+  padding: 8px 0;
   background: linear-gradient(180deg, rgba(10, 19, 45, 0.94) 0%, rgba(7, 14, 34, 0.94) 100%);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-shell);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -51,7 +51,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: var(--spacing-lg);
+  gap: 0;
   flex: 1;
 }
 

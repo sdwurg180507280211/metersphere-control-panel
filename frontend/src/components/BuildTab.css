@@ -1,7 +1,7 @@
 .build-tab {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 8px;
   min-height: 0;
   flex: 1;
 }
@@ -10,15 +10,15 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.95fr);
-  gap: 18px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
 }
 
 .build-control {
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.9) 0%, rgba(10, 19, 45, 0.92) 100%);
   border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 20px;
-  padding: 20px;
+  border-radius: 16px;
+  padding: 10px;
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.2);
   min-height: 0;
   display: flex;
@@ -29,7 +29,7 @@
 .build-log-panel {
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.92) 0%, rgba(10, 19, 45, 0.92) 100%);
   border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 20px;
+  border-radius: 16px 16px 0 0;
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.22);
   min-height: 0;
   display: flex;
@@ -41,36 +41,36 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .section-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .build-section-desc {
-  margin: 8px 0 0;
+  margin: 2px 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .building-indicator {
   font-size: 11px;
   color: #93c5fd;
   background: rgba(37, 99, 235, 0.18);
-  padding: 5px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   border: 1px solid rgba(96, 165, 250, 0.2);
 }
 
@@ -83,11 +83,11 @@
 }
 
 .module-count {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   font-weight: 600;
   white-space: nowrap;
-  padding: 8px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.45);
   border: 1px solid rgba(148, 163, 184, 0.12);
@@ -96,14 +96,14 @@
 .module-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .module-card {
   display: flex;
   flex-direction: column;
   border: 1px solid;
-  border-radius: 18px;
+  border-radius: 12px;
   overflow: hidden;
   transition: all 0.25s ease;
   box-shadow: 0 12px 24px rgba(2, 6, 23, 0.16);
@@ -127,14 +127,14 @@
 
 .module-btn-main {
   flex: 1;
-  padding: 16px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   display: flex;
   align-items: stretch;
-  min-height: 92px;
+  min-height: 60px;
   transition: all 0.2s;
 }
 
@@ -146,7 +146,7 @@
 .module-btn-content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 5px;
   width: 100%;
   min-width: 0;
 }
@@ -155,24 +155,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .module-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 
 .module-status-icon {
-  font-size: 16px;
+  font-size: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -192,9 +192,9 @@
 .module-status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
@@ -258,7 +258,7 @@
 .build-log-panel {
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.92) 0%, rgba(10, 19, 45, 0.92) 100%);
   border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 20px;
+  border-radius: 16px 16px 0 0;
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.22);
   min-height: 0;
   display: flex;
@@ -267,13 +267,14 @@
 }
 
 .build-log-panel .card-header {
-  padding: 16px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(8, 16, 33, 0.65);
+  background: transparent;
+  margin-bottom: 0;
 }
 
 .build-log-panel .card-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -322,20 +323,20 @@
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.9) 0%, rgba(10, 19, 45, 0.92) 100%);
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.12);
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.2);
 }
 
 .log-header {
-  padding: 16px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(8, 16, 33, 0.65);
 }
 
 .log-header .section-title {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 @keyframes dots {
@@ -417,28 +418,28 @@
 .dev-server-panel {
   background: rgba(103, 126, 234, 0.08);
   border: 1px solid rgba(103, 126, 234, 0.2);
-  border-radius: 14px;
-  padding: 16px;
-  margin-bottom: 20px;
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
 }
 
 .dev-server-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .dev-server-header h3 {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 
 .dev-server-status {
-  font-size: 12px;
-  padding: 4px 10px;
+  font-size: 11px;
+  padding: 3px 8px;
   border-radius: 8px;
   font-weight: 500;
 }
@@ -455,17 +456,17 @@
 
 .dev-server-controls {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dev-server-select {
   flex: 1;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: rgba(15, 27, 64, 0.6);
   border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -480,10 +481,10 @@
 }
 
 .btn-dev-server {
-  padding: 8px 16px;
+  padding: 10px 12px;
   border: none;
-  border-radius: 10px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
