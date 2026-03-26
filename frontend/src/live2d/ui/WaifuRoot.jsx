@@ -21,6 +21,37 @@ const WaifuRoot = () => {
     startTop: 0
   })
   const currentModelConfigRef = useRef(null)
+  const currentScaleRef = useRef(1)
+
+  const STORAGE_KEY = 'waifu-container-state'
+
+  const saveContainerState = (width, height, left, top, scale) => {
+    const state = {
+      width,
+      height,
+      left,
+      top,
+      scale,
+      timestamp: Date.now()
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    } catch (e) {
+      console.warn('[Waifu] Failed to save state:', e)
+    }
+  }
+
+  const loadContainerState = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.warn('[Waifu] Failed to load state:', e)
+    }
+    return null
+  }
 
   useEffect(() => {
     const instanceId = instanceIdRef.current
@@ -30,59 +61,89 @@ const WaifuRoot = () => {
     div.setAttribute('data-live2d-canvas', 'true')
     div.setAttribute('data-instance-id', instanceId)
     div.style.position = 'fixed'
-    div.style.right = '0'
-    div.style.bottom = '0'
-    div.style.width = '800px'
-    div.style.height = '800px'
     div.style.zIndex = '9999'
-    div.style.pointerEvents = 'none'
+    div.style.pointerEvents = 'auto' // 整个容器接收鼠标事件以便拖拽
+    div.style.cursor = 'move'
+
+    // 尝试加载保存的状态
+    const savedState = loadContainerState()
+    if (savedState) {
+      div.style.width = savedState.width + 'px'
+      div.style.height = savedState.height + 'px'
+      div.style.left = savedState.left + 'px'
+      div.style.top = savedState.top + 'px'
+      div.style.right = 'auto'
+      div.style.bottom = 'auto'
+      currentScaleRef.current = savedState.scale || 1
+    } else {
+      // 默认状态
+      div.style.right = '0'
+      div.style.bottom = '0'
+      div.style.width = '800px'
+      div.style.height = '800px'
+      currentScaleRef.current = 1
+    }
+
     document.body.appendChild(div)
     containerRef.current = div
 
-    // 创建拖拽手柄区域（顶部透明条）
-    const dragHandle = document.createElement('div')
-    dragHandle.style.position = 'absolute'
-    dragHandle.style.top = '0'
-    dragHandle.style.left = '0'
-    dragHandle.style.right = '0'
-    dragHandle.style.height = '60px'
-    dragHandle.style.cursor = 'move'
-    dragHandle.style.pointerEvents = 'auto'
-    dragHandle.style.zIndex = '10000'
-    dragHandle.title = '拖拽移动看板娘'
-    div.appendChild(dragHandle)
+    // 创建全屏拖拽捕获层（透明，用于捕获拖拽事件）
+    const dragLayer = document.createElement('div')
+    dragLayer.style.position = 'absolute'
+    dragLayer.style.top = '0'
+    dragLayer.style.left = '0'
+    dragLayer.style.right = '0'
+    dragLayer.style.bottom = '0'
+    dragLayer.style.cursor = 'move'
+    dragLayer.style.pointerEvents = 'auto'
+    dragLayer.style.zIndex = '9998'
+    dragLayer.style.background = 'transparent'
+    dragLayer.title = '拖拽移动看板娘'
+    div.appendChild(dragLayer)
 
     // 创建缩放手柄（四个角）
     const createResizeHandle = (position, cursor) => {
       const handle = document.createElement('div')
       handle.style.position = 'absolute'
-      handle.style.width = '24px'
-      handle.style.height = '24px'
+      handle.style.width = '28px'
+      handle.style.height = '28px'
       handle.style.cursor = cursor
       handle.style.pointerEvents = 'auto'
       handle.style.zIndex = '10000'
 
-      // 视觉提示（非常透明的圆点）
+      // 更明显的视觉提示
       handle.style.backgroundColor = 'rgba(100, 150, 255, 0.03)'
       handle.style.borderRadius = '50%'
       handle.style.border = '1px solid rgba(100, 150, 255, 0.08)'
+      handle.style.boxShadow = '0 0 8px rgba(100, 150, 255, 0.5)'
+      handle.style.transition = 'all 0.2s ease'
+
+      // 悬停时更明显
+      handle.addEventListener('mouseenter', () => {
+        handle.style.backgroundColor = 'rgba(100, 150, 255, 0.6)'
+        handle.style.transform = 'scale(1.2)'
+      })
+      handle.addEventListener('mouseleave', () => {
+        handle.style.backgroundColor = 'rgba(100, 150, 255, 0.03)'
+        handle.style.transform = 'scale(1)'
+      })
 
       switch (position) {
         case 'top-left':
-          handle.style.top = '-10px'
-          handle.style.left = '-10px'
+          handle.style.top = '-12px'
+          handle.style.left = '-12px'
           break
         case 'top-right':
-          handle.style.top = '-10px'
-          handle.style.right = '-10px'
+          handle.style.top = '-12px'
+          handle.style.right = '-12px'
           break
         case 'bottom-left':
-          handle.style.bottom = '-10px'
-          handle.style.left = '-10px'
+          handle.style.bottom = '-12px'
+          handle.style.left = '-12px'
           break
         case 'bottom-right':
-          handle.style.bottom = '-10px'
-          handle.style.right = '-10px'
+          handle.style.bottom = '-12px'
+          handle.style.right = '-12px'
           break
       }
       handle.dataset.resizeHandle = position
@@ -104,8 +165,12 @@ const WaifuRoot = () => {
       right: div.style.right
     })
 
-    // 拖拽逻辑
+    // 拖拽逻辑 - 在整个容器上触发
     const onDragStart = (e) => {
+      // 如果点击的是缩放手柄，不触发拖拽（让缩放优先）
+      if (e.target.dataset.resizeHandle) {
+        return
+      }
       const state = dragStateRef.current
       state.isDragging = true
       state.startX = e.clientX
@@ -127,7 +192,7 @@ const WaifuRoot = () => {
 
     const onDragMove = (e) => {
       const state = dragStateRef.current
-      if (!state.isDragging) return
+      if (!state.isDragging || state.isResizing) return
 
       const dx = e.clientX - state.startX
       const dy = e.clientY - state.startY
@@ -137,14 +202,27 @@ const WaifuRoot = () => {
     }
 
     const onDragEnd = () => {
-      dragStateRef.current.isDragging = false
+      const state = dragStateRef.current
+      if (!state.isDragging) return
+      state.isDragging = false
       document.removeEventListener('mousemove', onDragMove)
       document.removeEventListener('mouseup', onDragEnd)
+
+      // 保存状态
+      const rect = div.getBoundingClientRect()
+      saveContainerState(
+        rect.width,
+        rect.height,
+        rect.left,
+        rect.top,
+        currentScaleRef.current
+      )
     }
 
     // 缩放逻辑 - 同时调整容器和模型 scale
     const onResizeStart = (e) => {
       e.stopPropagation()
+      e.preventDefault()
       const state = dragStateRef.current
       state.isResizing = true
       state.resizeHandle = e.target.dataset.resizeHandle
@@ -239,6 +317,94 @@ const WaifuRoot = () => {
         if (canvas) {
           canvas.style.width = newContainerWidth + 'px'
           canvas.style.height = newContainerHeight + 'px'
+          canvas.style.pointerEvents = 'none' // canvas 不拦截事件，让拖拽穿透
+        }
+      }
+
+      // 更新模型 scale 和位置
+      if (controllerRef.current && controllerRef.current.currentModel && controllerRef.current.renderer) {
+        // 基于缩放开始时的模型状态进行增量修改
+        const newModelScale = state.startModelScale * scaleChange
+        const newModelX = state.startModelX * scaleChange
+        const newModelY = state.startModelY * scaleChange
+
+        controllerRef.current.renderer.setLayout({
+          scale: newModelScale,
+          x: newModelX,
+          y: newModelY
+        })
+
+        // 保存当前 scale - 相对于模型配置的总比例
+        const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
+        currentScaleRef.current = newModelScale / modelConfig.scale
+      }
+    }
+
+    const onResizeEnd = () => {
+      const state = dragStateRef.current
+      if (!state.isResizing) return
+      state.isResizing = false
+      document.removeEventListener('mousemove', onResizeMove)
+      document.removeEventListener('mouseup', onResizeEnd)
+
+      // 保存状态
+      const rect = div.getBoundingClientRect()
+      saveContainerState(
+        rect.width,
+        rect.height,
+        rect.left,
+        rect.top,
+        currentScaleRef.current
+      )
+    }
+
+    // 绑定事件 - 整个拖拽层监听拖拽
+    dragLayer.addEventListener('mousedown', onDragStart)
+    div.addEventListener('mousedown', onDragStart)
+    handles.forEach(handle => {
+      handle.addEventListener('mousedown', onResizeStart)
+    })
+
+    // 鼠标滚轮缩放
+    const onWheel = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      const rect = div.getBoundingClientRect()
+      const currentWidth = rect.width
+      const currentHeight = rect.height
+      const currentLeft = rect.left
+      const currentTop = rect.top
+
+      // 计算缩放比例 - 每次滚动缩放 10%
+      const delta = e.deltaY > 0 ? 0.9 : 1.1
+      const newWidth = Math.max(300, Math.min(1200, currentWidth * delta))
+      const newHeight = Math.max(300, Math.min(1200, currentHeight * delta))
+
+      // 保持中心不变进行缩放
+      const scaleChange = newWidth / currentWidth
+      const widthDiff = newWidth - currentWidth
+      const heightDiff = newHeight - currentHeight
+
+      const newLeft = currentLeft - widthDiff / 2
+      const newTop = currentTop - heightDiff / 2
+
+      // 更新容器尺寸和位置
+      div.style.right = 'auto'
+      div.style.bottom = 'auto'
+      div.style.width = newWidth + 'px'
+      div.style.height = newHeight + 'px'
+      div.style.left = newLeft + 'px'
+      div.style.top = newTop + 'px'
+
+      // 更新 PIXI 渲染器尺寸
+      if (controllerRef.current && controllerRef.current.stage) {
+        controllerRef.current.stage.resize(newWidth, newHeight)
+        const canvas = div.querySelector('canvas')
+        if (canvas) {
+          canvas.style.width = newWidth + 'px'
+          canvas.style.height = newHeight + 'px'
+          canvas.style.pointerEvents = 'none'
         }
       }
 
@@ -249,30 +415,36 @@ const WaifuRoot = () => {
         const baseX = modelConfig.position.x
         const baseY = modelConfig.position.y
 
-        // 基于初始配置计算新的 scale 和位置
-        const newModelScale = baseScale * scaleChange
-        const newModelX = baseX * scaleChange
-        const newModelY = baseY * scaleChange
+        // 计算新的总 scale
+        const newTotalScale = currentScaleRef.current * scaleChange
+
+        const newModelScale = baseScale * newTotalScale
+        const newModelX = baseX * newTotalScale
+        const newModelY = baseY * newTotalScale
 
         controllerRef.current.renderer.setLayout({
           scale: newModelScale,
           x: newModelX,
           y: newModelY
         })
+
+        // 保存当前 scale
+        currentScaleRef.current = newTotalScale
       }
+
+      // 保存状态
+      saveContainerState(
+        newWidth,
+        newHeight,
+        newLeft,
+        newTop,
+        currentScaleRef.current
+      )
     }
 
-    const onResizeEnd = () => {
-      dragStateRef.current.isResizing = false
-      document.removeEventListener('mousemove', onResizeMove)
-      document.removeEventListener('mouseup', onResizeEnd)
-    }
-
-    // 绑定事件
-    dragHandle.addEventListener('mousedown', onDragStart)
-    handles.forEach(handle => {
-      handle.addEventListener('mousedown', onResizeStart)
-    })
+    // 滚轮事件绑定到容器和拖拽层
+    div.addEventListener('wheel', onWheel, { passive: false })
+    dragLayer.addEventListener('wheel', onWheel, { passive: false })
 
     const initController = async () => {
       // 再次检查这个容器是否还属于我们（防止 StrictMode 清理）
@@ -287,8 +459,33 @@ const WaifuRoot = () => {
         controllerRef.current = controller
         await controller.init(div)
 
+        // 初始化语音系统
+        controller.initVoice()
+
         // 保存当前模型配置
         currentModelConfigRef.current = WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
+
+        // 应用保存的 scale
+        if (currentScaleRef.current !== 1 && controller.renderer) {
+          const modelConfig = currentModelConfigRef.current
+          const baseScale = modelConfig.scale
+          const baseX = modelConfig.position.x
+          const baseY = modelConfig.position.y
+
+          controller.renderer.setLayout({
+            scale: baseScale * currentScaleRef.current,
+            x: baseX * currentScaleRef.current,
+            y: baseY * currentScaleRef.current
+          })
+        }
+
+        // canvas 设置 pointer-events: none 让拖拽穿透
+        setTimeout(() => {
+          const canvas = div.querySelector('canvas')
+          if (canvas) {
+            canvas.style.pointerEvents = 'none'
+          }
+        }, 100)
 
         // 暴露到全局以便调试
         window.__waifuController = controller
