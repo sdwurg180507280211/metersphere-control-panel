@@ -1,7 +1,7 @@
 .services-tab {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 8px;
   min-height: 0;
   flex: 1;
 }
@@ -11,19 +11,26 @@
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .services-control-panel,
 .services-log-panel {
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.92) 0%, rgba(10, 19, 45, 0.92) 100%);
   border: 1px solid rgba(148, 163, 184, 0.12);
-  border-radius: 20px;
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.22);
 }
 
 .services-control-panel {
-  padding: 14px;
+  border-radius: 16px;
+}
+
+.services-log-panel {
+  border-radius: 16px 16px 0 0;
+}
+
+.services-control-panel {
+  padding: 10px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -91,10 +98,10 @@
 }
 
 .btn-batch {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 12px;
-  font-size: 13px;
+  border-radius: 10px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
@@ -150,7 +157,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid;
-  border-radius: 18px;
+  border-radius: 12px;
   overflow: hidden;
   transition: all 0.25s ease;
   box-shadow: 0 12px 24px rgba(2, 6, 23, 0.16);
@@ -175,14 +182,14 @@
 
 .service-btn-main {
   flex: 1;
-  padding: 16px;
+  padding: 10px 12px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   display: flex;
   align-items: stretch;
-  min-height: 92px;
+  min-height: 72px;
   transition: all 0.2s;
   position: relative;
 }
@@ -195,7 +202,7 @@
 .service-btn-content {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 }
@@ -204,24 +211,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
 }
 
 .service-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
 
 .status-icon {
-  font-size: 16px;
+  font-size: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -246,9 +253,9 @@
 .status-badge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
@@ -280,7 +287,7 @@
 .service-actions {
   display: flex;
   justify-content: flex-end;
-  padding: 0 14px 12px;
+  padding: 0 10px 8px;
   gap: 6px;
 }
 
