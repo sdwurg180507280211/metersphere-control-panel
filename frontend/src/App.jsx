@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useServiceStore, useBuildStore, useLogStore, usePackageStore, useConfigStore } from './store/useAppStore'
@@ -14,7 +14,7 @@ import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
 import WaifuRoot from './live2d/ui/WaifuRoot'
 import { WAIFU_FEATURE_FLAGS } from './live2d/config/waifuFeatureFlags'
-import { WAIFU_MODELS } from './live2d/config/waifuModels'
+import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from './live2d/config/waifuModels'
 import './styles/App.css'
 
 const TAB_ITEMS = [
@@ -64,6 +64,7 @@ function App() {
   const { activeTab, setActiveTab, syncHash } = useUiStore()
   const searchInputRef = useRef(null)
   const selectorRef = useRef(null)
+  const [currentWaifuModel, setCurrentWaifuModel] = useState(DEFAULT_WAIFU_MODEL_ID)
   const dragStateRef = useRef({
     isDragging: false,
     startX: 0,
@@ -177,7 +178,7 @@ function App() {
 
   // 模型选择器拖拽逻辑
   useEffect(() => {
-    if (!WAIFU_FEATURE_FLAGS.engine === 'pixi') return
+    if (WAIFU_FEATURE_FLAGS.engine !== 'pixi') return
 
     const selectorDiv = selectorRef.current
     if (!selectorDiv) return
@@ -305,7 +306,9 @@ function App() {
           <div className="selector-wrapper">
             <select
               className="waifu-select"
+              value={currentWaifuModel}
               onChange={(e) => {
+                setCurrentWaifuModel(e.target.value)
                 if (window.switchWaifuModel) {
                   window.switchWaifuModel(e.target.value)
                 }

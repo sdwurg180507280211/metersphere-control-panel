@@ -269,7 +269,7 @@ const WaifuRoot = () => {
       let scaleChange = 1
 
       if (handle.includes('right')) {
-        newContainerWidth = Math.max(300, state.startContainerWidth + dx)
+        newContainerWidth = Math.max(350, state.startContainerWidth + dx)
         scaleChange = newContainerWidth / state.startContainerWidth
       }
       if (handle.includes('left')) {
@@ -278,13 +278,13 @@ const WaifuRoot = () => {
         newLeft = state.startLeft + state.startContainerWidth - newContainerWidth
       }
       if (handle.includes('bottom')) {
-        newContainerHeight = Math.max(300, state.startContainerHeight + dy)
+        newContainerHeight = Math.max(350, state.startContainerHeight + dy)
         if (!handle.includes('left') && !handle.includes('right')) {
           scaleChange = newContainerHeight / state.startContainerHeight
         }
       }
       if (handle.includes('top')) {
-        newContainerHeight = Math.max(300, state.startContainerHeight - dy)
+        newContainerHeight = Math.max(350, state.startContainerHeight - dy)
         if (!handle.includes('left') && !handle.includes('right')) {
           scaleChange = newContainerHeight / state.startContainerHeight
         }
@@ -379,7 +379,7 @@ const WaifuRoot = () => {
       // 计算缩放比例 - 每次滚动缩放 10%
       const delta = e.deltaY > 0 ? 0.9 : 1.1
       const newWidth = Math.max(300, Math.min(1200, currentWidth * delta))
-      const newHeight = Math.max(300, Math.min(1200, currentHeight * delta))
+      const newHeight = Math.max(350, Math.min(1200, currentHeight * delta))
 
       // 保持中心不变进行缩放
       const scaleChange = newWidth / currentWidth

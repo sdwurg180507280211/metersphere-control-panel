@@ -384,7 +384,9 @@ export function useWebSocket() {
                   appendServiceLogRef.current(data.data.lines ? data.data : data.data.message)
                   break
                 case 'logs:build':
+                case 'logs:devserver':
                   // 支持新的增强格式（包含 lines 数组）和旧格式
+                  // 开发服务器日志也显示在构建日志区域
                   appendBuildLogRef.current(data.data.lines ? data.data : data.data.message)
                   break
                 case 'logs:package':

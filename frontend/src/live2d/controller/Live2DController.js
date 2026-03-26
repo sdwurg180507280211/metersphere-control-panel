@@ -1,6 +1,9 @@
 import Live2DStage from '../engine/Live2DStage.js'
 import Live2DModelLoader from '../engine/Live2DModelLoader.js'
 import Live2DRenderer from '../engine/Live2DRenderer.js'
+import LipSyncSystem from '../features/lipSync/LipSyncSystem.js'
+import { getTextToSpeechInstance } from '../services/TextToSpeechService.js'
+import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
 
 class Live2DController {
@@ -16,6 +19,18 @@ class Live2DController {
     this.autoPlayTimer = null
     this.autoPlayInterval = [5000, 12000] // 随机间隔范围：5~12秒
     this.nonIdleActionTimer = null // 每5秒播放非待机动作的定时器
+
+    // 语音和嘴型同步
+    this.lipSync = null
+    this.tts = null
+    this.asr = null
+    this.isSpeaking = false
+    this.isListening = false
+    this.animationFrameId = null
+    this.currentSpeechText = '' // 当前正在朗读的文字
+
+    // ASR 结果回调
+    this.onASRResult = null
   }
 
   async init(container) {
@@ -251,6 +266,8 @@ class Live2DController {
     // 启用交互
     model.interactive = true
 
+    // 移除旧监听器再添加新的 - 避免切换模型后重复绑定
+    model.off('pointerdown')
     // 点击事件
     model.on('pointerdown', () => {
       console.log('[Live2D] Model clicked!')
@@ -325,6 +342,23 @@ class Live2DController {
   }
 
   destroy() {
+    // 清理语音
+    this.stopSpeaking()
+    this.stopListening()
+    if (this.lipSync) {
+      this.lipSync.destroy()
+      this.lipSync = null
+    }
+    if (this.tts) {
+      this.tts.destroy()
+      this.tts = null
+    }
+    if (this.asr) {
+      this.asr.destroy()
+      this.asr = null
+    }
+    this.stopLipSyncTick()
+
     // 清理定时器
     this.stopNonIdleActionTimer()
 
@@ -408,6 +442,317 @@ class Live2DController {
       clearInterval(this.nonIdleActionTimer)
       this.nonIdleActionTimer = null
       console.log('[Live2D] Stopped non-idle action timer')
+    }
+  }
+
+  // ========== 语音和嘴型同步 API ==========
+
+  /**
+   * 初始化语音系统
+   * 可以在 init 后调用，也可以按需延迟初始化
+   */
+  initVoice() {
+    // 初始化嘴型同步系统（paramController 暂时直接操作模型参数）
+    this.lipSync = new LipSyncSystem(null)
+
+    // 初始化 TTS
+    this.tts = getTextToSpeechInstance({
+      lang: 'zh-CN',
+      rate: 0.9,
+      pitch: 1.1,
+      onStart: () => {
+        this.startSpeakingInternal()
+      },
+      onEnd: () => {
+        this.stopSpeakingInternal()
+      },
+      onError: () => {
+        this.stopSpeakingInternal()
+      }
+    })
+
+    // 初始化 ASR（语音识别）
+    this.asr = getSpeechRecognitionInstance({
+      lang: 'zh-CN',
+      continuous: false,
+      interimResults: false,
+      onResult: (transcript) => {
+        if (this.onASRResult && transcript) {
+          this.onASRResult(transcript)
+        }
+      },
+      onStart: () => {
+        this.isListening = true
+      },
+      onEnd: () => {
+        this.isListening = false
+      },
+      onError: (error) => {
+        this.isListening = false
+        console.error('[ASR]', error)
+      }
+    })
+
+    console.log('[Live2D] Voice system initialized (TTS + ASR)')
+  }
+
+  /**
+   * 朗读文字并驱动嘴型
+   * @param {string} text - 要朗读的文字
+   * @returns {boolean} 是否成功开始
+   */
+  speak(text) {
+    if (!this.tts) {
+      this.initVoice()
+    }
+
+    if (!this.tts.isSupported()) {
+      console.warn('[Live2D] TTS not supported by browser')
+      return false
+    }
+
+    if (!text || text.trim().length === 0) {
+      return false
+    }
+
+    // 停止之前的朗读
+    this.stopSpeaking()
+
+    // 保存当前文字，供 LipSync 使用
+    this.currentSpeechText = text.trim()
+
+    const success = this.tts.speak(this.currentSpeechText)
+    if (success) {
+      // TTS 会通过回调触发 startSpeakingInternal
+      return true
+    }
+    return false
+  }
+
+  /**
+   * 停止当前朗读
+   */
+  stopSpeaking() {
+    if (this.tts) {
+      this.tts.stop()
+    }
+    this.stopSpeakingInternal()
+  }
+
+  /**
+   * 内部：开始说话，启动嘴型同步
+   */
+  startSpeakingInternal() {
+    if (!this.currentModel || !this.lipSync) {
+      return
+    }
+
+    this.isSpeaking = true
+
+    // 使用保存的当前文字
+    this.lipSync.start(this.currentSpeechText, 'text')
+
+    // 启动动画循环
+    this.startLipSyncTick()
+    console.log('[Live2D] Speaking started')
+  }
+
+  /**
+   * 内部：停止说话，停止嘴型同步
+   */
+  stopSpeakingInternal() {
+    this.isSpeaking = false
+
+    if (this.lipSync) {
+      this.lipSync.stop()
+    }
+
+    this.currentSpeechText = ''
+    this.stopLipSyncTick()
+    console.log('[Live2D] Speaking stopped')
+  }
+
+  /**
+   * 启动嘴型同步动画循环
+   */
+  startLipSyncTick() {
+    if (this.animationFrameId) {
+      return
+    }
+
+    let lastTime = performance.now()
+    const tick = (currentTime) => {
+      const delta = currentTime - lastTime
+      lastTime = currentTime
+
+      if (this.lipSync && this.isSpeaking) {
+        this.tickLipSync(delta)
+      }
+
+      if (this.isSpeaking) {
+        this.animationFrameId = requestAnimationFrame(tick)
+      }
+    }
+
+    this.animationFrameId = requestAnimationFrame(tick)
+  }
+
+  /**
+   * 停止嘴型同步动画循环
+   */
+  stopLipSyncTick() {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId)
+      this.animationFrameId = null
+    }
+  }
+
+  /**
+   * 嘴型同步 tick - 更新嘴型参数
+   */
+  tickLipSync(delta) {
+    if (!this.lipSync || !this.currentModel?.internalModel?.coreModel) {
+      return
+    }
+
+    // tick lip sync 计算目标嘴型
+    this.lipSync.tick(delta)
+
+    // 直接应用参数到模型（未来接入 ParamController 后改为提交）
+    const coreModel = this.currentModel.internalModel.coreModel
+
+    // 当前实现：直接读取 currentMouthOpen 并应用
+    // 完整 LipSyncSystem 应该通过 ParamController
+    try {
+      // 从 lipSync 获取当前值（临时直接访问私有成员，未来重构）
+      const mouthOpen = this.lipSync.currentMouthOpen
+      if (typeof mouthOpen === 'number') {
+        coreModel.setParameterValueById('ParamMouthOpenY', mouthOpen)
+        const mouthForm = Math.round(mouthOpen * 2) - 1
+        coreModel.setParameterValueById('ParamMouthForm', mouthForm)
+      }
+    } catch (e) {
+      // 参数不存在，忽略
+      console.debug('[Live2D] LipSync: parameter not found in model', e)
+    }
+  }
+
+  /**
+   * 开始说话（不使用 TTS，只驱动嘴型，用于外部语音播放）
+   * @param {string} text - 要说的文字
+   */
+  startSpeaking(text = '') {
+    if (!this.lipSync) {
+      this.initVoice()
+    }
+    this.startSpeakingInternal()
+    if (this.lipSync) {
+      this.lipSync.start(text, 'text')
+    }
+  }
+
+  /**
+   * 停止说话
+   */
+  stopSpeaking() {
+    this.stopSpeakingInternal()
+  }
+
+  /**
+   * 是否正在说话
+   */
+  getIsSpeaking() {
+    return this.isSpeaking
+  }
+
+  /**
+   * 切换 TTS 启用/禁用
+   */
+  toggleTtsEnabled() {
+    if (!this.tts) {
+      this.initVoice()
+    }
+    const enabled = this.tts.toggleEnabled()
+    if (!enabled && this.isSpeaking) {
+      this.stopSpeaking()
+    }
+    return enabled
+  }
+
+  /**
+   * 获取 TTS 启用状态
+   */
+  getTtsEnabled() {
+    return this.tts?.enabled ?? false
+  }
+
+  /**
+   * 设置 TTS 语速
+   */
+  setTtsRate(rate) {
+    if (this.tts) {
+      this.tts.setRate(rate)
+    }
+  }
+
+  /**
+   * 检查浏览器是否支持 TTS
+   */
+  isTtsSupported() {
+    return 'speechSynthesis' in window
+  }
+
+  // ========== 语音识别 (ASR) API ==========
+
+  /**
+   * 开始语音识别
+   * @param {function(string)} onResult - 识别结果回调
+   * @returns {boolean} 是否成功开始
+   */
+  startListening(onResult) {
+    if (!this.asr) {
+      this.initVoice()
+    }
+
+    if (!this.asr.isSupported()) {
+      console.warn('[Live2D] ASR not supported by browser')
+      return false
+    }
+
+    this.onASRResult = onResult
+    return this.asr.start()
+  }
+
+  /**
+   * 停止语音识别
+   */
+  stopListening() {
+    if (this.asr) {
+      this.asr.stop()
+    }
+    this.isListening = false
+  }
+
+  /**
+   * 是否正在录音
+   */
+  getIsListening() {
+    return this.isListening
+  }
+
+  /**
+   * 检查浏览器是否支持 ASR
+   */
+  isAsrSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  }
+
+  /**
+   * 设置 ASR 语言
+   */
+  setAsrLang(lang) {
+    if (this.asr) {
+      this.asr.setLang(lang)
     }
   }
 }
