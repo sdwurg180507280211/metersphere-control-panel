@@ -164,9 +164,9 @@ class SystemCommandService {
     });
 
     return new Promise((resolve, reject) => {
-      const sshCommand = `nohup setsid ssh ${sshArgs.map(arg => `'${arg.replace(/'/g, "\\'")}'`).join(' ')} > /dev/null 2>&1 & echo $!`;
-
-      const child = spawn('/bin/sh', ['-c', sshCommand], {
+      // 直接启动 ssh，不使用 nohup/setsid 的 shell 包装
+      // 让 Node.js 管理子进程，通过 detached 和 unref 让它在后台运行
+      const child = spawn('ssh', sshArgs, {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
@@ -177,15 +177,12 @@ class SystemCommandService {
         }
       });
 
-      let stdout = '';
       let stderr = '';
       let settled = false;
       let connectTimer = null;
-      let verifyTimer = null;
 
       const cleanup = () => {
         if (connectTimer) clearTimeout(connectTimer);
-        if (verifyTimer) clearTimeout(verifyTimer);
       };
 
       const finishReject = (error) => {
@@ -202,10 +199,6 @@ class SystemCommandService {
         resolve(payload);
       };
 
-      child.stdout?.on('data', (raw) => {
-        stdout += raw.toString();
-      });
-
       child.stderr?.on('data', (raw) => {
         const msg = raw.toString();
         stderr += msg;
@@ -214,32 +207,22 @@ class SystemCommandService {
         }
       });
 
-      // 等待 spawn 完成，获取 ssh pid
-      connectTimer = setTimeout(() => {
-        child.unref();
+      // 给 ssh 3 秒时间连接，之后检查进程是否仍在运行
+      connectTimer = setTimeout(async () => {
         connectTimer = null;
-
-        // 读取输出的 pid
-        const pid = parseInt(stdout.trim(), 10);
-        if (!pid || isNaN(pid)) {
+        try {
+          // 检查进程是否仍在运行
+          process.kill(child.pid, 0);
+          // 进程还在，让它脱离父进程继续运行
+          child.unref();
+          logger.broadcast(`SSH 隧道已建立，PID: ${child.pid}`, 'service');
+          finishResolve({ pid: child.pid });
+        } catch {
+          // 进程已退出，连接失败
           finishReject(createAppError(500, 'TUNNEL_CONNECT_FAILED',
-            '无法获取 SSH 进程 PID'));
-          return;
+            stderr.trim() || 'SSH 隧道连接失败，进程已退出'));
         }
-
-        // 等待 3 秒检查进程是否仍在运行
-        verifyTimer = setTimeout(() => {
-          verifyTimer = null;
-          try {
-            process.kill(pid, 0);
-            logger.broadcast(`SSH 隧道已建立，PID: ${pid}`, 'service');
-            finishResolve({ pid });
-          } catch {
-            finishReject(createAppError(500, 'TUNNEL_CONNECT_FAILED',
-              stderr.trim() || 'SSH 隧道连接失败，进程已退出'));
-          }
-        }, 3000);
-      }, 200);
+      }, 3000);
 
       child.on('error', (error) => {
         if (error.code === 'ENOENT') {
