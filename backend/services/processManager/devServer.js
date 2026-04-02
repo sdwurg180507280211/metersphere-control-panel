@@ -163,14 +163,20 @@ module.exports = function applyDevServer(proto) {
       const child = spawn(npmCommand, [...npmArgsPrefix, 'run', devScript], {
         cwd: modulePath,
         env: { ...process.env, PORT: devPort.toString() },
-        detached: false
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe']
       });
 
       let resolved = false;
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child });
+          // 让子进程脱离父进程，独立运行
+          if (process.platform !== 'win32') {
+            child.unref();
+          }
+          // 不保存 child 引用，因为进程已脱离
+          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child: null });
           this._savePid(`devserver-${moduleId}`, child.pid);
           resolve({ success: true, module: moduleInfo });
         }
