@@ -11,6 +11,15 @@ import './ServicesTab.css'
 
 const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting'])
 
+// 从 API 响应中提取错误消息（处理 error 是对象 {code, message, details} 的情况）
+function extractError(data, defaultMessage) {
+  const { error } = data
+  if (typeof error === 'object' && error !== null) {
+    return error.message || error
+  }
+  return error || defaultMessage
+}
+
 // 状态配置
 const STATE_CONFIG = {
   starting: {
@@ -145,7 +154,7 @@ function ServicesTab({ searchInputRef }) {
           setTimeout(fetchServices, 2000)
         }
       } else {
-        toast.error(data.error || `${action}失败`)
+        toast.error(extractError(data, `${action}失败`))
       }
     } catch (error) {
       toast.error(`网络错误: ${error.message}`)
@@ -174,7 +183,7 @@ function ServicesTab({ searchInputRef }) {
           error: null
         })
       } else {
-        toast.error(data.error || '重启失败')
+        toast.error(extractError(data, '重启失败'))
       }
     } catch (error) {
       toast.error(`网络错误: ${error.message}`)
@@ -343,7 +352,7 @@ function ServicesTab({ searchInputRef }) {
                         updateServiceStatus(service.id, { ...serviceStatus, phase: 'stopping', running: false, error: null })
                         if (!connected) setTimeout(fetchServices, 2000)
                       } else {
-                        toast.error(data.error || '停止失败')
+                        toast.error(extractError(data, '停止失败'))
                       }
                     })
                     .catch((err) => toast.error(`网络错误: ${err.message}`))
@@ -511,48 +520,21 @@ const ServiceButton = memo(function ServiceButton({
       {phase === 'failed' && (
         <div className="service-actions">
           <Tooltip content="停止服务" position="bottom">
-            <button 
-              className="btn-icon btn-stop-small" 
+            <button
+              className="btn-icon btn-stop-small"
               onClick={onForceStop}
             >
               🛑
             </button>
           </Tooltip>
-        </div>
-      )}
-
-      {/* 错误摘要展示 */}
-      {error && phase === 'failed' && (
-        <div className="error-section">
-          <div className="error-header" onClick={onToggleError}>
-            <span className="error-label">
-              <span className="error-icon">⚠️</span>
-              {getErrorTypeLabel(error)}
-            </span>
-            <span className="error-toggle">
-              {isErrorExpanded ? '收起 ▲' : '展开 ▼'}
-            </span>
-          </div>
-          <div className={`error-content ${isErrorExpanded ? 'expanded' : ''}`}>
-            <p className="error-text">{error}</p>
-            {getErrorHint(error) && (
-              <p className="error-hint">💡 {getErrorHint(error)}</p>
-            )}
-            <div className="error-actions">
-              <button
-                className="btn-retry btn-stop-retry"
-                onClick={(e) => { e.stopPropagation(); onForceStop(e); }}
-              >
-                停止服务
-              </button>
-              <button
-                className="btn-retry"
-                onClick={(e) => { e.stopPropagation(); onToggle(); }}
-              >
-                重试启动
-              </button>
-            </div>
-          </div>
+          <Tooltip content="重新启动" position="bottom">
+            <button
+              className="btn-icon btn-restart-small"
+              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            >
+              🔄
+            </button>
+          </Tooltip>
         </div>
       )}
     </div>

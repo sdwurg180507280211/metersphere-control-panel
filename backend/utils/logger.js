@@ -318,7 +318,17 @@ class Logger {
   _writeToLevelFile(level, serviceId, date, content) {
     const dir = level === 'error' ? this.errorLogDir : this.warnLogDir;
     const logFile = path.join(dir, `${serviceId}-${date}.log`);
-    
+
+    // 确保目录存在（增强健壮性：即使目录被删除也能自动重建）
+    if (!fs.existsSync(dir)) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+      } catch (mkdirErr) {
+        console.error(`创建${level}日志目录失败 (${dir}):`, mkdirErr.message);
+        return;
+      }
+    }
+
     fs.appendFile(logFile, content, (err) => {
       if (err) {
         console.error(`写入${level}日志失败 (${serviceId}):`, err.message);
@@ -332,6 +342,16 @@ class Logger {
 
     if (existing && !existing.destroyed) {
       return existing;
+    }
+
+    // 确保日志根目录存在
+    if (!fs.existsSync(this.logDir)) {
+      try {
+        fs.mkdirSync(this.logDir, { recursive: true });
+      } catch (mkdirErr) {
+        console.error(`创建日志根目录失败 (${this.logDir}):`, mkdirErr.message);
+        return null;
+      }
     }
 
     const logFile = path.join(this.logDir, `${type}-${date}.log`);

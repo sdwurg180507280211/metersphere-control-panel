@@ -23,14 +23,18 @@ function BuildTab({ searchInputRef }) {
     }
     loadData()
 
-    fetch('/api/build/dev-server/status')
-      .then(res => res.json())
-      .then(data => {
+    const fetchDevServerStatus = async () => {
+      try {
+        const res = await fetch('/api/build/dev-server/status')
+        const data = await res.json()
         if (data.success && data.data) {
           setDevServer({ running: data.data.running, module: data.data.module, loading: false })
         }
-      })
-      .catch(() => {})
+      } catch (e) {
+        console.error('获取开发服务器状态失败:', e)
+      }
+    }
+    fetchDevServerStatus()
   }, [fetchModules, fetchActiveBuilds])
 
   useEffect(() => {

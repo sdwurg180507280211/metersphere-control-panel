@@ -270,6 +270,18 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       }, { serviceConfig, broadcast: false });
     }
 
+    // 如果服务已经在 running 且进程还活着，即使健康检查暂时失败也不标记为 failed
+    // 这避免了重启下游服务时导致上游 gateway 被误标记为失败
+    if (current.phase === 'running' && pid && this._isProcessRunning(pid)) {
+      logger.broadcast(`[${serviceConfig.name}] 健康检查暂时失败，但进程仍在运行，保持 running 状态: ${health.error}`, 'service', serviceId);
+      return this._setServiceStatus(serviceId, {
+        running: true,
+        pid,
+        phase: 'running',
+        error: health.error // 仍然保存错误信息供显示
+      }, { serviceConfig, broadcast: false });
+    }
+
     if (current.phase === 'failed') {
       return this._setServiceStatus(serviceId, {
         running: false,

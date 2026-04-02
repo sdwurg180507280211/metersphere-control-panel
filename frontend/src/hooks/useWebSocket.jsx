@@ -7,6 +7,15 @@ const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY = 3000
 
+// 从 API 响应中提取错误消息（处理 error 是对象 {code, message, details} 的情况）
+function extractError(data, defaultMessage) {
+  const { error } = data
+  if (typeof error === 'object' && error !== null) {
+    return error.message || error
+  }
+  return error || defaultMessage
+}
+
 export function useWebSocket() {
   const wsRef = useRef(null)
   const reconnectTimerRef = useRef(null)
@@ -304,7 +313,7 @@ export function useWebSocket() {
         toast.success(`${serviceName} 重启命令已发送`)
         updateServiceStatusRef.current(serviceId, { phase: 'restarting', running: false })
       } else {
-        toast.error(data.error || '重启失败')
+        toast.error(extractError(data, '重启失败'))
       }
     } catch (error) {
       toast.error(`重启失败: ${error.message}`)
@@ -320,7 +329,7 @@ export function useWebSocket() {
         toast.success(`${serviceName} 启动命令已发送`)
         updateServiceStatusRef.current(serviceId, { phase: 'starting', running: false })
       } else {
-        toast.error(data.error || '启动失败')
+        toast.error(extractError(data, '启动失败'))
       }
     } catch (error) {
       toast.error(`启动失败: ${error.message}`)

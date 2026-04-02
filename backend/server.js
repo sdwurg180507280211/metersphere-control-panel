@@ -226,7 +226,7 @@ app.use((err, req, res, next) => {
 async function initServices() {
   // 连接 Redis
   await cacheService.connect();
-  
+
   // 初始化 WebSocket
   websocketService.init(server);
 
@@ -242,18 +242,58 @@ async function initServices() {
   if (cleanedLocks.length > 0 || cleanedRates.length > 0) {
     console.log(`恢复扫描清理完成: locks=${cleanedLocks.length}, rates=${cleanedRates.length}`);
   }
-  
+
+  // 恢复后端服务进程跟踪
+  try {
+    const processManager = require('./services/processManager');
+    if (processManager.restoreServices) {
+      const restoredCount = await processManager.restoreServices();
+      if (restoredCount > 0) {
+        console.log(`恢复后端服务完成: ${restoredCount} 个`);
+      }
+    }
+  } catch (error) {
+    console.error('恢复后端服务失败:', error.message);
+  }
+
+  // 恢复开发服务器进程跟踪
+  try {
+    const processManager = require('./services/processManager');
+    if (processManager.restoreDevServers) {
+      const restoredCount = await processManager.restoreDevServers();
+      if (restoredCount > 0) {
+        console.log(`恢复开发服务器完成: ${restoredCount} 个`);
+      }
+    }
+  } catch (error) {
+    console.error('恢复开发服务器失败:', error.message);
+  }
+
   console.log('服务初始化完成');
 }
 
 // 优雅关闭处理
 async function gracefulShutdown(signal) {
   console.log(`收到 ${signal} 信号，正在优雅关闭...`);
-  
+
   try {
-    // 停止所有服务
-    const processManager = require('./services/processManager');
-    await processManager.stopAll();
+    // 环境变量控制：默认保持后端服务不停止
+    // - 开发环境（nodemon 自动重启）：不改代码重启杀死所有服务，提升开发效率
+    // - 如果需要退出时停止所有服务，请明确设置: MS_KEEP_SERVICES_ON_EXIT=0
+    const keepServices = !(
+      process.env.MS_KEEP_SERVICES_ON_EXIT === '0' ||
+      process.env.MS_KEEP_SERVICES_ON_EXIT === 'false' ||
+      process.env.MS_KEEP_SERVICES_ON_EXIT === 'no'
+    );
+
+    if (!keepServices) {
+      // 停止所有服务
+      const processManager = require('./services/processManager');
+      await processManager.stopAll();
+      console.log('所有后端服务已停止');
+    } else {
+      console.log('默认保持后端进程运行（如需停止请设置 MS_KEEP_SERVICES_ON_EXIT=0）');
+    }
 
     // 清理 jobService 定时器
     jobService.destroy();

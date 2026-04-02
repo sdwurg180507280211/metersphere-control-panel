@@ -182,6 +182,85 @@ class ProcessManager {
     fs.writeFileSync(this._getPidFile(serviceId), String(pid));
   }
 
+  /**
+   * 恢复已存在的后端服务进程（从 PID 文件恢复）
+   * 应在后端启动时调用，恢复重启前正在运行的服务
+   */
+  async restoreServices() {
+    if (!fs.existsSync(this.pidDir)) {
+      return 0;
+    }
+
+    let restoredCount = 0;
+    const files = fs.readdirSync(this.pidDir);
+
+    for (const file of files) {
+      // 跳过开发服务器的 PID (devserver-*.pid)
+      if (file.startsWith('devserver-')) {
+        continue;
+      }
+
+      // 只处理 .pid 文件
+      if (!file.endsWith('.pid')) {
+        continue;
+      }
+
+      const serviceId = file.replace('.pid', '');
+      const pid = this._getPid(serviceId);
+
+      if (!pid) {
+        // PID 文件无效，清理
+        this._clearPid(serviceId);
+        continue;
+      }
+
+      // 检查进程是否还在运行
+      if (this._isProcessRunning(pid)) {
+        // 获取服务配置
+        const serviceConfig = this._getServiceConfig(serviceId);
+        if (!serviceConfig) {
+          // 服务配置不存在，清理
+          this._clearPid(serviceId);
+          continue;
+        }
+
+        // 恢复到内存状态
+        serviceProcesses.set(serviceId, {
+          pid,
+          pom: serviceConfig.pom,
+          port: serviceConfig.port,
+          child: null  // spawn 引用丢失，无法获取新日志，这是已知限制
+        });
+
+        // 设置状态为 checking_health，触发健康检查
+        this._setServiceStatus(serviceId, {
+          phase: 'checking_health',
+          running: false,
+          pid
+        }, { serviceConfig, broadcast: false });
+
+        // 启动健康监控，自动更新最终状态
+        this._monitorServiceHealth(serviceId, serviceConfig, {
+          phase: 'checking_health',
+          initialDelay: 1000
+        });
+
+        logger.broadcast(`恢复后端服务: ${serviceConfig.name} (PID: ${pid})`, 'system');
+        restoredCount++;
+      } else {
+        // 进程已死，清理 PID 文件
+        this._clearPid(serviceId);
+      }
+    }
+
+    if (restoredCount > 0) {
+      logger.broadcast(`共恢复 ${restoredCount} 个后端服务进程`, 'system');
+    }
+
+    return restoredCount;
+  }
+
+
   _clearPid(serviceId, expectedPid = null) {
     const tracked = serviceProcesses.get(serviceId);
     if (expectedPid && tracked?.pid && tracked.pid !== expectedPid) {

@@ -243,7 +243,20 @@ function buildServiceCatalog(services = {}) {
       startOrder: service.startOrder || DEFAULT_SERVICE_START_ORDER,
       enabled: service.enabled !== false
     }))
-    .sort((a, b) => a.startOrder - b.startOrder || a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      // 先按 startOrder 排序
+      const orderDiff = a.startOrder - b.startOrder;
+      if (orderDiff !== 0) {
+        return orderDiff;
+      }
+      // startOrder 相同时，将 gateway 排在最后，因为它依赖所有其他服务
+      const aIsGateway = a.id.includes('gateway') || a.name.toLowerCase().includes('gateway');
+      const bIsGateway = b.id.includes('gateway') || b.name.toLowerCase().includes('gateway');
+      if (aIsGateway && !bIsGateway) return 1;
+      if (!aIsGateway && bIsGateway) return -1;
+      // 其他情况按名称排序
+      return a.name.localeCompare(b.name);
+    });
 }
 
 function buildFrontendModules(services = {}) {

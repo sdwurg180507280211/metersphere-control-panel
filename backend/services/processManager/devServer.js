@@ -6,17 +6,95 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const logger = require('../../utils/logger');
+const configManager = require('../../services/configManager');
 const { devServerProcesses } = require('./shared');
 
 module.exports = function applyDevServer(proto) {
 
+  /**
+   * 恢复已存在的开发服务器进程（从 PID 文件恢复）
+   * 应在后端启动时调用
+   */
+  proto.restoreDevServers = async function() {
+    const validator = require('../../utils/validator');
+    const modules = (configManager.getResolvedConfig().frontendModules || []);
+    let restoredCount = 0;
+
+    for (const module of modules) {
+      const pidKey = `devserver-${module.id}`;
+      const pid = this._getPid(pidKey);
+
+      if (pid && this._isProcessRunning(pid)) {
+        // 尝试从模块配置中获取端口信息
+        let devPort = 4200;
+        try {
+          const modulePath = path.join(this._getProjectRoot(), module.frontendPath);
+          const vueConfigPath = path.join(modulePath, 'vue.config.js');
+          if (fs.existsSync(vueConfigPath)) {
+            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+            if (portMatch) {
+              devPort = parseInt(portMatch[1]);
+            }
+          }
+        } catch (e) {
+          // 忽略解析错误，使用默认端口
+        }
+
+        const moduleInfo = { id: module.id, name: module.name, port: devPort };
+        devServerProcesses.set(module.id, {
+          pid,
+          module: moduleInfo,
+          child: null
+        });
+        logger.broadcast(`恢复开发服务器: ${module.name} (PID: ${pid})`, 'devserver');
+        restoredCount++;
+      } else if (pid) {
+        // PID 文件存在但进程已死，清理
+        this._clearPid(pidKey);
+      }
+    }
+
+    if (restoredCount > 0) {
+      logger.broadcast(`共恢复 ${restoredCount} 个开发服务器进程`, 'devserver');
+    }
+    return restoredCount;
+  };
+
   proto.startDevServer = async function(moduleId) {
+    // 先尝试恢复可能存在的进程
     if (devServerProcesses.has(moduleId)) {
-      return { success: false, error: '开发服务器已在运行中' };
+      const existing = devServerProcesses.get(moduleId);
+      if (existing.pid && this._isProcessRunning(existing.pid)) {
+        return { success: false, error: '开发服务器已在运行中' };
+      } else {
+        // 进程已死，清理
+        devServerProcesses.delete(moduleId);
+      }
     }
 
     const pid = this._getPid(`devserver-${moduleId}`);
     if (pid && this._isProcessRunning(pid)) {
+      // 进程存在但内存中没有，恢复跟踪
+      const validator = require('../../utils/validator');
+      if (validator.isValidModule(moduleId)) {
+        const moduleConfig = validator.getValidModule(moduleId);
+        // 尝试获取端口
+        let devPort = 4200;
+        try {
+          const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
+          const vueConfigPath = path.join(modulePath, 'vue.config.js');
+          if (fs.existsSync(vueConfigPath)) {
+            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+            if (portMatch) {
+              devPort = parseInt(portMatch[1]);
+            }
+          }
+        } catch (e) {}
+        const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
+        devServerProcesses.set(moduleId, { pid, module: moduleInfo, child: null });
+      }
       return { success: false, error: '开发服务器已在运行中' };
     }
     if (pid) {
@@ -128,42 +206,106 @@ module.exports = function applyDevServer(proto) {
       moduleId = devServerProcesses.keys().next().value;
     }
 
-    const devServer = devServerProcesses.get(moduleId);
-    if (!devServer) {
+    let devServer = devServerProcesses.get(moduleId);
+    let pid = devServer?.pid;
+
+    // 如果内存中没有，尝试从 PID 文件获取
+    if (!pid) {
+      pid = this._getPid(`devserver-${moduleId}`);
+    }
+
+    if (!pid) {
       return { success: false, error: '开发服务器未运行' };
     }
 
-    await this._terminateProcess(devServer.pid);
-    this._clearPid(`devserver-${moduleId}`, devServer.pid);
+    // 终止进程
+    await this._terminateProcess(pid);
+    this._clearPid(`devserver-${moduleId}`, pid);
     devServerProcesses.delete(moduleId);
     return { success: true };
   };
 
-  proto.getDevServerStatus = function(moduleId) {
+  proto.getDevServerStatus = async function(moduleId) {
     const devServer = devServerProcesses.get(moduleId);
     if (devServer) {
+      // 检查进程是否还在运行
+      if (devServer.pid && !this._isProcessRunning(devServer.pid)) {
+        // 进程已死，清理
+        devServerProcesses.delete(moduleId);
+        this._clearPid(`devserver-${moduleId}`);
+        return { running: false, module: null };
+      }
       return {
         running: true,
-        module: { id: devServer.module.id, name: devServer.module.name }
+        module: { id: devServer.module.id, name: devServer.module.name, port: devServer.module.port }
       };
     }
 
     const pid = this._getPid(`devserver-${moduleId}`);
     if (pid && this._isProcessRunning(pid)) {
+      // 进程存在但内存映射丢失，自动恢复
       const validator = require('../../utils/validator');
       if (validator.isValidModule(moduleId)) {
         const moduleConfig = validator.getValidModule(moduleId);
+        // 尝试获取端口信息
+        let devPort = 4200;
+        try {
+          const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
+          const vueConfigPath = path.join(modulePath, 'vue.config.js');
+          if (fs.existsSync(vueConfigPath)) {
+            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+            if (portMatch) {
+              devPort = parseInt(portMatch[1]);
+            }
+          }
+        } catch (e) {}
+        // 恢复内存映射
+        const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
+        devServerProcesses.set(moduleId, { pid, module: moduleInfo, child: null });
+        logger.broadcast(`自动恢复开发服务器跟踪: ${moduleConfig.name} (PID: ${pid})`, 'devserver');
         return {
           running: true,
-          module: { id: moduleConfig.id, name: moduleConfig.name }
+          module: { id: moduleConfig.id, name: moduleConfig.name, port: devPort }
         };
       }
+    } else if (pid) {
+      // PID 文件存在但进程已死，清理
+      this._clearPid(`devserver-${moduleId}`);
     }
 
     return { running: false, module: null };
   };
 
-  proto.getAllDevServerStatus = function() {
+  proto.getAllDevServerStatus = async function() {
+    // 先尝试恢复所有可能丢失的进程
+    const modules = (configManager.getResolvedConfig().frontendModules || []);
+    for (const module of modules) {
+      if (!devServerProcesses.has(module.id)) {
+        const pid = this._getPid(`devserver-${module.id}`);
+        if (pid && this._isProcessRunning(pid)) {
+          // 自动恢复
+          let devPort = 4200;
+          try {
+            const modulePath = path.join(this._getProjectRoot(), module.frontendPath);
+            const vueConfigPath = path.join(modulePath, 'vue.config.js');
+            if (fs.existsSync(vueConfigPath)) {
+              const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+              const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+              if (portMatch) {
+                devPort = parseInt(portMatch[1]);
+              }
+            }
+          } catch (e) {}
+          const moduleInfo = { id: module.id, name: module.name, port: devPort };
+          devServerProcesses.set(module.id, { pid, module: moduleInfo, child: null });
+          logger.broadcast(`自动恢复开发服务器跟踪: ${module.name} (PID: ${pid})`, 'devserver');
+        } else if (pid) {
+          this._clearPid(`devserver-${module.id}`);
+        }
+      }
+    }
+
     if (devServerProcesses.size === 0) {
       return { running: false, module: null };
     }
@@ -171,7 +313,7 @@ module.exports = function applyDevServer(proto) {
     const [moduleId, devServer] = devServerProcesses.entries().next().value;
     return {
       running: true,
-      module: { id: devServer.module.id, name: devServer.module.name }
+      module: { id: devServer.module.id, name: devServer.module.name, port: devServer.module.port }
     };
   };
 };
