@@ -7,9 +7,15 @@ const fs = require('fs');
 const PID_DIR = path.join(__dirname, '../../../.pids');
 const BATCH_START_HEALTH_TIMEOUT = 120000;
 const BATCH_START_HEALTH_INTERVAL = 3000;
+const LOG_DIR = path.join(__dirname, '../../../logs');
+const MAX_HS_ERR_LOGS = 10;
+const ORPHAN_CLEANUP_INTERVAL = 300000; // 5 分钟
 
 if (!fs.existsSync(PID_DIR)) {
   fs.mkdirSync(PID_DIR, { recursive: true });
+}
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
 const serviceProcesses = new Map();
@@ -20,8 +26,11 @@ const TRANSITIONAL_SERVICE_PHASES = new Set(['starting', 'checking_health', 'sto
 
 module.exports = {
   PID_DIR,
+  LOG_DIR,
   BATCH_START_HEALTH_TIMEOUT,
   BATCH_START_HEALTH_INTERVAL,
+  MAX_HS_ERR_LOGS,
+  ORPHAN_CLEANUP_INTERVAL,
   serviceProcesses,
   serviceStatuses,
   buildProcesses,

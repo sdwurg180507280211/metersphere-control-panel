@@ -159,6 +159,10 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     this._attachServiceProcess(serviceId, serviceConfig, child);
 
+    if (process.platform !== 'win32') {
+      child.unref();
+    }
+
     if (options.monitorHealth !== false) {
       this._monitorServiceHealth(serviceId, serviceConfig, {
         phase: 'checking_health',

@@ -16,8 +16,11 @@ const logger = require('../../utils/logger');
 const healthChecker = require('../healthChecker');
 const {
   PID_DIR,
+  LOG_DIR,
   BATCH_START_HEALTH_TIMEOUT,
   BATCH_START_HEALTH_INTERVAL,
+  MAX_HS_ERR_LOGS,
+  ORPHAN_CLEANUP_INTERVAL,
   serviceProcesses,
   serviceStatuses,
   TRANSITIONAL_SERVICE_PHASES
@@ -30,7 +33,80 @@ const applyDevServer = require('./devServer');
 class ProcessManager {
   constructor() {
     this.pidDir = PID_DIR;
+    this.logDir = LOG_DIR;
     this.serviceHealthMonitors = new Map();
+    this.cleanupInterval = null;
+    this._startPeriodicCleanup();
+  }
+
+  _startPeriodicCleanup() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    this.cleanupInterval = setInterval(() => {
+      try {
+        this._cleanupOrphanedProcesses();
+      } catch (err) {
+        logger.broadcast(`孤儿进程清理失败: ${err.message}`, 'system');
+      }
+      try {
+        this._rotateHsErrLogs();
+      } catch (err) {
+        logger.broadcast(`日志轮转失败: ${err.message}`, 'system');
+      }
+    }, ORPHAN_CLEANUP_INTERVAL);
+    this.cleanupInterval.unref();
+  }
+
+  _cleanupOrphanedProcesses() {
+    let cleanedCount = 0;
+    for (const [serviceId, info] of serviceProcesses.entries()) {
+      if (info.pid && !this._isProcessRunning(info.pid)) {
+        this._clearPid(serviceId, info.pid);
+        const current = this._getCurrentServiceStatus(serviceId);
+        if (current.phase === 'running' || current.phase === 'checking_health') {
+          this._setServiceStatus(serviceId, {
+            phase: 'failed',
+            running: false,
+            pid: null,
+            error: '进程异常退出'
+          });
+        }
+        cleanedCount++;
+      }
+    }
+    if (cleanedCount > 0) {
+      logger.broadcast(`清理了 ${cleanedCount} 个孤儿进程记录`, 'system');
+    }
+    return cleanedCount;
+  }
+
+  _rotateHsErrLogs() {
+    const files = fs.readdirSync(this.logDir)
+      .filter(f => f.startsWith('hs_err_pid') && f.endsWith('.log'))
+      .map(f => {
+        const filePath = path.join(this.logDir, f);
+        const stat = fs.statSync(filePath);
+        return { file: filePath, mtime: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    const toDelete = files.slice(MAX_HS_ERR_LOGS);
+    for (const { file } of toDelete) {
+      try {
+        fs.unlinkSync(file);
+      } catch {
+        // ignore
+      }
+    }
+    return toDelete.length;
+  }
+
+  stopPeriodicCleanup() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   // ── 配置访问 ──
@@ -179,7 +255,10 @@ class ProcessManager {
   }
 
   _savePid(serviceId, pid) {
-    fs.writeFileSync(this._getPidFile(serviceId), String(pid));
+    const pidFile = this._getPidFile(serviceId);
+    const tempFile = `${pidFile}.tmp`;
+    fs.writeFileSync(tempFile, String(pid), { mode: 0o644 });
+    fs.renameSync(tempFile, pidFile);
   }
 
   /**
