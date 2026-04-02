@@ -16,34 +16,60 @@ function TunnelDialog({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // 打开时轮询状态
-  useEffect(() => {
-    if (!isOpen) return
-
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch('/api/services/tunnel/status')
-        const data = await res.json()
-        if (data.success) {
-          setStatus(data.data.status)
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 3000)
-    return () => clearInterval(interval)
-  }, [isOpen])
-
   // 重置状态
   useEffect(() => {
     if (isOpen) {
       setError('')
       setLoading(false)
-      setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
     }
+  }, [isOpen])
+
+  // 打开时加载保存的配置并轮询状态
+  useEffect(() => {
+    if (!isOpen) return
+
+    const fetchConfigAndStatus = async () => {
+      try {
+        // 先获取状态
+        const resStatus = await fetch('/api/services/tunnel/status')
+        const dataStatus = await resStatus.json()
+        if (dataStatus.success) {
+          setStatus(dataStatus.data.status)
+        }
+
+        // 再获取保存的配置
+        const resConfig = await fetch('/api/services/tunnel/config')
+        const dataConfig = await resConfig.json()
+        if (dataConfig.success && dataConfig.data.ports && dataConfig.data.ports.length > 0) {
+          // 使用保存的配置
+          setPortMappings(dataConfig.data.ports.map(m => ({
+            ...m,
+            remotePort: Number(m.remotePort),
+            localPort: Number(m.localPort)
+          })))
+        } else {
+          // 使用默认配置
+          setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
+        }
+      } catch {
+        // 如果获取失败，使用默认配置
+        setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
+      }
+    }
+
+    fetchConfigAndStatus()
+    const interval = setInterval(() => {
+      fetch('/api/services/tunnel/status')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setStatus(data.data.status)
+          }
+        })
+        .catch(() => {})
+    }, 3000)
+
+    return () => clearInterval(interval)
   }, [isOpen])
 
   const updatePort = useCallback((index, field, value) => {
@@ -77,10 +103,19 @@ function TunnelDialog({ isOpen, onClose }) {
 
     const ports = validPorts.map((m) => ({
       remotePort: Number(m.remotePort),
-      localPort: Number(m.localPort)
+      localPort: Number(m.localPort),
+      description: m.description || ''
     }))
 
     try {
+      // 先保存配置到文件
+      await fetch('/api/services/tunnel/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ports })
+      })
+
+      // 再启动隧道
       const res = await fetch('/api/services/tunnel/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

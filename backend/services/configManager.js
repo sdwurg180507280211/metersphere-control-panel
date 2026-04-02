@@ -122,6 +122,7 @@ class ConfigManager {
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
       claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
+      sshTunnel: editableDraft.sshTunnel || currentRaw.sshTunnel,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 
@@ -131,6 +132,11 @@ class ConfigManager {
       persisted.npmPath = editableDraft.npmPath;
     } else {
       delete persisted.npmPath;
+    }
+
+    // 如果 sshTunnel 存在但是 ports 为空，删除整个字段使用默认值
+    if (persisted.sshTunnel && (!persisted.sshTunnel.ports || persisted.sshTunnel.ports.length === 0)) {
+      delete persisted.sshTunnel;
     }
 
     const packageConfig = this._buildPersistedPackage(currentRaw.package, editableDraft.package || {}, editableDraft.projectRoot);
@@ -253,7 +259,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'sshTunnel']
     };
   }
 

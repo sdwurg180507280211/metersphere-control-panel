@@ -173,6 +173,50 @@ const serviceController = {
     } catch (error) {
       return sendError(res, error);
     }
+  },
+
+  /**
+   * 获取保存的 SSH 隧道配置
+   */
+  getTunnelConfig(req, res) {
+    try {
+      const editableConfig = configManager.getEditableConfig();
+      const savedPorts = editableConfig.sshTunnel?.ports;
+      return res.json({
+        success: true,
+        data: { ports: savedPorts || null }
+      });
+    } catch (error) {
+      return sendError(res, error);
+    }
+  },
+
+  /**
+   * 保存 SSH 隧道配置
+   */
+  async saveTunnelConfig(req, res) {
+    try {
+      const { ports } = req.body || {};
+
+      // 获取当前配置
+      const currentConfig = configManager.getEditableConfig();
+      const newConfig = {
+        ...currentConfig,
+        sshTunnel: { ports }
+      };
+
+      // 保存草稿
+      configManager.saveDraft(newConfig);
+      configManager.applyConfig();
+
+      return res.json({
+        success: true,
+        message: 'SSH 隧道配置已保存'
+      });
+    } catch (error) {
+      logger.broadcast(`SSH 隧道配置保存失败: ${error.message}`, 'service');
+      return sendError(res, error);
+    }
   }
 };
 

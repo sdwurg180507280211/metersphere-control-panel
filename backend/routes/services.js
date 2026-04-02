@@ -21,6 +21,8 @@ router.post('/system/reload', serviceController.systemReload);
 router.post('/tunnel/start', serviceController.tunnelStart);
 router.post('/tunnel/stop', serviceController.tunnelStop);
 router.get('/tunnel/status', serviceController.tunnelStatus);
+router.get('/tunnel/config', serviceController.getTunnelConfig);
+router.post('/tunnel/config', serviceController.saveTunnelConfig);
 
 // 单个服务操作
 router.get('/:id/status', serviceController.getStatus);

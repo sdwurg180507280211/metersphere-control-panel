@@ -206,6 +206,27 @@ function normalizeServices(rawServices = {}) {
   );
 }
 
+function normalizeSshTunnelConfig(rawTunnel = {}) {
+  const tunnel = rawTunnel && typeof rawTunnel === 'object' && !Array.isArray(rawTunnel)
+    ? rawTunnel
+    : {};
+
+  let ports = [];
+  if (Array.isArray(tunnel.ports)) {
+    ports = tunnel.ports
+      .map(p => ({
+        remotePort: normalizeNumericField(p.remotePort, null),
+        localPort: normalizeNumericField(p.localPort, null),
+        description: normalizeString(p.description, '')
+      }))
+      .filter(p => p.remotePort && p.localPort);
+  }
+
+  return {
+    ports: ports.length > 0 ? ports : null
+  };
+}
+
 function normalizeEditableConfig(rawConfig = {}) {
   const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
     ? rawConfig
@@ -213,7 +234,7 @@ function normalizeEditableConfig(rawConfig = {}) {
 
   const projectRoot = normalizeString(config.projectRoot, DEFAULT_PROJECT_ROOT);
   const npmPath = normalizeString(config.npmPath, detectNpmPath());
-  
+
   return {
     port: normalizeNumericField(config.port, DEFAULT_PORT),
     projectRoot,
@@ -226,6 +247,7 @@ function normalizeEditableConfig(rawConfig = {}) {
     },
     waifu: normalizeWaifuConfig(config.waifu || {}),
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
+    sshTunnel: normalizeSshTunnelConfig(config.sshTunnel || {}),
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
   };
@@ -328,6 +350,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     properties: editable.properties,
     waifu: editable.waifu,
     claudeCode: editable.claudeCode,
+    sshTunnel: editable.sshTunnel,
     package: editable.package,
     services: editable.services,
     serviceCatalog,
@@ -380,6 +403,7 @@ module.exports = {
   normalizePackageConfig,
   normalizeServiceDefinition,
   normalizeServices,
+  normalizeSshTunnelConfig,
   buildServiceCatalog,
   buildFrontendModules,
   buildResolvedConfig,

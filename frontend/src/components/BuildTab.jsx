@@ -14,7 +14,10 @@ function BuildTab({ searchInputRef }) {
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, moduleId: null, moduleName: '' })
   const [backendPrompt, setBackendPrompt] = useState({ isOpen: false })
-  const [devServer, setDevServer] = useState({ running: false, module: null, loading: false })
+  const [devServers, setDevServers] = useState({
+    runningModules: new Map(), // key: moduleId, value: module info
+    loadingModules: new Set()  // 正在启动/停止中的模块 ID
+  })
 
   useEffect(() => {
     const loadData = async () => {
@@ -28,7 +31,21 @@ function BuildTab({ searchInputRef }) {
         const res = await fetch('/api/build/dev-server/status')
         const data = await res.json()
         if (data.success && data.data) {
-          setDevServer({ running: data.data.running, module: data.data.module, loading: false })
+          // 兼容旧版单模块返回格式
+          if (data.data.module) {
+            const runningModules = new Map()
+            if (data.data.running && data.data.module) {
+              runningModules.set(data.data.module.id, data.data.module)
+            }
+            setDevServers({ runningModules, loadingModules: new Set() })
+          } else if (data.data.runningModules) {
+            // 新版多模块返回格式
+            const runningModules = new Map()
+            Object.entries(data.data.runningModules).forEach(([id, module]) => {
+              runningModules.set(parseInt(id) || id, module)
+            })
+            setDevServers({ runningModules, loadingModules: new Set() })
+          }
         }
       } catch (e) {
         console.error('获取开发服务器状态失败:', e)
@@ -119,8 +136,21 @@ function BuildTab({ searchInputRef }) {
     setBackendPrompt({ isOpen: false })
   }, [])
 
+  // Helper to update loading state
+  const setLoading = useCallback((moduleId, isLoading) => {
+    setDevServers(prev => {
+      const loadingModules = new Set(prev.loadingModules)
+      if (isLoading) {
+        loadingModules.add(moduleId)
+      } else {
+        loadingModules.delete(moduleId)
+      }
+      return { ...prev, loadingModules }
+    })
+  }, [])
+
   const handleStartDevServer = useCallback(async (moduleId) => {
-    setDevServer(prev => ({ ...prev, loading: true }))
+    setLoading(moduleId, true)
     try {
       const res = await fetch('/api/build/dev-server/start', {
         method: 'POST',
@@ -129,46 +159,59 @@ function BuildTab({ searchInputRef }) {
       })
       const data = await res.json()
       if (data.success) {
-        setDevServer({ running: true, module: data.module, loading: false })
+        setDevServers(prev => {
+          const runningModules = new Map(prev.runningModules)
+          runningModules.set(moduleId, data.module)
+          const loadingModules = new Set(prev.loadingModules)
+          loadingModules.delete(moduleId)
+          return { runningModules, loadingModules }
+        })
         toast.success('开发服务器已启动', { icon: '🚀' })
       } else {
         const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '启动失败'
         toast.error(errorMsg)
-        setDevServer(prev => ({ ...prev, loading: false }))
+        setLoading(moduleId, false)
       }
     } catch (error) {
       toast.error(`启动失败: ${error.message}`)
-      setDevServer(prev => ({ ...prev, loading: false }))
+      setLoading(moduleId, false)
     }
-  }, [])
+  }, [setLoading])
 
-  const handleStopDevServer = useCallback(async () => {
-    setDevServer(prev => ({ ...prev, loading: true }))
+  const handleStopDevServer = useCallback(async (moduleId) => {
+    setLoading(moduleId, true)
     try {
       const res = await fetch('/api/build/dev-server/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: devServer.module?.id })
+        body: JSON.stringify({ module: moduleId })
       })
       const data = await res.json()
       if (data.success) {
-        setDevServer({ running: false, module: null, loading: false })
+        setDevServers(prev => {
+          const runningModules = new Map(prev.runningModules)
+          runningModules.delete(moduleId)
+          const loadingModules = new Set(prev.loadingModules)
+          loadingModules.delete(moduleId)
+          return { runningModules, loadingModules }
+        })
         toast.success('开发服务器已停止')
       } else {
         const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '停止失败'
         toast.error(errorMsg)
-        setDevServer(prev => ({ ...prev, loading: false }))
+        setLoading(moduleId, false)
       }
     } catch (error) {
       toast.error(`停止失败: ${error.message}`)
-      setDevServer(prev => ({ ...prev, loading: false }))
+      setLoading(moduleId, false)
     }
-  }, [devServer.module?.id])
+  }, [setLoading])
 
-  const handleOpenDevServer = useCallback(() => {
-    const port = devServer.module?.port || 4200
+  const handleOpenDevServer = useCallback((moduleId) => {
+    const module = devServers.runningModules.get(moduleId)
+    const port = module?.port || 4200
     window.open(`http://localhost:${port}`, '_blank')
-  }, [devServer.module])
+  }, [devServers.runningModules])
 
   if (initialLoading) {
     return (
@@ -220,9 +263,9 @@ function BuildTab({ searchInputRef }) {
 
               <div className="module-list">
                 {modules.map((module, index) => {
-                  const isRunningDev = devServer.running && devServer.module?.id === module.id
+                  const isRunningDev = devServers.runningModules.has(module.id)
                   const isBuildingThis = activeBuilds.some(b => b.moduleId === module.id && b.status === 'running')
-                  const isOtherDevRunning = devServer.running && devServer.module?.id !== module.id
+                  const isLoading = devServers.loadingModules.has(module.id)
 
                   return (
                     <div
@@ -249,28 +292,28 @@ function BuildTab({ searchInputRef }) {
                               <button
                                 className="btn-dev-server btn-start"
                                 onClick={() => handleStartDevServer(module.id)}
-                                disabled={devServer.loading || isOtherDevRunning || isBuilding}
+                                disabled={isLoading || isBuilding}
                                 style={{ width: '100%' }}
                               >
-                                启动开发服务器
+                                {isLoading ? '启动中...' : '启动开发服务器'}
                               </button>
                             ) : (
                               <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
                                 <button
                                   className="btn-dev-server btn-open"
-                                  onClick={handleOpenDevServer}
-                                  disabled={devServer.loading}
+                                  onClick={() => handleOpenDevServer(module.id)}
+                                  disabled={isLoading}
                                   style={{ flex: 1 }}
                                 >
                                   🌐 打开
                                 </button>
                                 <button
                                   className="btn-dev-server btn-stop"
-                                  onClick={handleStopDevServer}
-                                  disabled={devServer.loading}
+                                  onClick={() => handleStopDevServer(module.id)}
+                                  disabled={isLoading}
                                   style={{ flex: 1 }}
                                 >
-                                  停止
+                                  {isLoading ? '停止中...' : '停止'}
                                 </button>
                               </div>
                             )}
