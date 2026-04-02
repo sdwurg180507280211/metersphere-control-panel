@@ -171,12 +171,12 @@ module.exports = function applyDevServer(proto) {
       const timeout = setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          // 让子进程脱离父进程，独立运行
+          // 让子进程脱离父进程，独立运行（但仍保留 child 引用用于日志）
           if (process.platform !== 'win32') {
             child.unref();
           }
-          // 不保存 child 引用，因为进程已脱离
-          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child: null });
+          // 保存 child 引用，用于日志捕获
+          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child });
           this._savePid(`devserver-${moduleId}`, child.pid);
           resolve({ success: true, module: moduleInfo });
         }
