@@ -23,7 +23,6 @@ const {
   ORPHAN_CLEANUP_INTERVAL,
   serviceProcesses,
   serviceStatuses,
-  devServerProcesses,
   TRANSITIONAL_SERVICE_PHASES
 } = require('./shared');
 
@@ -73,14 +72,6 @@ class ProcessManager {
             error: '进程异常退出'
           });
         }
-        cleanedCount++;
-      }
-    }
-    // 清理已死的开发服务器进程
-    for (const [moduleId, info] of devServerProcesses.entries()) {
-      if (info.pid && !this._isProcessRunning(info.pid)) {
-        this._clearPid(`devserver-${moduleId}`, info.pid, devServerProcesses);
-        logger.broadcast(`清理已死的开发服务器: ${info.module?.name || moduleId}`, 'devserver');
         cleanedCount++;
       }
     }
@@ -349,14 +340,14 @@ class ProcessManager {
   }
 
 
-  _clearPid(trackedId, expectedPid = null, trackedMap = serviceProcesses) {
-    const tracked = trackedMap.get(trackedId);
+  _clearPid(serviceId, expectedPid = null) {
+    const tracked = serviceProcesses.get(serviceId);
     if (expectedPid && tracked?.pid && tracked.pid !== expectedPid) {
       return;
     }
 
-    trackedMap.delete(trackedId);
-    const pidFile = this._getPidFile(trackedId);
+    serviceProcesses.delete(serviceId);
+    const pidFile = this._getPidFile(serviceId);
     if (fs.existsSync(pidFile)) {
       fs.unlinkSync(pidFile);
     }
@@ -384,18 +375,6 @@ class ProcessManager {
     } catch (error) {
       return false;
     }
-  }
-
-  /**
-   * 检查给定 PID 是否是正在跟踪的开发服务器进程
-   */
-  _isDevServerProcess(pid) {
-    for (const [_, devInfo] of devServerProcesses.entries()) {
-      if (devInfo.pid === pid) {
-        return true;
-      }
-    }
-    return false;
   }
 
   // ── WebSocket 广播 ──
@@ -447,18 +426,7 @@ class ProcessManager {
       return;
     }
 
-    // 跳过开发服务器进程，不要误杀它们（开发服务器由构建页面单独管理）
-    if (this._isDevServerProcess(pid)) {
-      logger.broadcast(`跳过终止开发服务器进程 (PID: ${pid})，开发服务器由单独管理`, 'system');
-      return;
-    }
-
     const killOne = (targetPid, signal) => {
-      // 检查确保不是开发服务器进程
-      if (this._isDevServerProcess(targetPid)) {
-        logger.broadcast(`跳过终止开发服务器子进程 (PID: ${targetPid})`, 'system');
-        return false;
-      }
       try {
         process.kill(targetPid, signal);
         return true;
