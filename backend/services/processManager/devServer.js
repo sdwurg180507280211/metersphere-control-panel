@@ -312,14 +312,25 @@ module.exports = function applyDevServer(proto) {
       }
     }
 
-    if (devServerProcesses.size === 0) {
-      return { running: false, module: null };
+    // 检查所有已跟踪进程，清理已死的
+    const runningModules = {};
+    for (const [moduleId, devServer] of devServerProcesses.entries()) {
+      if (devServer.pid && !this._isProcessRunning(devServer.pid)) {
+        // 进程已死，清理
+        devServerProcesses.delete(moduleId);
+        this._clearPid(`devserver-${moduleId}`);
+      } else if (devServer.module) {
+        runningModules[devServer.module.id] = {
+          id: devServer.module.id,
+          name: devServer.module.name,
+          port: devServer.module.port
+        };
+      }
     }
 
-    const [moduleId, devServer] = devServerProcesses.entries().next().value;
     return {
-      running: true,
-      module: { id: devServer.module.id, name: devServer.module.name, port: devServer.module.port }
+      running: devServerProcesses.size > 0,
+      runningModules
     };
   };
 };
