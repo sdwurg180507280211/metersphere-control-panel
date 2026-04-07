@@ -31,27 +31,45 @@ function BuildTab({ searchInputRef }) {
         const res = await fetch('/api/build/dev-server/status')
         const data = await res.json()
         if (data.success && data.data) {
+          const newRunningModules = new Map()
           // 兼容旧版单模块返回格式
           if (data.data.module) {
-            const runningModules = new Map()
             if (data.data.running && data.data.module) {
-              runningModules.set(data.data.module.id, data.data.module)
+              newRunningModules.set(data.data.module.id, data.data.module)
             }
-            setDevServers({ runningModules, loadingModules: new Set() })
           } else if (data.data.runningModules) {
             // 新版多模块返回格式
-            const runningModules = new Map()
             Object.entries(data.data.runningModules).forEach(([id, module]) => {
-              runningModules.set(parseInt(id) || id, module)
+              newRunningModules.set(parseInt(id) || id, module)
             })
-            setDevServers({ runningModules, loadingModules: new Set() })
           }
+
+          setDevServers(prev => {
+            if (prev.runningModules.size !== newRunningModules.size) {
+              return { ...prev, runningModules: newRunningModules }
+            }
+
+            for (const [id, module] of newRunningModules) {
+              const prevModule = prev.runningModules.get(id)
+              if (!prevModule ||
+                  prevModule.id !== module.id ||
+                  prevModule.port !== module.port ||
+                  prevModule.name !== module.name) {
+                return { ...prev, runningModules: newRunningModules }
+              }
+            }
+
+            return prev
+          })
         }
       } catch (e) {
         console.error('获取开发服务器状态失败:', e)
       }
     }
     fetchDevServerStatus()
+
+    const interval = setInterval(fetchDevServerStatus, 5000)
+    return () => clearInterval(interval)
   }, [fetchModules, fetchActiveBuilds])
 
   useEffect(() => {
