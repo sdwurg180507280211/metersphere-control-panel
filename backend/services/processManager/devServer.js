@@ -54,6 +54,7 @@ module.exports = function applyDevServer(proto) {
           return pid;
         }
       }
+      return null;
     }
 
     return portPids[0];
