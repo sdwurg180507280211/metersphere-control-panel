@@ -255,6 +255,30 @@
   border-bottom: 1px solid var(--accent-primary) !important;
 }
 
+/* 每服务镜像版本输入框 */
+.config-service-version-input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: rgba(8, 16, 33, 0.5);
+  color: #93c5fd;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.config-service-version-input::placeholder {
+  color: rgba(148, 163, 184, 0.35);
+  font-family: system-ui, sans-serif;
+}
+
+.config-service-version-input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
 /* Hint 图标样式 */
 .config-field-hint-icon {
   cursor: pointer;

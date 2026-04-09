@@ -560,6 +560,73 @@
   font-size: 13px;
 }
 
+/* 每服务版本输入框 */
+.package-service-version {
+  padding: 0 14px 10px 14px;
+}
+
+.package-service-version-input {
+  width: 100%;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: rgba(8, 16, 33, 0.6);
+  color: #93c5fd;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.package-service-version-input::placeholder {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.package-service-version-input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.package-service-version-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 版本标签列表 */
+.package-version-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.package-version-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: rgba(37, 99, 235, 0.12);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.15);
+}
+
+.package-version-tag.version-next {
+  background: rgba(34, 197, 94, 0.12);
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.package-version-tag.version-custom {
+  background: rgba(124, 58, 237, 0.12);
+  color: #c4b5fd;
+  border-color: rgba(124, 58, 237, 0.2);
+}
+
+.package-status-meta-wide,
+.package-summary-wide {
+  grid-column: 1 / -1;
+}
+
 .package-status-empty {
   min-height: 200px;
   display: flex;

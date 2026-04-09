@@ -94,15 +94,6 @@ function validateMaxJobs(rawMaxJobs) {
   return value;
 }
 
-function validateImageVersion(rawImageVersion) {
-  const imageVersion = String(rawImageVersion || '').trim();
-  if (!imageVersion) {
-    throw createAppError(400, 'INVALID_IMAGE_VERSION', '镜像版本不能为空');
-  }
-
-  return imageVersion;
-}
-
 function validatePackagePath(rawPackagePath) {
   if (rawPackagePath === undefined || rawPackagePath === null || rawPackagePath === '') {
     return '';
@@ -119,16 +110,25 @@ function validatePackagePath(rawPackagePath) {
 function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConfig()) {
   const defaults = packageConfig.getPackageDefaults(resolvedConfig.package || {});
   const services = validateServices(payload.services ?? defaults.services, resolvedConfig);
-  const imageVersion = validateImageVersion(payload.imageVersion ?? defaults.imageVersion);
   const parallelBuild = normalizeBoolean(payload.parallelBuild, defaults.parallelBuild);
   const maxJobs = validateMaxJobs(payload.maxJobs ?? defaults.maxJobs);
   const buildOnly = normalizeBoolean(payload.buildOnly, defaults.buildOnly);
   const packagePath = validatePackagePath(payload.packagePath ?? defaults.packagePath);
   const scriptPath = resolvePackageScriptPath(payload.scriptPath || null, resolvedConfig);
 
+  // 构建每服务版本映射：优先取前端覆盖 > 服务配置 > 种子版本
+  const seedVersion = packageConfig.DEFAULT_SEED_VERSION;
+  const serviceImageVersions = {};
+  const resolvedServices = resolvedConfig.services || {};
+  for (const serviceId of services) {
+    const override = payload.serviceImageVersions?.[serviceId];
+    const configured = resolvedServices[serviceId]?.imageVersion;
+    serviceImageVersions[serviceId] = override || configured || seedVersion;
+  }
+
   return {
     services,
-    imageVersion,
+    serviceImageVersions,
     parallelBuild,
     maxJobs,
     buildOnly,
@@ -137,10 +137,16 @@ function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConf
   };
 }
 
+function serviceIdToEnvKey(serviceId) {
+  return 'SERVICE_VERSION_' + serviceId.replace(/-/g, '_').toUpperCase();
+}
+
 function buildPackageEnvironment(options) {
+  // IMAGE_VERSION 仍传递（取第一个服务版本），用于脚本全局 fallback 兼容
+  const firstVersion = Object.values(options.serviceImageVersions || {})[0] || packageConfig.DEFAULT_SEED_VERSION;
   const env = {
     ...process.env,
-    IMAGE_VERSION: options.imageVersion,
+    IMAGE_VERSION: firstVersion,
     PARALLEL_BUILD: String(options.parallelBuild),
     MAX_JOBS: String(options.maxJobs),
     BUILD_ONLY: String(options.buildOnly)
@@ -148,6 +154,13 @@ function buildPackageEnvironment(options) {
 
   if (options.packagePath) {
     env.PACKAGE_PATH = options.packagePath;
+  }
+
+  // 传递每服务专属版本号环境变量
+  if (options.serviceImageVersions) {
+    for (const [serviceId, version] of Object.entries(options.serviceImageVersions)) {
+      env[serviceIdToEnvKey(serviceId)] = version;
+    }
   }
 
   return env;

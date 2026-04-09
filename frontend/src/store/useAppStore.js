@@ -839,7 +839,7 @@ function normalizePackageTask(task) {
   const metadata = {
     ...(task.metadata || {}),
     services: task.metadata?.services || task.services || [],
-    imageVersion: task.metadata?.imageVersion || task.imageVersion || '',
+    serviceImageVersions: task.metadata?.serviceImageVersions || task.serviceImageVersions || {},
     parallelBuild: task.metadata?.parallelBuild ?? task.parallelBuild ?? false,
     maxJobs: task.metadata?.maxJobs ?? task.maxJobs ?? null,
     buildOnly: task.metadata?.buildOnly ?? task.buildOnly ?? false,

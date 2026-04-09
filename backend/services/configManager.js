@@ -210,6 +210,13 @@ class ConfigManager {
           delete nextService.jvmOptions;
         }
 
+        // Per-service image version
+        if (serviceDraft.imageVersion) {
+          nextService.imageVersion = serviceDraft.imageVersion;
+        } else {
+          delete nextService.imageVersion;
+        }
+
         return [serviceId, nextService];
       })
     );
@@ -556,6 +563,31 @@ class ConfigManager {
       applyImpact: diagnosticsResult.applyImpact,
       meta: this.getMeta()
     };
+  }
+
+  /**
+   * 批量更新服务镜像版本（打包成功后自动递增调用）
+   * @param {Object} serviceImageVersions - { serviceId: newVersion }
+   */
+  updateServiceImageVersions(serviceImageVersions) {
+    if (!serviceImageVersions || typeof serviceImageVersions !== 'object') {
+      return;
+    }
+
+    const currentEditable = this.getEditableConfig();
+    const updatedServices = { ...currentEditable.services };
+
+    for (const [serviceId, newVersion] of Object.entries(serviceImageVersions)) {
+      if (updatedServices[serviceId]) {
+        updatedServices[serviceId] = {
+          ...updatedServices[serviceId],
+          imageVersion: newVersion
+        };
+      }
+    }
+
+    const draft = { ...currentEditable, services: updatedServices };
+    this.saveDraft(draft);
   }
 
   getPropertiesFile(filename) {

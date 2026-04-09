@@ -36,6 +36,7 @@ export function useWebSocket() {
   const fetchServicesRef = useRef(useServiceStore.getState().fetchServices)
   const updatePackageTaskRef = useRef(usePackageStore.getState().updateCurrentTask)
   const fetchPackageActiveTaskRef = useRef(usePackageStore.getState().fetchActiveTask)
+  const fetchPackageOptionsRef = useRef(usePackageStore.getState().fetchOptions)
   const setInfraStatusRef = useRef(useInfraStore.getState().setStatus)
   const fetchInfraStatusRef = useRef(useInfraStore.getState().fetchInfraStatus)
 
@@ -278,6 +279,8 @@ export function useWebSocket() {
 
       if (channel === 'job:completed') {
         toast.success('打包任务已完成')
+        // 刷新打包选项以获取最新版本号
+        scheduleRefresh('packageOptions', () => fetchPackageOptionsRef.current(), 500)
       }
 
       if (channel === 'job:failed') {
@@ -297,7 +300,7 @@ export function useWebSocket() {
       error: payload.error || null,
       metadata: {
         services: payload.services,
-        imageVersion: payload.imageVersion,
+        serviceImageVersions: payload.serviceImageVersions,
         parallelBuild: payload.parallelBuild,
         maxJobs: payload.maxJobs,
         heartbeatAt: payload.heartbeatAt
@@ -305,7 +308,12 @@ export function useWebSocket() {
     }
 
     updatePackageTaskRef.current(nextTask)
-  }, [])
+
+    // 打包完成后刷新 options 以获取最新版本号
+    if (channel === 'package:completed') {
+      scheduleRefresh('packageOptions', () => fetchPackageOptionsRef.current(), 500)
+    }
+  }, [scheduleRefresh])
 
   // 重启服务
   const restartService = async (serviceId, serviceName) => {

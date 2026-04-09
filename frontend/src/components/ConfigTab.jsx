@@ -322,6 +322,7 @@ function ConfigTab() {
             <th style={{ width: '80px' }}>状态</th>
             <th>服务定义</th>
             <th>端口 (Port)</th>
+            <th style={{ width: '160px' }}>镜像版本</th>
             <th style={{ width: '100px' }}>启动顺序</th>
             <th style={{ width: '40px' }}></th>
           </tr>
@@ -381,6 +382,15 @@ function ConfigTab() {
                     </div>
                   </td>
                   <td>
+                    <input
+                      type="text"
+                      className="config-service-version-input"
+                      value={s.imageVersion ?? ''}
+                      onChange={e => updateService(id, { imageVersion: e.target.value })}
+                      placeholder="v2.10.26.01-lts"
+                    />
+                  </td>
+                  <td>
                      <input 
                        type="number" 
                        value={s.startOrder ?? ''} 
@@ -396,7 +406,7 @@ function ConfigTab() {
             })
           ) : (
             <tr>
-              <td colSpan="5">
+              <td colSpan="6">
                 <div style={{ padding: '80px 0', textAlign: 'center', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', borderRadius: '16px' }}>
                   <div style={{ fontSize: '48px', marginBottom: '20px', opacity: 0.5 }}>🔎</div>
                   <div style={{ fontSize: '16px', fontWeight: 600 }}>未发现匹配的服务模块</div>

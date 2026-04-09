@@ -138,7 +138,6 @@ function normalizePackageConfig(rawPackage = {}) {
   };
 
   normalized.scriptPath = normalizeString(config.scriptPath, '');
-  normalized.imageVersion = normalizeString(config.imageVersion, '');
   normalized.packagePath = normalizeString(config.packagePath, '');
   normalized.defaultServices = Array.isArray(config.defaultServices)
     ? [...new Set(config.defaultServices.map((item) => normalizeString(item)).filter(Boolean))]
@@ -205,7 +204,8 @@ function normalizeServiceDefinition(serviceId, rawService = {}) {
     healthCheck,
     startOrder: normalizeNumericField(service.startOrder, DEFAULT_SERVICE_START_ORDER),
     enabled: normalizeBoolean(service.enabled, true),
-    jvmOptions: normalizeString(service.jvmOptions, '')
+    jvmOptions: normalizeString(service.jvmOptions, ''),
+    imageVersion: normalizeString(service.imageVersion, '')
   };
 }
 

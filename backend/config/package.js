@@ -14,9 +14,10 @@ const PACKAGE_CAPABILITIES = {
   explicitAllServicesOnly: true
 };
 
+const DEFAULT_SEED_VERSION = 'v2.10.26.01-lts';
+
 const BASE_PACKAGE_DEFAULTS = {
   services: ['api-test'],
-  imageVersion: 'v2.10.26.09-lts',
   parallelBuild: true,
   maxJobs: 4,
   buildOnly: false,
@@ -28,7 +29,6 @@ function getPackageDefaults(packageConfig = {}) {
     services: Array.isArray(packageConfig.defaultServices) && packageConfig.defaultServices.length > 0
       ? packageConfig.defaultServices
       : BASE_PACKAGE_DEFAULTS.services,
-    imageVersion: packageConfig.imageVersion || BASE_PACKAGE_DEFAULTS.imageVersion,
     parallelBuild: packageConfig.parallelBuild ?? BASE_PACKAGE_DEFAULTS.parallelBuild,
     maxJobs: packageConfig.maxJobs ?? BASE_PACKAGE_DEFAULTS.maxJobs,
     buildOnly: packageConfig.buildOnly ?? BASE_PACKAGE_DEFAULTS.buildOnly,
@@ -43,7 +43,8 @@ function getPackageServiceOptions(resolvedConfig = {}) {
     id,
     name: services[id]?.name || id,
     description: services[id]?.pom || null,
-    enabled: services[id]?.enabled !== false
+    enabled: services[id]?.enabled !== false,
+    imageVersion: services[id]?.imageVersion || ''
   }));
 }
 
@@ -66,6 +67,7 @@ function getPackageScriptCandidates(options = {}) {
 
 module.exports = {
   CONTROL_PANEL_ROOT,
+  DEFAULT_SEED_VERSION,
   getPackageServiceIds,
   PACKAGE_CAPABILITIES,
   PACKAGE_RESOURCE_KEY: 'package:run',

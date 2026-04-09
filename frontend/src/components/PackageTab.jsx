@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { useLogStore, usePackageStore } from '../store/useAppStore'
+import { useLogStore, usePackageStore, useConfigStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import EmptyState from './EmptyState'
 import './PackageTab.css'
 
-const RECENT_IMAGE_STORAGE_KEY = 'ms-control-panel:package-recent-image-versions'
-const MAX_RECENT_IMAGE_VERSIONS = 5
 const FALLBACK_DEFAULTS = {
   services: ['api-test'],
-  imageVersion: 'v2.10.26.09-lts',
   parallelBuild: true,
   maxJobs: 4
 }
@@ -17,13 +14,13 @@ const FALLBACK_DEFAULTS = {
 function PackageTab({ searchInputRef }) {
   const initializedRef = useRef(false)
   const [selectedServices, setSelectedServices] = useState(FALLBACK_DEFAULTS.services)
-  const [imageVersion, setImageVersion] = useState(FALLBACK_DEFAULTS.imageVersion)
   const [parallelBuild, setParallelBuild] = useState(FALLBACK_DEFAULTS.parallelBuild)
   const [maxJobs, setMaxJobs] = useState(FALLBACK_DEFAULTS.maxJobs)
-  const [recentImageVersions, setRecentImageVersions] = useState(() => loadRecentImageVersions())
   const [showLogModal, setShowLogModal] = useState(false)
+  const [serviceImageVersions, setServiceImageVersions] = useState({})
 
   const { clearPackageLogs } = useLogStore()
+  const { resolved } = useConfigStore()
   const {
     options,
     optionsLoading,
@@ -48,11 +45,41 @@ function PackageTab({ searchInputRef }) {
     if (!initializedRef.current || currentTask?.jobId) {
       initializedRef.current = true
       setSelectedServices(source.services?.length ? source.services : FALLBACK_DEFAULTS.services)
-      setImageVersion(source.imageVersion || FALLBACK_DEFAULTS.imageVersion)
       setParallelBuild(source.parallelBuild ?? FALLBACK_DEFAULTS.parallelBuild)
       setMaxJobs(source.maxJobs ?? FALLBACK_DEFAULTS.maxJobs)
     }
   }, [options?.defaults, currentTask?.jobId, currentTask?.metadata])
+
+  // 从后端 options.services 解析每服务版本（允许覆盖旧值）
+  useEffect(() => {
+    const resolvedServices = resolved?.services || {}
+    const optionServices = options?.services || []
+    const versions = {}
+    for (const service of optionServices) {
+      if (service.imageVersion) {
+        versions[service.id] = service.imageVersion
+      } else if (resolvedServices[service.id]?.imageVersion) {
+        versions[service.id] = resolvedServices[service.id].imageVersion
+      }
+    }
+    if (Object.keys(versions).length > 0) {
+      setServiceImageVersions((prev) => ({
+        ...prev,
+        ...versions
+      }))
+    }
+  }, [options?.services, resolved?.services])
+
+  // 打包完成后，用 nextImageVersions 更新前端版本号
+  useEffect(() => {
+    const nextVersions = currentTask?.result?.nextImageVersions
+    if (currentTask?.status === 'success' && nextVersions && Object.keys(nextVersions).length > 0) {
+      setServiceImageVersions((prev) => ({
+        ...prev,
+        ...nextVersions
+      }))
+    }
+  }, [currentTask?.status, currentTask?.result?.nextImageVersions])
 
   const defaults = options?.defaults || FALLBACK_DEFAULTS
   const services = options?.services || []
@@ -68,7 +95,6 @@ function PackageTab({ searchInputRef }) {
   const summaryCards = [
     { label: '已选服务', value: selectedServices.length },
     { label: '任务状态', value: currentStatusText },
-    { label: '最近镜像', value: recentImageVersions[0] || defaults.imageVersion },
     { label: '并行模式', value: parallelBuild ? '并行' : '串行' }
   ]
 
@@ -84,6 +110,17 @@ function PackageTab({ searchInputRef }) {
     ))
   }
 
+  const handleServiceVersionChange = (serviceId, value) => {
+    setServiceImageVersions((prev) => ({ ...prev, [serviceId]: value }))
+  }
+
+  // 获取服务的实际版本（优先用户编辑 > 服务配置 > 种子版本）
+  const getServiceVersion = (serviceId) => {
+    return serviceImageVersions[serviceId]
+      || services.find((s) => s.id === serviceId)?.imageVersion
+      || 'v2.10.26.01-lts'
+  }
+
   const handleSubmit = async () => {
     if (selectedServices.length === 0) {
       toast.error('请至少选择一个服务，第一阶段不支持空选择触发全量打包')
@@ -92,7 +129,11 @@ function PackageTab({ searchInputRef }) {
 
     const payload = {
       services: selectedServices,
-      imageVersion: imageVersion.trim(),
+      serviceImageVersions: selectedServices.reduce((map, serviceId) => {
+        const v = getServiceVersion(serviceId)
+        if (v) map[serviceId] = v
+        return map
+      }, {}),
       parallelBuild,
       maxJobs
     }
@@ -100,8 +141,6 @@ function PackageTab({ searchInputRef }) {
     try {
       clearPackageLogs()
       const task = await startPackage(payload)
-      const nextRecent = saveRecentImageVersion(imageVersion.trim())
-      setRecentImageVersions(nextRecent)
       toast.success(`打包任务已启动：${task.metadata?.services?.join(', ') || selectedServices.join(', ')}`)
     } catch (error) {
       toast.error(error.message || '启动打包任务失败')
@@ -138,6 +177,7 @@ function PackageTab({ searchInputRef }) {
             <div className="package-service-list">
               {services.map((service, index) => {
                 const checked = selectedServices.includes(service.id)
+                const serviceVersion = getServiceVersion(service.id)
                 return (
                   <div
                     key={service.id}
@@ -159,6 +199,18 @@ function PackageTab({ searchInputRef }) {
                         <span className="package-service-id">{service.id}</span>
                       </div>
                     </button>
+                    {checked && (
+                      <div className="package-service-version" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          className="package-service-version-input"
+                          type="text"
+                          value={serviceImageVersions[service.id] || ''}
+                          placeholder={serviceVersion}
+                          disabled={isRunning}
+                          onChange={(e) => handleServiceVersionChange(service.id, e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -178,40 +230,6 @@ function PackageTab({ searchInputRef }) {
                 disabled={isRunning}
                 onChange={(event) => setMaxJobs(event.target.value)}
               />
-            </div>
-
-            <div className="package-field package-field-large">
-              <label className="package-label" htmlFor="package-image-version">镜像版本</label>
-              <input
-                id="package-image-version"
-                className="package-input"
-                type="text"
-                list="package-image-versions"
-                value={imageVersion}
-                disabled={isRunning}
-                onChange={(event) => setImageVersion(event.target.value)}
-                placeholder={defaults.imageVersion}
-              />
-              <datalist id="package-image-versions">
-                {recentImageVersions.map((item) => (
-                  <option key={item} value={item} />
-                ))}
-              </datalist>
-              {recentImageVersions.length > 0 && (
-                <div className="package-recent-list">
-                  {recentImageVersions.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`package-recent-item ${item === imageVersion ? 'active' : ''}`}
-                      onClick={() => setImageVersion(item)}
-                      disabled={isRunning}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="package-field">
@@ -246,10 +264,16 @@ function PackageTab({ searchInputRef }) {
                     <span>服务</span>
                     <strong>{currentTask.metadata?.services?.join(', ') || '-'}</strong>
                   </div>
-                  <div className="package-status-meta-item">
-                    <span>镜像版本</span>
-                    <strong>{currentTask.metadata?.imageVersion || '-'}</strong>
-                  </div>
+                  {currentTask.metadata?.serviceImageVersions && (
+                    <div className="package-status-meta-item package-status-meta-wide">
+                      <span>镜像版本</span>
+                      <div className="package-version-list">
+                        {Object.entries(currentTask.metadata.serviceImageVersions).map(([id, ver]) => (
+                          <span key={id} className="package-version-tag">{id}: {ver}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="package-status-meta-item">
                     <span>线程数</span>
                     <strong>{currentTask.metadata?.maxJobs ?? '-'}</strong>
@@ -262,6 +286,16 @@ function PackageTab({ searchInputRef }) {
                     <div className="package-status-meta-item">
                       <span>退出码</span>
                       <strong>{currentTask.result.exitCode}</strong>
+                    </div>
+                  )}
+                  {currentTask.result?.nextImageVersions && (
+                    <div className="package-status-meta-item package-status-meta-wide">
+                      <span>递增后版本</span>
+                      <div className="package-version-list">
+                        {Object.entries(currentTask.result.nextImageVersions).map(([id, ver]) => (
+                          <span key={id} className="package-version-tag version-next">{id}: {ver}</span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -304,10 +338,22 @@ function PackageTab({ searchInputRef }) {
                 <span className="package-summary-label">本次服务</span>
                 <strong>{selectedServices.join(', ') || defaults.services.join(', ')}</strong>
               </div>
-              <div className="package-summary-item">
-                <span className="package-summary-label">镜像版本</span>
-                <strong>{imageVersion || defaults.imageVersion}</strong>
-              </div>
+              {selectedServices.length > 0 && (
+                <div className="package-summary-item package-summary-wide">
+                  <span className="package-summary-label">镜像版本</span>
+                  <div className="package-version-list">
+                    {selectedServices.map((id) => {
+                      const sv = getServiceVersion(id)
+                      const name = services.find((s) => s.id === id)?.name || id
+                      return (
+                        <span key={id} className="package-version-tag">
+                          {name}: {sv}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="package-summary-item">
                 <span className="package-summary-label">线程数</span>
                 <strong>{maxJobs}</strong>
@@ -336,33 +382,6 @@ function PackageTab({ searchInputRef }) {
       )}
     </div>
   )
-}
-
-function loadRecentImageVersions() {
-  try {
-    const rawValue = window.localStorage.getItem(RECENT_IMAGE_STORAGE_KEY)
-    if (!rawValue) {
-      return []
-    }
-
-    const values = JSON.parse(rawValue)
-    return Array.isArray(values) ? values.filter(Boolean).slice(0, MAX_RECENT_IMAGE_VERSIONS) : []
-  } catch (error) {
-    return []
-  }
-}
-
-function saveRecentImageVersion(imageVersion) {
-  const normalized = String(imageVersion || '').trim()
-  if (!normalized) {
-    return loadRecentImageVersions()
-  }
-
-  const nextValues = [normalized, ...loadRecentImageVersions().filter((item) => item !== normalized)]
-    .slice(0, MAX_RECENT_IMAGE_VERSIONS)
-
-  window.localStorage.setItem(RECENT_IMAGE_STORAGE_KEY, JSON.stringify(nextValues))
-  return nextValues
 }
 
 function renderStatusText(status) {

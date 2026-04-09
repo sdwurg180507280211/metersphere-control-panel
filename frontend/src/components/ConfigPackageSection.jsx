@@ -38,13 +38,6 @@ function ConfigPackageSection({ packageConfig, resolved, fieldErrors, fieldWarni
 
         <div className="config-field-card">
           <label className="config-field">
-            <span>默认镜像版本</span>
-            <input value={packageConfig.imageVersion ?? ''} onChange={(e) => onChange('package.imageVersion', e.target.value)} />
-          </label>
-        </div>
-
-        <div className="config-field-card">
-          <label className="config-field">
             <span>最大线程数</span>
             <input value={packageConfig.maxJobs ?? ''} onChange={(e) => onChange('package.maxJobs', e.target.value)} />
             <FieldMessages path="package.maxJobs" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} />
