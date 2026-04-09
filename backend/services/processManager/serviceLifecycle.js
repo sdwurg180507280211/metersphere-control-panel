@@ -193,18 +193,32 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       error: null
     }, { serviceConfig });
 
-    const pidCandidates = new Set();
+    const pidCandidates = new Map();
+    const registerPid = (pid, source) => {
+      if (!pid) {
+        return;
+      }
+
+      const existing = pidCandidates.get(pid);
+      if (existing) {
+        existing.sources.add(source);
+        return;
+      }
+
+      pidCandidates.set(pid, { pid, sources: new Set([source]) });
+    };
+
     const trackedPid = this._getPid(serviceId);
     if (trackedPid) {
-      pidCandidates.add(trackedPid);
+      registerPid(trackedPid, 'tracked');
     }
 
     for (const pid of await this._findPidsByPom(serviceConfig.pom)) {
-      pidCandidates.add(pid);
+      registerPid(pid, 'pom');
     }
 
     for (const pid of await this._findPidsByPort(serviceConfig.port)) {
-      pidCandidates.add(pid);
+      registerPid(pid, 'port');
     }
 
     if (pidCandidates.size === 0) {
@@ -217,8 +231,29 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       return { success: true, method: 'none', phase: options.finalPhase || 'stopped' };
     }
 
-    for (const pid of pidCandidates) {
+    for (const { pid } of pidCandidates.values()) {
       await this._terminateProcess(pid);
+    }
+
+    const mandatoryRemaining = [];
+    for (const { pid, sources } of pidCandidates.values()) {
+      if (!this._isProcessRunning(pid)) {
+        continue;
+      }
+
+      if (sources.has('tracked') || sources.has('pom')) {
+        mandatoryRemaining.push(pid);
+      }
+    }
+
+    if (mandatoryRemaining.length > 0) {
+      this._setServiceStatus(serviceId, {
+        phase: 'failed',
+        running: true,
+        pid: mandatoryRemaining[0],
+        error: `停止失败，仍有服务进程存活: ${mandatoryRemaining.join(', ')}`
+      }, { serviceConfig });
+      return { success: false, method: 'pid', phase: 'failed' };
     }
 
     this._clearPid(serviceId);
@@ -240,7 +275,10 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       error: null
     }, { serviceConfig });
 
-    await this.stop(serviceId, serviceConfig, { phase: 'restarting', finalPhase: 'restarting' });
+    const stopResult = await this.stop(serviceId, serviceConfig, { phase: 'restarting', finalPhase: 'restarting' });
+    if (!stopResult.success) {
+      return { ...stopResult, restarted: false, phase: 'failed' };
+    }
     await new Promise((resolve) => setTimeout(resolve, delay));
 
     const result = await this.start(serviceId, serviceConfig, { phase: 'restarting' });

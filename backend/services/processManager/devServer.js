@@ -10,48 +10,129 @@ const configManager = require('../../services/configManager');
 const { devServerProcesses } = require('./shared');
 
 module.exports = function applyDevServer(proto) {
+  proto._resolveDevServerPort = async function(moduleConfig) {
+    let devPort = 4200;
+
+    try {
+      const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
+      const vueConfigPath = path.join(modulePath, 'vue.config.js');
+      if (fs.existsSync(vueConfigPath)) {
+        const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
+        const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
+        if (portMatch) {
+          devPort = parseInt(portMatch[1]);
+        }
+      }
+    } catch (error) {
+      logger.broadcast(`解析开发服务器端口失败: ${error.message}`, 'devserver');
+    }
+
+    return devPort;
+  };
+
+  proto._buildDevServerModuleInfo = async function(moduleConfig) {
+    return {
+      id: moduleConfig.id,
+      name: moduleConfig.name,
+      port: await this._resolveDevServerPort(moduleConfig)
+    };
+  };
+
+  proto._findDevServerListenerPid = async function(moduleInfo, rootPid = null) {
+    const portPids = await this._findPidsByPort(moduleInfo.port);
+    if (portPids.length === 0) {
+      return rootPid;
+    }
+
+    if (rootPid && portPids.includes(rootPid)) {
+      return rootPid;
+    }
+
+    if (rootPid) {
+      for (const pid of portPids) {
+        if (await this._isProcessDescendantOf(rootPid, pid)) {
+          return pid;
+        }
+      }
+      return null;
+    }
+
+    return portPids[0];
+  };
+
+  proto._trackDevServer = async function(moduleId, moduleInfo, pid, child = null) {
+    const listenerPid = await this._findDevServerListenerPid(moduleInfo, pid);
+    const tracked = {
+      pid,
+      listenerPid,
+      module: moduleInfo,
+      child
+    };
+    devServerProcesses.set(moduleId, tracked);
+    return tracked;
+  };
+
+  proto._clearDevServerTracking = function(moduleId, expectedPid = null) {
+    const tracked = devServerProcesses.get(moduleId);
+    if (expectedPid !== null) {
+      const trackedPids = [tracked?.pid, tracked?.listenerPid].filter(Boolean);
+      if (trackedPids.length > 0 && !trackedPids.includes(expectedPid)) {
+        return;
+      }
+    }
+
+    devServerProcesses.delete(moduleId);
+    this._clearPidFile(`devserver-${moduleId}`, expectedPid);
+  };
+
+  proto._isTrackedDevServerRunning = function(devServer) {
+    if (!devServer) {
+      return false;
+    }
+
+    const runtimePid = devServer.listenerPid || devServer.pid;
+    if (runtimePid && this._isProcessRunning(runtimePid)) {
+      return true;
+    }
+
+    return Boolean(devServer.pid && this._isProcessRunning(devServer.pid));
+  };
+
+  proto._restoreDevServerByModule = async function(moduleConfig) {
+    const moduleId = moduleConfig.id;
+    const pidKey = `devserver-${moduleId}`;
+    const pid = this._getPid(pidKey);
+
+    if (!pid) {
+      return null;
+    }
+
+    if (!this._isProcessRunning(pid)) {
+      this._clearPidFile(pidKey, pid);
+      return null;
+    }
+
+    const moduleInfo = await this._buildDevServerModuleInfo(moduleConfig);
+    const tracked = await this._trackDevServer(moduleId, moduleInfo, pid, null);
+    return {
+      tracked,
+      restored: !tracked.child
+    };
+  };
 
   /**
    * 恢复已存在的开发服务器进程（从 PID 文件恢复）
    * 应在后端启动时调用
    */
   proto.restoreDevServers = async function() {
-    const validator = require('../../utils/validator');
     const modules = (configManager.getResolvedConfig().frontendModules || []);
     let restoredCount = 0;
 
     for (const module of modules) {
-      const pidKey = `devserver-${module.id}`;
-      const pid = this._getPid(pidKey);
-
-      if (pid && this._isProcessRunning(pid)) {
-        // 尝试从模块配置中获取端口信息
-        let devPort = 4200;
-        try {
-          const modulePath = path.join(this._getProjectRoot(), module.frontendPath);
-          const vueConfigPath = path.join(modulePath, 'vue.config.js');
-          if (fs.existsSync(vueConfigPath)) {
-            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
-            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
-            if (portMatch) {
-              devPort = parseInt(portMatch[1]);
-            }
-          }
-        } catch (e) {
-          // 忽略解析错误，使用默认端口
-        }
-
-        const moduleInfo = { id: module.id, name: module.name, port: devPort };
-        devServerProcesses.set(module.id, {
-          pid,
-          module: moduleInfo,
-          child: null
-        });
-        logger.broadcast(`恢复开发服务器: ${module.name} (PID: ${pid})`, 'devserver');
+      const restored = await this._restoreDevServerByModule(module);
+      if (restored?.tracked) {
+        logger.broadcast(`恢复开发服务器: ${module.name} (PID: ${restored.tracked.pid})`, 'devserver');
         restoredCount++;
-      } else if (pid) {
-        // PID 文件存在但进程已死，清理
-        this._clearPid(pidKey);
       }
     }
 
@@ -65,40 +146,12 @@ module.exports = function applyDevServer(proto) {
     // 先尝试恢复可能存在的进程
     if (devServerProcesses.has(moduleId)) {
       const existing = devServerProcesses.get(moduleId);
-      if (existing.pid && this._isProcessRunning(existing.pid)) {
+      if (this._isTrackedDevServerRunning(existing)) {
         return { success: false, error: '开发服务器已在运行中' };
       } else {
         // 进程已死，清理
-        devServerProcesses.delete(moduleId);
+        this._clearDevServerTracking(moduleId, existing.pid || existing.listenerPid || null);
       }
-    }
-
-    const pid = this._getPid(`devserver-${moduleId}`);
-    if (pid && this._isProcessRunning(pid)) {
-      // 进程存在但内存中没有，恢复跟踪
-      const validator = require('../../utils/validator');
-      if (validator.isValidModule(moduleId)) {
-        const moduleConfig = validator.getValidModule(moduleId);
-        // 尝试获取端口
-        let devPort = 4200;
-        try {
-          const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
-          const vueConfigPath = path.join(modulePath, 'vue.config.js');
-          if (fs.existsSync(vueConfigPath)) {
-            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
-            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
-            if (portMatch) {
-              devPort = parseInt(portMatch[1]);
-            }
-          }
-        } catch (e) {}
-        const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
-        devServerProcesses.set(moduleId, { pid, module: moduleInfo, child: null });
-      }
-      return { success: false, error: '开发服务器已在运行中' };
-    }
-    if (pid) {
-      this._clearPid(`devserver-${moduleId}`);
     }
 
     const validator = require('../../utils/validator');
@@ -107,6 +160,11 @@ module.exports = function applyDevServer(proto) {
     }
 
     const moduleConfig = validator.getValidModule(moduleId);
+    const restored = await this._restoreDevServerByModule(moduleConfig);
+    if (restored?.tracked) {
+      return { success: false, error: '开发服务器已在运行中' };
+    }
+
     const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
     const { command: npmCommand, argsPrefix: npmArgsPrefix } = this._resolveNpmCommand();
 
@@ -168,7 +226,7 @@ module.exports = function applyDevServer(proto) {
       });
 
       let resolved = false;
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
         if (!resolved) {
           resolved = true;
           // 让子进程脱离父进程，独立运行（但仍保留 child 引用用于日志）
@@ -176,7 +234,7 @@ module.exports = function applyDevServer(proto) {
             child.unref();
           }
           // 保存 child 引用，用于日志捕获
-          devServerProcesses.set(moduleId, { pid: child.pid, module: moduleInfo, child });
+          await this._trackDevServer(moduleId, moduleInfo, child.pid, child);
           this._savePid(`devserver-${moduleId}`, child.pid);
           resolve({ success: true, module: moduleInfo });
         }
@@ -197,8 +255,7 @@ module.exports = function applyDevServer(proto) {
           resolve({ success: false, error: `进程立即退出 (代码: ${code})` });
         } else {
           logger.broadcast(`${moduleInfo.name} 开发服务器已停止 (退出码: ${code})`, 'devserver');
-          this._clearPid(`devserver-${moduleId}`, child.pid);
-          devServerProcesses.delete(moduleId);
+          this._clearDevServerTracking(moduleId, child.pid);
         }
       });
 
@@ -214,10 +271,16 @@ module.exports = function applyDevServer(proto) {
 
     let devServer = devServerProcesses.get(moduleId);
     let pid = devServer?.pid;
+    const validator = require('../../utils/validator');
 
     // 如果内存中没有，尝试从 PID 文件获取
     if (!pid) {
       pid = this._getPid(`devserver-${moduleId}`);
+      if (pid && validator.isValidModule(moduleId)) {
+        const moduleConfig = validator.getValidModule(moduleId);
+        const moduleInfo = await this._buildDevServerModuleInfo(moduleConfig);
+        devServer = await this._trackDevServer(moduleId, moduleInfo, pid, null);
+      }
     }
 
     if (!pid) {
@@ -225,9 +288,12 @@ module.exports = function applyDevServer(proto) {
     }
 
     // 终止进程
-    await this._terminateProcess(pid);
-    this._clearPid(`devserver-${moduleId}`, pid);
-    devServerProcesses.delete(moduleId);
+    const listenerPid = devServer?.listenerPid;
+    await this._terminateProcess(pid, { protectDevServers: false });
+    if (listenerPid && listenerPid !== pid && this._isProcessRunning(listenerPid)) {
+      await this._terminateProcess(listenerPid, { protectDevServers: false });
+    }
+    this._clearDevServerTracking(moduleId, pid);
     return { success: true };
   };
 
@@ -235,10 +301,9 @@ module.exports = function applyDevServer(proto) {
     const devServer = devServerProcesses.get(moduleId);
     if (devServer) {
       // 检查进程是否还在运行
-      if (devServer.pid && !this._isProcessRunning(devServer.pid)) {
+      if (!this._isTrackedDevServerRunning(devServer)) {
         // 进程已死，清理
-        devServerProcesses.delete(moduleId);
-        this._clearPid(`devserver-${moduleId}`);
+        this._clearDevServerTracking(moduleId, devServer.pid || devServer.listenerPid || null);
         return { running: false, module: null };
       }
       return {
@@ -247,37 +312,17 @@ module.exports = function applyDevServer(proto) {
       };
     }
 
-    const pid = this._getPid(`devserver-${moduleId}`);
-    if (pid && this._isProcessRunning(pid)) {
-      // 进程存在但内存映射丢失，自动恢复
-      const validator = require('../../utils/validator');
-      if (validator.isValidModule(moduleId)) {
-        const moduleConfig = validator.getValidModule(moduleId);
-        // 尝试获取端口信息
-        let devPort = 4200;
-        try {
-          const modulePath = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
-          const vueConfigPath = path.join(modulePath, 'vue.config.js');
-          if (fs.existsSync(vueConfigPath)) {
-            const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
-            const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
-            if (portMatch) {
-              devPort = parseInt(portMatch[1]);
-            }
-          }
-        } catch (e) {}
-        // 恢复内存映射
-        const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
-        devServerProcesses.set(moduleId, { pid, module: moduleInfo, child: null });
-        logger.broadcast(`自动恢复开发服务器跟踪: ${moduleConfig.name} (PID: ${pid})`, 'devserver');
+    const validator = require('../../utils/validator');
+    if (validator.isValidModule(moduleId)) {
+      const moduleConfig = validator.getValidModule(moduleId);
+      const restored = await this._restoreDevServerByModule(moduleConfig);
+      if (restored?.tracked) {
+        logger.broadcast(`自动恢复开发服务器跟踪: ${moduleConfig.name} (PID: ${restored.tracked.pid})`, 'devserver');
         return {
           running: true,
-          module: { id: moduleConfig.id, name: moduleConfig.name, port: devPort }
+          module: { id: moduleConfig.id, name: moduleConfig.name, port: restored.tracked.module.port }
         };
       }
-    } else if (pid) {
-      // PID 文件存在但进程已死，清理
-      this._clearPid(`devserver-${moduleId}`);
     }
 
     return { running: false, module: null };
@@ -288,38 +333,34 @@ module.exports = function applyDevServer(proto) {
     const modules = (configManager.getResolvedConfig().frontendModules || []);
     for (const module of modules) {
       if (!devServerProcesses.has(module.id)) {
-        const pid = this._getPid(`devserver-${module.id}`);
-        if (pid && this._isProcessRunning(pid)) {
-          // 自动恢复
-          let devPort = 4200;
-          try {
-            const modulePath = path.join(this._getProjectRoot(), module.frontendPath);
-            const vueConfigPath = path.join(modulePath, 'vue.config.js');
-            if (fs.existsSync(vueConfigPath)) {
-              const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
-              const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
-              if (portMatch) {
-                devPort = parseInt(portMatch[1]);
-              }
-            }
-          } catch (e) {}
-          const moduleInfo = { id: module.id, name: module.name, port: devPort };
-          devServerProcesses.set(module.id, { pid, module: moduleInfo, child: null });
-          logger.broadcast(`自动恢复开发服务器跟踪: ${module.name} (PID: ${pid})`, 'devserver');
-        } else if (pid) {
-          this._clearPid(`devserver-${module.id}`);
+        const restored = await this._restoreDevServerByModule(module);
+        if (restored?.tracked) {
+          logger.broadcast(`自动恢复开发服务器跟踪: ${module.name} (PID: ${restored.tracked.pid})`, 'devserver');
         }
       }
     }
 
-    if (devServerProcesses.size === 0) {
-      return { running: false, module: null };
+    const runningModules = {};
+    for (const [moduleId, devServer] of devServerProcesses.entries()) {
+      if (!this._isTrackedDevServerRunning(devServer)) {
+        this._clearDevServerTracking(moduleId, devServer.pid || devServer.listenerPid || null);
+        continue;
+      }
+
+      if (devServer.module) {
+        runningModules[devServer.module.id] = {
+          id: devServer.module.id,
+          name: devServer.module.name,
+          port: devServer.module.port
+        };
+      }
     }
 
-    const [moduleId, devServer] = devServerProcesses.entries().next().value;
+    const firstModule = Object.values(runningModules)[0] || null;
     return {
-      running: true,
-      module: { id: devServer.module.id, name: devServer.module.name, port: devServer.module.port }
+      running: Object.keys(runningModules).length > 0,
+      module: firstModule,
+      runningModules
     };
   };
 };

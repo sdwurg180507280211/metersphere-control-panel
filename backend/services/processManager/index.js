@@ -23,6 +23,7 @@ const {
   ORPHAN_CLEANUP_INTERVAL,
   serviceProcesses,
   serviceStatuses,
+  devServerProcesses,
   TRANSITIONAL_SERVICE_PHASES
 } = require('./shared');
 
@@ -72,6 +73,14 @@ class ProcessManager {
             error: '进程异常退出'
           });
         }
+        cleanedCount++;
+      }
+    }
+    for (const [moduleId, info] of devServerProcesses.entries()) {
+      const runtimePid = info.listenerPid || info.pid;
+      if (runtimePid && !this._isProcessRunning(runtimePid)) {
+        this._clearDevServerTracking?.(moduleId, info.pid || info.listenerPid || null);
+        logger.broadcast(`清理已死的开发服务器: ${info.module?.name || moduleId}`, 'devserver');
         cleanedCount++;
       }
     }
@@ -340,6 +349,22 @@ class ProcessManager {
   }
 
 
+  _clearPidFile(pidKey, expectedPid = null) {
+    const pidFile = this._getPidFile(pidKey);
+    if (!fs.existsSync(pidFile)) {
+      return;
+    }
+
+    if (expectedPid !== null) {
+      const currentPid = parseInt(fs.readFileSync(pidFile, 'utf8'), 10);
+      if (!Number.isNaN(currentPid) && currentPid !== expectedPid) {
+        return;
+      }
+    }
+
+    fs.unlinkSync(pidFile);
+  }
+
   _clearPid(serviceId, expectedPid = null) {
     const tracked = serviceProcesses.get(serviceId);
     if (expectedPid && tracked?.pid && tracked.pid !== expectedPid) {
@@ -347,10 +372,7 @@ class ProcessManager {
     }
 
     serviceProcesses.delete(serviceId);
-    const pidFile = this._getPidFile(serviceId);
-    if (fs.existsSync(pidFile)) {
-      fs.unlinkSync(pidFile);
-    }
+    this._clearPidFile(serviceId, expectedPid);
   }
 
   _getPid(serviceId) {
@@ -375,6 +397,63 @@ class ProcessManager {
     } catch (error) {
       return false;
     }
+  }
+
+  async _findDescendantPids(parentPid) {
+    const descendants = [];
+    const queue = [parentPid];
+    const seen = new Set([parentPid]);
+
+    while (queue.length > 0) {
+      const currentPid = queue.shift();
+      const childPids = await this._findChildPids(currentPid);
+      for (const childPid of childPids) {
+        if (seen.has(childPid)) {
+          continue;
+        }
+        seen.add(childPid);
+        descendants.push(childPid);
+        queue.push(childPid);
+      }
+    }
+
+    return descendants;
+  }
+
+  async _isProcessDescendantOf(rootPid, targetPid) {
+    if (!rootPid || !targetPid) {
+      return false;
+    }
+    if (rootPid === targetPid) {
+      return true;
+    }
+
+    const descendants = await this._findDescendantPids(rootPid);
+    return descendants.includes(targetPid);
+  }
+
+  async _isDevServerProcess(pid) {
+    for (const devInfo of devServerProcesses.values()) {
+      if (!devInfo) {
+        continue;
+      }
+
+      const rootPid = devInfo.pid;
+      const listenerPid = devInfo.listenerPid;
+      if (rootPid === pid || listenerPid === pid) {
+        return true;
+      }
+
+      if (rootPid && await this._isProcessDescendantOf(rootPid, pid)) {
+        return true;
+      }
+
+      if (listenerPid && listenerPid !== rootPid && await this._isProcessDescendantOf(listenerPid, pid)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // ── WebSocket 广播 ──
@@ -421,8 +500,14 @@ class ProcessManager {
       .filter((pid) => !Number.isNaN(pid) && pid !== process.pid);
   }
 
-  async _terminateProcess(pid) {
+  async _terminateProcess(pid, options = {}) {
     if (!pid || !this._isProcessRunning(pid)) {
+      return;
+    }
+
+    const protectDevServers = options.protectDevServers !== false;
+    if (protectDevServers && await this._isDevServerProcess(pid)) {
+      logger.broadcast(`跳过终止开发服务器进程 (PID: ${pid})`, 'system');
       return;
     }
 
@@ -435,14 +520,27 @@ class ProcessManager {
       }
     };
 
-    const childPids = await this._findChildPids(pid);
+    const descendantPids = await this._findDescendantPids(pid);
+    const orderedDescendants = [...descendantPids].reverse();
 
     if (process.platform === 'win32') {
+      if (protectDevServers) {
+        for (const childPid of orderedDescendants) {
+          if (await this._isDevServerProcess(childPid)) {
+            logger.broadcast(`跳过终止包含开发服务器子进程的进程树 (PID: ${pid})`, 'system');
+            return;
+          }
+        }
+      }
       await this._execFileSafe('taskkill', ['/PID', String(pid), '/T', '/F']);
       return;
     }
 
-    for (const childPid of childPids) {
+    for (const childPid of orderedDescendants) {
+      if (protectDevServers && await this._isDevServerProcess(childPid)) {
+        logger.broadcast(`跳过终止开发服务器子进程 (PID: ${childPid})`, 'system');
+        continue;
+      }
       killOne(childPid, 'SIGTERM');
     }
     killOne(pid, 'SIGTERM');
@@ -453,8 +551,11 @@ class ProcessManager {
     }
 
     if (this._isProcessRunning(pid)) {
-      for (const childPid of childPids) {
+      for (const childPid of orderedDescendants) {
         if (this._isProcessRunning(childPid)) {
+          if (protectDevServers && await this._isDevServerProcess(childPid)) {
+            continue;
+          }
           killOne(childPid, 'SIGKILL');
         }
       }
