@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import toast from 'react-hot-toast'
 import { useBuildStore, useConfigStore, usePackageStore, useServiceStore, useWebSocketStore } from '../store/useAppStore'
 import { passwordCache } from '../utils/passwordCache'
 import ConfigSaveBar from './ConfigSaveBar'
 import ConfigField from './ConfigField'
 import CustomSelect from './CustomSelect'
+import ConfirmDialog from './ConfirmDialog'
 import PropertiesDialog from './PropertiesDialog'
 import PasswordDialog from './PasswordDialog'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
@@ -17,6 +18,13 @@ function ConfigTab() {
   const [showRuntimeModal, setShowRuntimeModal] = useState(false)
   const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false)
   const [serviceFilter, setServiceFilter] = useState('')
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    action: null,
+    type: 'warning'
+  })
   const [reloadDialog, setReloadDialog] = useState({
     isOpen: false,
     password: '',
@@ -80,6 +88,17 @@ function ConfigTab() {
     return counts
   }, [validation?.errors])
 
+  const tabDirtyCounts = useMemo(() => {
+    const counts = { environment: 0, services: 0, integrations: 0, advanced: 0 }
+    dirtyFields.forEach(path => {
+      if (path.startsWith('projectRoot') || path.startsWith('npmPath') || path.startsWith('properties')) counts.environment++
+      else if (path.startsWith('services')) counts.services++
+      else if (path.startsWith('redis') || path.startsWith('claudeCode') || path.startsWith('tunnel') || path.startsWith('waifu')) counts.integrations++
+      else counts.advanced++
+    })
+    return counts
+  }, [dirtyFields])
+
   const filteredServices = useMemo(() => {
     const entries = Object.entries(draft?.services || {})
     if (!serviceFilter) return entries
@@ -110,12 +129,34 @@ function ConfigTab() {
     try {
       const result = await saveConfig()
       toast.success(result.meta?.hasUnappliedChanges ? '配置已固化到磁盘，等待应用' : '配置已保存并同步')
+      return true
     } catch (error) {
       toast.error(error.message || '保存失败')
+      return false
     }
   }
 
+  const handleSaveAndApply = async () => {
+    const saved = await handleSave()
+    if (saved) await handleApply()
+  }
+
   const handleApply = async () => {
+    const requiresRestart = applyImpact?.requiresRestart?.length > 0
+    const hotFields = applyImpact?.changedPaths?.filter(p => !applyImpact.requiresRestart?.includes(p)) || []
+    const message = requiresRestart
+      ? `即将应用配置到运行时。\n\n热更新字段: ${hotFields.length} 项\n需重启字段: ${applyImpact.requiresRestart.length} 项（${applyImpact.requiresRestart.join(', ')}）`
+      : '即将应用配置到运行时，所有修改将立即生效。'
+    setConfirmDialog({
+      isOpen: true,
+      title: '确认应用配置',
+      message,
+      action: 'apply',
+      type: requiresRestart ? 'warning' : 'primary'
+    })
+  }
+
+  const handleApplyConfirmed = async () => {
     try {
       const result = await applyConfig()
       await Promise.allSettled([
@@ -126,6 +167,34 @@ function ConfigTab() {
     } catch (error) {
       toast.error(error.message || '应用失败')
     }
+  }
+
+  const handleRemoveService = (id, name) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '删除服务定义',
+      message: `确定删除服务「${name || id}」吗？删除后需保存配置才会生效。`,
+      action: `remove:${id}`,
+      type: 'danger'
+    })
+  }
+
+  const handleResetDraft = () => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '重置所有修改',
+      message: '确定丢弃所有未保存的修改吗？此操作不可撤销。',
+      action: 'reset',
+      type: 'danger'
+    })
+  }
+
+  const handleConfirmAction = () => {
+    const { action } = confirmDialog
+    setConfirmDialog({ isOpen: false, title: '', message: '', action: null, type: 'warning' })
+    if (action === 'apply') handleApplyConfirmed()
+    else if (action === 'reset') resetDraft()
+    else if (action?.startsWith('remove:')) removeService(action.slice(7))
   }
 
   const openSystemReloadDialog = useCallback(() => {
@@ -243,6 +312,7 @@ function ConfigTab() {
       <div className="config-search-wrapper" style={{ marginTop: '24px' }}>
         <span className="config-search-icon-inline">🔍</span>
         <input className="config-search-input" placeholder="输入服务 ID 或名称快速过滤..." value={serviceFilter} onChange={e => setServiceFilter(e.target.value)} />
+        {serviceFilter && <button className="config-search-clear" onClick={() => setServiceFilter('')}>✕</button>}
       </div>
 
       <table className="config-service-table">
@@ -318,7 +388,7 @@ function ConfigTab() {
                      />
                   </td>
                   <td>
-                    <button className="config-action-btn-danger" onClick={() => removeService(id)}>✕</button>
+                    <button className="config-action-btn-danger" onClick={() => handleRemoveService(id, s.name)}>✕</button>
                   </td>
                 </tr>
               )
@@ -427,10 +497,10 @@ function ConfigTab() {
     <div className="tab-content config-tab">
       <div className="config-container">
         <div className="config-sidebar">
-          <NavItem id="environment" icon="🌍" label="基础环境" activeId={activeTab} errorCount={tabErrorCounts.environment} onClick={setActiveTab} />
-          <NavItem id="services" icon="📋" label="服务管理" activeId={activeTab} errorCount={tabErrorCounts.services} onClick={setActiveTab} />
-          <NavItem id="integrations" icon="🔗" label="外部集成" activeId={activeTab} errorCount={tabErrorCounts.integrations} onClick={setActiveTab} />
-          <NavItem id="advanced" icon="⚙️" label="运行控制" activeId={activeTab} errorCount={tabErrorCounts.advanced} onClick={setActiveTab} />
+          <NavItem id="environment" icon="🌍" label="基础环境" activeId={activeTab} errorCount={tabErrorCounts.environment} dirtyCount={tabDirtyCounts.environment} onClick={setActiveTab} />
+          <NavItem id="services" icon="📋" label="服务管理" activeId={activeTab} errorCount={tabErrorCounts.services} dirtyCount={tabDirtyCounts.services} onClick={setActiveTab} />
+          <NavItem id="integrations" icon="🔗" label="外部集成" activeId={activeTab} errorCount={tabErrorCounts.integrations} dirtyCount={tabDirtyCounts.integrations} onClick={setActiveTab} />
+          <NavItem id="advanced" icon="⚙️" label="运行控制" activeId={activeTab} errorCount={tabErrorCounts.advanced} dirtyCount={tabDirtyCounts.advanced} onClick={setActiveTab} />
         </div>
 
         <div className="config-content">
@@ -441,7 +511,18 @@ function ConfigTab() {
         </div>
       </div>
 
-      <ConfigSaveBar dirtyCount={dirtyFields.length} validating={validating} saving={saving} applying={applying} hasUnappliedChanges={meta?.hasUnappliedChanges} applyImpact={applyImpact} onValidate={handleValidate} onSave={handleSave} onApply={handleApply} onReset={resetDraft} />
+      <ConfigSaveBar dirtyCount={dirtyFields.length} validating={validating} saving={saving} applying={applying} hasUnappliedChanges={meta?.hasUnappliedChanges} applyImpact={applyImpact} onValidate={handleValidate} onSave={handleSave} onSaveAndApply={handleSaveAndApply} onApply={handleApply} onReset={handleResetDraft} />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="确认"
+        cancelText="取消"
+        type={confirmDialog.type}
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmDialog({ isOpen: false, title: '', message: '', action: null, type: 'warning' })}
+      />
 
       {showPropertiesModal && <PropertiesDialog onClose={() => setShowPropertiesModal(false)} />}
       
@@ -478,11 +559,14 @@ function ConfigTab() {
   )
 }
 
-function NavItem({ id, icon, label, activeId, errorCount, onClick }) {
+function NavItem({ id, icon, label, activeId, errorCount, dirtyCount, onClick }) {
   return (
     <div className={`config-nav-item ${activeId === id ? 'active' : ''}`} onClick={() => onClick(id)}>
       <div className="config-nav-content"><span className="config-nav-icon">{icon}</span>{label}</div>
-      {errorCount > 0 && <span className="config-nav-badge">{errorCount}</span>}
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        {dirtyCount > 0 && <span className="config-nav-dirty-dot" title={`${dirtyCount} 项未保存修改`} />}
+        {errorCount > 0 && <span className="config-nav-badge">{errorCount}</span>}
+      </div>
     </div>
   )
 }

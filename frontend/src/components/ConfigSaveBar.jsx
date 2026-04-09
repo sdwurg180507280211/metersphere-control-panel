@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import './ConfigSaveBar.css'
 
 function ConfigSaveBar({
@@ -10,12 +10,26 @@ function ConfigSaveBar({
   applyImpact,
   onValidate,
   onSave,
+  onSaveAndApply,
   onApply,
   onReset
 }) {
   const isDirty = dirtyCount > 0
   const canApply = hasUnappliedChanges && !isDirty
   const requiresRestart = applyImpact?.requiresRestart?.length > 0
+  const [justSaved, setJustSaved] = useState(false)
+
+  useEffect(() => {
+    if (justSaved) {
+      const timer = setTimeout(() => setJustSaved(false), 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [justSaved])
+
+  const handleSave = async () => {
+    const result = await onSave()
+    if (result !== false) setJustSaved(true)
+  }
 
   if (!isDirty && !hasUnappliedChanges) return null
 
@@ -27,6 +41,10 @@ function ConfigSaveBar({
             <span className="island-status dirty">
               <span className="dot" /> 有 {dirtyCount} 项未保存修改
             </span>
+          ) : justSaved ? (
+            <span className="island-status saved">
+              <span className="dot" /> 配置已保存
+            </span>
           ) : hasUnappliedChanges ? (
             <span className="island-status unapplied">
               <span className="dot" /> 配置已保存，等待应用生效
@@ -34,7 +52,7 @@ function ConfigSaveBar({
             </span>
           ) : null}
         </div>
-        
+
         <div className="island-actions">
           {isDirty && (
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -44,15 +62,18 @@ function ConfigSaveBar({
               <button className="island-btn-secondary" onClick={onValidate} disabled={validating || saving || applying}>
                 {validating ? '校验中...' : '校验'}
               </button>
-              <button className="island-btn-primary" onClick={onSave} disabled={validating || saving || applying}>
-                {saving ? '保存中...' : '保存修改'}
+              <button className="island-btn-secondary" onClick={handleSave} disabled={validating || saving || applying}>
+                {saving ? '保存中...' : justSaved ? '✓ 已保存' : '仅保存'}
+              </button>
+              <button className="island-btn-primary" onClick={onSaveAndApply} disabled={validating || saving || applying}>
+                {applying ? '应用中...' : '保存并应用'}
               </button>
             </div>
           )}
-          
+
           {canApply && (
             <button className="island-btn-apply" onClick={onApply} disabled={validating || saving || applying}>
-              {applying ? '应用中...' : '立即应用到运行时'}
+              {applying ? '应用中...' : '应用到运行时'}
             </button>
           )}
         </div>
