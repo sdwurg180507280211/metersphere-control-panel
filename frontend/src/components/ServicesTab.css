@@ -30,7 +30,7 @@
 }
 
 .services-control-panel {
-  padding: 1exitpx;
+  padding: 14px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -162,9 +162,9 @@
 
 .btn-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
-  padding-top: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 6px;
+  padding-top: 2px;
 }
 
 .service-card {
@@ -196,14 +196,14 @@
 
 .service-btn-main {
   flex: 1;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   display: flex;
   align-items: stretch;
-  min-height: 72px;
+  min-height: 48px;
   transition: all 0.2s;
   position: relative;
 }
@@ -256,7 +256,7 @@
 }
 
 .service-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -301,7 +301,7 @@
 .service-actions {
   display: flex;
   justify-content: flex-end;
-  padding: 0 10px 8px;
+  padding: 0 10px 6px;
   gap: 6px;
 }
 

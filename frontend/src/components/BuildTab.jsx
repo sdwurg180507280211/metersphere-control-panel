@@ -305,7 +305,7 @@ function BuildTab({ searchInputRef }) {
                             </span>
                           </div>
 
-                          <div className="module-meta-row" style={{ marginTop: '12px', flexDirection: 'column', gap: '8px' }}>
+                          <div className="module-meta-row" style={{ marginTop: '6px', flexDirection: 'column', gap: '4px' }}>
                             {!isRunningDev ? (
                               <button
                                 className="btn-dev-server btn-start"

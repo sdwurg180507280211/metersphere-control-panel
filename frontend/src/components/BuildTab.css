@@ -18,7 +18,7 @@
   background: linear-gradient(180deg, rgba(15, 27, 64, 0.9) 0%, rgba(10, 19, 45, 0.92) 100%);
   border: 1px solid rgba(148, 163, 184, 0.12);
   border-radius: 16px;
-  padding: 10px;
+  padding: 14px;
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.2);
   min-height: 0;
   display: flex;
@@ -95,8 +95,8 @@
 
 .module-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
 }
 
 .module-card {
@@ -134,7 +134,7 @@
   text-align: left;
   display: flex;
   align-items: stretch;
-  min-height: 60px;
+  min-height: 48px;
   transition: all 0.2s;
 }
 
@@ -181,7 +181,7 @@
 }
 
 .module-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -294,8 +294,8 @@
 
 .skeleton-wrapper .module-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
 }
 
 .skeleton-log-placeholder {
@@ -481,10 +481,10 @@
 }
 
 .btn-dev-server {
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: none;
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
