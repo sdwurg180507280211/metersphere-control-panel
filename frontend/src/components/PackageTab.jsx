@@ -177,11 +177,37 @@ function PackageTab({ searchInputRef }) {
                 <span className="chip-icon">{statusIcon(currentStatus)}</span>
                 {renderStatusText(currentStatus)}
               </span>
+              <div className="package-toolbar-params">
+                <div className="package-param-item">
+                  <span className="package-param-label">线程</span>
+                  <input
+                    className="package-param-input"
+                    type="number"
+                    min="1"
+                    max="64"
+                    value={maxJobs}
+                    disabled={isRunning}
+                    onChange={(e) => setMaxJobs(e.target.value)}
+                  />
+                </div>
+                <label className={`package-switch ${parallelBuild ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={parallelBuild}
+                    disabled={isRunning}
+                    onChange={(e) => setParallelBuild(e.target.checked)}
+                  />
+                  <span className="package-switch-text">并行</span>
+                </label>
+              </div>
+              <span className="package-param-label" style={{ marginLeft: 'auto' }}>
+                {selectedServices.length}/{services.length}
+              </span>
             </div>
           </div>
 
-          {/* 状态条 */}
-          <PackageStatusStrip task={currentTask} status={currentStatus} />
+          {/* 状态条（仅运行/完成/失败时显示） */}
+          {currentTask && <PackageStatusStrip task={currentTask} status={currentStatus} />}
 
           {/* 脚本不可用警告 */}
           {!scriptInfo?.valid && (
@@ -208,19 +234,14 @@ function PackageTab({ searchInputRef }) {
                     disabled={isRunning}
                   >
                     <div className="package-service-content">
-                      <div className="package-service-main">
-                        <div className="package-service-info">
-                          <span className={`package-service-icon ${checked ? 'checked' : ''}`}>
-                            {checked ? '●' : '○'}
-                          </span>
-                          <span className="package-service-name">{service.name}</span>
-                        </div>
-                        {checked && (
-                          <span className="package-service-version-badge">{serviceVersion}</span>
-                        )}
+                      <div className="package-service-info">
+                        <span className={`package-service-icon ${checked ? 'checked' : ''}`}>
+                          {checked ? '●' : '○'}
+                        </span>
+                        <span className="package-service-name">{service.name}</span>
                       </div>
-                      {!checked && (
-                        <span className="package-service-id">{service.id}</span>
+                      {checked && (
+                        <span className="package-service-version-badge">{serviceVersion}</span>
                       )}
                     </div>
                   </button>
@@ -239,37 +260,6 @@ function PackageTab({ searchInputRef }) {
                 </div>
               )
             })}
-          </div>
-
-          {/* 参数行 */}
-          <div className="package-params-row">
-            <div className="package-param-item">
-              <span className="package-param-label">线程数</span>
-              <input
-                className="package-param-input"
-                type="number"
-                min="1"
-                max="64"
-                value={maxJobs}
-                disabled={isRunning}
-                onChange={(e) => setMaxJobs(e.target.value)}
-              />
-            </div>
-            <label className={`package-switch ${parallelBuild ? 'active' : ''}`}>
-              <input
-                type="checkbox"
-                checked={parallelBuild}
-                disabled={isRunning}
-                onChange={(e) => setParallelBuild(e.target.checked)}
-              />
-              <span className="package-switch-text">并行构建 {parallelBuild ? '已开启' : '已关闭'}</span>
-            </label>
-            <div className="package-param-item" style={{ marginLeft: 'auto' }}>
-              <span className="package-param-label">已选</span>
-              <span className="package-param-label" style={{ color: 'var(--text-primary)' }}>
-                {selectedServices.length} / {services.length}
-              </span>
-            </div>
           </div>
         </section>
 

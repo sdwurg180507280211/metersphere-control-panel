@@ -24,7 +24,7 @@
 
 .package-control-panel {
   border-radius: 16px;
-  padding: 18px;
+  padding: 14px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -55,7 +55,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 0 12px 0;
+  padding: 0 0 8px 0;
   border-bottom: none;
   background: transparent;
   margin-bottom: 0;
@@ -64,7 +64,7 @@
 .batch-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-start;
   align-items: center;
   width: 100%;
@@ -135,9 +135,8 @@
 .package-status-strip {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  gap: 6px;
+  padding: 6px 0;
   flex-wrap: wrap;
 }
 
@@ -227,20 +226,20 @@
 /* ── 服务选择网格 (类似 btn-grid) ── */
 .package-service-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
-  padding: 4px 0;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  padding: 2px 0;
 }
 
 .package-service-card {
   display: flex;
   flex-direction: column;
   border: 1px solid;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  transition: all 0.25s ease;
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.16);
-  animation: fadeInUp 0.35s ease-out backwards;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(2, 6, 23, 0.12);
+  animation: fadeInUp 0.3s ease-out backwards;
 }
 
 .package-service-card:not(.selected) {
@@ -271,14 +270,14 @@
 
 .package-service-btn {
   flex: 1;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   display: flex;
-  align-items: stretch;
-  min-height: 56px;
+  align-items: center;
+  min-height: 38px;
   transition: all 0.2s;
 }
 
@@ -289,7 +288,7 @@
 
 .package-service-content {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 6px;
   width: 100%;
   min-width: 0;
@@ -300,6 +299,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 
 .package-service-info {
@@ -326,7 +327,7 @@
 }
 
 .package-service-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -356,15 +357,15 @@
 
 /* ── 选中服务的版本输入区 ── */
 .package-service-version {
-  padding: 0 12px 8px;
+  padding: 0 10px 6px;
 }
 
 .package-service-version-input {
   width: 100%;
   border: 1px solid rgba(96, 165, 250, 0.2);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
   font-family: 'SF Mono', 'Fira Code', monospace;
   background: rgba(8, 16, 33, 0.6);
   color: #93c5fd;
@@ -386,36 +387,35 @@
   cursor: not-allowed;
 }
 
-/* ── 参数行 ── */
-.package-params-row {
+/* ── Toolbar 内嵌参数 ── */
+.package-toolbar-params {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 0 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
-  margin-top: 4px;
-  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .package-param-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .package-param-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .package-param-input {
-  width: 64px;
+  width: 48px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 10px;
-  padding: 6px 10px;
-  font-size: 13px;
+  border-radius: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
   text-align: center;
   background: rgba(15, 23, 42, 0.72);
   color: var(--text-primary);
@@ -425,7 +425,7 @@
 .package-param-input:focus {
   outline: none;
   border-color: rgba(96, 165, 250, 0.35);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.14);
 }
 
 .package-param-input:disabled {
@@ -436,10 +436,10 @@
 .package-switch {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.72);
   cursor: pointer;
   transition: all 0.2s;
@@ -451,13 +451,13 @@
 }
 
 .package-switch input {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   accent-color: #2563eb;
 }
 
 .package-switch-text {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -514,8 +514,9 @@
     justify-content: center;
   }
 
-  .package-params-row {
-    flex-direction: column;
-    align-items: flex-start;
+  .package-toolbar-params {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
   }
 }
