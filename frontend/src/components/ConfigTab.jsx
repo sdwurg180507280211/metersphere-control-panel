@@ -10,6 +10,7 @@ import PropertiesDialog from './PropertiesDialog'
 import PasswordDialog from './PasswordDialog'
 import ConfigRuntimePanel from './ConfigRuntimePanel'
 import ConfigDiagnosticsPanel from './ConfigDiagnosticsPanel'
+import ConfigPanelModal from './ConfigPanelModal'
 import './ConfigTab.css'
 
 function ConfigTab() {
@@ -526,23 +527,13 @@ function ConfigTab() {
 
       {showPropertiesModal && <PropertiesDialog onClose={() => setShowPropertiesModal(false)} />}
       
-      {showDiagnosticsModal && (
-        <div className="log-modal-overlay" onClick={() => setShowDiagnosticsModal(false)}>
-          <div className="log-modal" style={{ maxWidth: '1000px' }} onClick={e => e.stopPropagation()}>
-            <div className="log-modal-header"><h3>深度配置诊断</h3><button className="log-modal-close" onClick={() => setShowDiagnosticsModal(false)}>✕</button></div>
-            <div className="log-modal-body"><ConfigDiagnosticsPanel diagnostics={diagnostics} validation={validation} loading={diagnosticsLoading} onRefresh={refreshDiagnostics} /></div>
-          </div>
-        </div>
-      )}
-      
-      {showRuntimeModal && (
-        <div className="log-modal-overlay" onClick={() => setShowRuntimeModal(false)}>
-          <div className="log-modal" onClick={e => e.stopPropagation()}>
-            <div className="log-modal-header"><h3>系统运行时快照</h3><button className="log-modal-close" onClick={() => setShowRuntimeModal(false)}>✕</button></div>
-            <div className="log-modal-body"><ConfigRuntimePanel runtime={runtime} resolved={resolved} meta={meta} applyImpact={applyImpact} /></div>
-          </div>
-        </div>
-      )}
+      <ConfigPanelModal isOpen={showDiagnosticsModal} title="深度配置诊断" onClose={() => setShowDiagnosticsModal(false)} maxWidth="960px">
+        <ConfigDiagnosticsPanel diagnostics={diagnostics} validation={validation} loading={diagnosticsLoading} onRefresh={refreshDiagnostics} />
+      </ConfigPanelModal>
+
+      <ConfigPanelModal isOpen={showRuntimeModal} title="系统运行时快照" onClose={() => setShowRuntimeModal(false)}>
+        <ConfigRuntimePanel runtime={runtime} resolved={resolved} meta={meta} applyImpact={applyImpact} />
+      </ConfigPanelModal>
 
       <PasswordDialog
         isOpen={reloadDialog.isOpen}

@@ -1,20 +1,21 @@
 import React from 'react'
+import toast from 'react-hot-toast'
 
 function ConfigRuntimePanel({ runtime, resolved, meta, applyImpact }) {
   if (!runtime) return null
 
   const handleCopy = (text) => {
-    navigator.clipboard.writeText(text)
-    alert('已复制到剪贴板')
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('已复制到剪贴板', { duration: 1500 })
+    })
   }
 
   return (
     <div className="runtime-container">
       <div className="runtime-grid">
-        {/* 第一组：基础环境 */}
         <section className="runtime-card">
           <div className="runtime-card-header">
-            <span className="runtime-icon">🏠</span>
+            <span className="runtime-icon">⌂</span>
             <h5>项目与路径</h5>
           </div>
           <div className="runtime-card-body">
@@ -24,10 +25,9 @@ function ConfigRuntimePanel({ runtime, resolved, meta, applyImpact }) {
           </div>
         </section>
 
-        {/* 第二组：缓存与数据 */}
         <section className="runtime-card">
           <div className="runtime-card-header">
-            <span className="runtime-icon">💾</span>
+            <span className="runtime-icon">◆</span>
             <h5>缓存系统 (Redis)</h5>
           </div>
           <div className="runtime-card-body">
@@ -37,10 +37,9 @@ function ConfigRuntimePanel({ runtime, resolved, meta, applyImpact }) {
           </div>
         </section>
 
-        {/* 第三组：任务引擎 */}
         <section className="runtime-card">
           <div className="runtime-card-header">
-            <span className="runtime-icon">⚙️</span>
+            <span className="runtime-icon">⚙</span>
             <h5>任务执行引擎</h5>
           </div>
           <div className="runtime-card-body">
@@ -50,45 +49,50 @@ function ConfigRuntimePanel({ runtime, resolved, meta, applyImpact }) {
           </div>
         </section>
 
-        {/* 第四组：外部集成 */}
         <section className="runtime-card">
           <div className="runtime-card-header">
-            <span className="runtime-icon">🚀</span>
+            <span className="runtime-icon">⚡</span>
             <h5>AI 模型集成</h5>
           </div>
           <div className="runtime-card-body">
             <RuntimeItem label="API Base" value={runtime.envOverrides?.ANTHROPIC_BASE_URL || '默认'} />
             <RuntimeItem label="模型名称" value={runtime.envOverrides?.ANTHROPIC_MODEL || '未配置'} />
-            <RuntimeItem label="Token 状态" value={runtime.envOverrides?.ANTHROPIC_AUTH_TOKEN ? '已加载 (加密)' : '未加载'} isTag />
+            <RuntimeItem
+              label="Token 状态"
+              value={runtime.envOverrides?.ANTHROPIC_AUTH_TOKEN ? '已加载' : '未加载'}
+              isTag
+              tagType={runtime.envOverrides?.ANTHROPIC_AUTH_TOKEN ? 'success' : 'neutral'}
+            />
           </div>
         </section>
       </div>
 
-      {/* 底部：应用影响 */}
       {applyImpact?.changedPaths?.length > 0 && (
         <div className="runtime-footer-notice">
-          <div className="notice-icon">🔔</div>
-          <div className="notice-text">
-            发现有 {applyImpact.changedPaths.length} 项更改尚未应用到运行时。
-            {applyImpact.requiresRestart?.length > 0 && <span className="warning-inline"> 部分更改需要重启后面板才能生效。</span>}
-          </div>
+          <span className="notice-icon">●</span>
+          <span className="notice-text">
+            有 {applyImpact.changedPaths.length} 项更改尚未应用到运行时
+            {applyImpact.requiresRestart?.length > 0 && (
+              <span className="warning-inline"> 部分更改需重启面板生效</span>
+            )}
+          </span>
         </div>
       )}
     </div>
   )
 }
 
-function RuntimeItem({ label, value, onCopy, isPath, isTag }) {
+function RuntimeItem({ label, value, onCopy, isPath, isTag, tagType }) {
   return (
     <div className="runtime-item">
       <div className="runtime-item-label">{label}</div>
       <div className="runtime-item-value-wrapper">
-        <span className={`runtime-item-value ${isPath ? 'mono' : ''} ${isTag ? 'tag' : ''}`}>
+        <span className={`runtime-item-value ${isPath ? 'mono' : ''} ${isTag ? `tag tag-${tagType || 'default'}` : ''}`}>
           {value || '-'}
         </span>
-        {onCopy && value && (
-          <button className="runtime-copy-btn" onClick={() => onCopy(value)} title="复制内容">
-            📋
+        {onCopy && value && value !== '-' && (
+          <button className="runtime-copy-btn" onClick={() => onCopy(value)} title="复制">
+            ⎘
           </button>
         )}
       </div>
