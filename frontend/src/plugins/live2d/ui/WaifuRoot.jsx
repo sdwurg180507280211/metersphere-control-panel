@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Live2DController from '../controller/Live2DController'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
+import '../waifu.css'
 
 const WaifuRoot = () => {
   const containerRef = useRef(null)

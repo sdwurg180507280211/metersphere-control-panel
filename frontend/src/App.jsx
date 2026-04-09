@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useServiceStore, useBuildStore, useLogStore, usePackageStore, useConfigStore } from './store/useAppStore'
@@ -12,10 +12,14 @@ import SqlTab from './components/SqlTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
-import WaifuRoot from './live2d/ui/WaifuRoot'
-import { WAIFU_FEATURE_FLAGS } from './live2d/config/waifuFeatureFlags'
-import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from './live2d/config/waifuModels'
+import { isPluginEnabled, getPlugin } from './plugins/registry'
+import './plugins/live2d/index' // registers the plugin (no code loaded yet)
 import './styles/App.css'
+
+// Lazy-loaded Live2D components — only fetched when the plugin is activated
+const LazyWaifuRoot = lazy(() =>
+  import('./plugins/live2d/ui/WaifuRoot.jsx').then((m) => ({ default: m.default }))
+)
 
 const TAB_ITEMS = [
   {
@@ -64,7 +68,8 @@ function App() {
   const { activeTab, setActiveTab, syncHash } = useUiStore()
   const searchInputRef = useRef(null)
   const selectorRef = useRef(null)
-  const [currentWaifuModel, setCurrentWaifuModel] = useState(DEFAULT_WAIFU_MODEL_ID)
+  const [currentWaifuModel, setCurrentWaifuModel] = useState('rice')
+  const [waifuReady, setWaifuReady] = useState(false)
   const dragStateRef = useRef({
     isDragging: false,
     startX: 0,
@@ -83,10 +88,32 @@ function App() {
   const dirtyFields = useConfigStore((s) => s.dirtyFields)
   const saving = useConfigStore((s) => s.saving)
   const applying = useConfigStore((s) => s.applying)
+  const resolved = useConfigStore((s) => s.resolved)
   const hasUnsavedConfigChanges = dirtyFields.length > 0 && !saving && !applying
   const activeTabMeta = TAB_ITEMS.find((item) => item.id === activeTab) || TAB_ITEMS[0]
 
   useWebSocket()
+
+  // Activate/deactivate Live2D plugin based on config
+  useEffect(() => {
+    const live2dPlugin = getPlugin('live2d')
+    if (!live2dPlugin) return
+
+    const waifuEnabled = resolved?.waifu?.enabled !== false
+    if (waifuEnabled && !live2dPlugin.enabled) {
+      live2dPlugin.activate().then(() => {
+        setWaifuReady(true)
+        if (live2dPlugin.DEFAULT_WAIFU_MODEL_ID) {
+          setCurrentWaifuModel(live2dPlugin.DEFAULT_WAIFU_MODEL_ID)
+        }
+      }).catch((err) => {
+        console.warn('Live2D plugin activation failed:', err)
+      })
+    } else if (!waifuEnabled && live2dPlugin.enabled) {
+      live2dPlugin.deactivate()
+      setWaifuReady(false)
+    }
+  }, [resolved?.waifu?.enabled])
 
   // 处理浏览器 Hash 变化 (前进/后退)
   useEffect(() => {
@@ -183,7 +210,7 @@ function App() {
 
   // 模型选择器拖拽逻辑
   useEffect(() => {
-    if (WAIFU_FEATURE_FLAGS.engine !== 'pixi') return
+    if (!waifuReady) return
 
     const selectorDiv = selectorRef.current
     if (!selectorDiv) return
@@ -236,7 +263,9 @@ function App() {
       document.removeEventListener('mousemove', onDragMove)
       document.removeEventListener('mouseup', onDragEnd)
     }
-  }, [])
+  }, [waifuReady])
+
+  const waifuModels = getPlugin('live2d')?.WAIFU_MODELS || {}
 
   return (
     <div className="app">
@@ -305,8 +334,8 @@ function App() {
         onFocusSearch={handleFocusSearch}
       />
 
-      {/* 不明显的看板娘模型切换下拉框 - 支持拖拽 */}
-      {WAIFU_FEATURE_FLAGS.engine === 'pixi' && (
+      {/* 看板娘模型切换下拉框 - 支持拖拽 */}
+      {waifuReady && (
         <div ref={selectorRef} className="waifu-model-selector">
           <div className="selector-wrapper">
             <select
@@ -320,7 +349,7 @@ function App() {
               }}
               title="切换看板娘"
             >
-              {Object.values(WAIFU_MODELS).map((model) => (
+              {Object.values(waifuModels).map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
                 </option>
@@ -330,7 +359,11 @@ function App() {
         </div>
       )}
 
-      {WAIFU_FEATURE_FLAGS.engine === 'pixi' && <WaifuRoot />}
+      {waifuReady && (
+        <Suspense fallback={null}>
+          <LazyWaifuRoot />
+        </Suspense>
+      )}
     </div>
   )
 }

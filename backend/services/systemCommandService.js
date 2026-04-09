@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const logger = require('../utils/logger');
 const { createAppError } = require('../utils/errors');
+const configManager = require('./configManager');
 
 const COMMAND_TIMEOUT_MS = 30000;
 const INVALID_PASSWORD_PATTERN = /(sorry, try again|incorrect password|a password is required|no password was provided|incorrect password attempt)/i;
@@ -133,8 +134,9 @@ class SystemCommandService {
       throw createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射');
     }
 
-    const REMOTE_HOST = '8.152.216.176';
-    const REMOTE_USER = 'root';
+    const resolvedConfig = configManager.getResolvedConfig();
+    const REMOTE_HOST = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
+    const REMOTE_USER = resolvedConfig.tunnel?.remoteUser || 'root';
 
     // 检查是否已有隧道进程
     const currentStatus = await this.getTunnelStatus();
@@ -246,7 +248,10 @@ class SystemCommandService {
     logger.broadcast('\n========== 停止 SSH 反向隧道 ==========', 'service');
 
     return new Promise((resolve, reject) => {
-      const child = spawn('pkill', ['-f', 'ssh.*8\\.152\\.216\\.176'], {
+      const resolvedConfig = configManager.getResolvedConfig();
+      const remoteHost = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
+      const escapedHost = remoteHost.replace(/\./g, '\\.');
+      const child = spawn('pkill', ['-f', `ssh.*${escapedHost}`], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
@@ -276,7 +281,10 @@ class SystemCommandService {
    */
   async getTunnelStatus() {
     return new Promise((resolve) => {
-      const child = spawn('pgrep', ['-f', 'ssh.*8\\.152\\.216\\.176'], {
+      const resolvedConfig = configManager.getResolvedConfig();
+      const remoteHost = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
+      const escapedHost = remoteHost.replace(/\./g, '\\.');
+      const child = spawn('pgrep', ['-f', `ssh.*${escapedHost}`], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 

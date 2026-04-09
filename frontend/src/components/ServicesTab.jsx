@@ -161,7 +161,7 @@ function ServicesTab({ searchInputRef }) {
   } = useServiceStore()
   const { connected } = useWebSocketStore()
   const { status: infraStatus, fetchInfraStatus } = useInfraStore()
-  const { diagnostics } = useConfigStore()
+  const { diagnostics, resolved } = useConfigStore()
   const [expandedErrors, setExpandedErrors] = useState(new Set())
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({
@@ -381,7 +381,7 @@ function ServicesTab({ searchInputRef }) {
         <section className="card services-control-panel">
           <div className="card-header">
             <div className="batch-actions">
-              <Tooltip content="建立 SSH 反向隧道到 8.152.216.176" position="bottom">
+              <Tooltip content={`建立 SSH 反向隧道到 ${resolved?.tunnel?.remoteHost || '8.152.216.176'}`} position="bottom">
                 <button className="btn-batch btn-tunnel" onClick={() => setTunnelDialogOpen(true)}>
                   <span className="btn-icon-text">SSH</span>
                   隧道

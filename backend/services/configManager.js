@@ -122,6 +122,8 @@ class ConfigManager {
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
       claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
+      waifu: editableDraft.waifu || currentRaw.waifu,
+      tunnel: editableDraft.tunnel || currentRaw.tunnel,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 
@@ -268,7 +270,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'jvmOptions']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'jvmOptions', 'tunnel']
     };
   }
 
