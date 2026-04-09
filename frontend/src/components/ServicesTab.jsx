@@ -151,9 +151,6 @@ function InfraStatusStrip({ status, onRefresh, sdkDiagnostics }) {
           {building ? '\u6784\u5EFA\u4E2D...' : '\u6784\u5EFA SDK'}
         </button>
       )}
-      <button className="infra-refresh-btn" onClick={onRefresh} title="\u5237\u65B0\u57FA\u7840\u8BBE\u65BD\u72B6\u6001">
-        \u21BB
-      </button>
     </div>
   )
 }
@@ -415,12 +412,12 @@ function ServicesTab({ searchInputRef }) {
                 </button>
               </Tooltip>
             </div>
+            <InfraStatusStrip
+              status={infraStatus}
+              onRefresh={fetchInfraStatus}
+              sdkDiagnostics={diagnostics?.sdkBuild}
+            />
           </div>
-          <InfraStatusStrip
-            status={infraStatus}
-            onRefresh={fetchInfraStatus}
-            sdkDiagnostics={diagnostics?.sdkBuild}
-          />
           <div className="btn-grid">
             {catalog.map((service, index) => (
               <ServiceButton

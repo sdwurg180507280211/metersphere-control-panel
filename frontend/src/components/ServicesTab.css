@@ -61,6 +61,14 @@
   align-items: center;
 }
 
+.services-control-panel .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .skeleton-title,
 .skeleton-log-title,
 .skeleton-actions::before,
@@ -107,8 +115,7 @@
 .batch-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
+  gap: 8px;
 }
 
 .btn-batch {
@@ -533,8 +540,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
 }
 
 .infra-badge {
@@ -587,7 +592,6 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  margin-left: auto;
 }
 
 .infra-refresh-btn:hover {
