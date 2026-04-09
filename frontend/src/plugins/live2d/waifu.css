@@ -1,7 +1,7 @@
 /* 看板娘模型切换下拉框 - 圆形图标按钮，和缩放手柄风格一致 */
 .waifu-model-selector {
   position: fixed;
-  bottom: 40px;
+  bottom: 540px;
   right: 40px;
   z-index: 10001;
   display: flex;
