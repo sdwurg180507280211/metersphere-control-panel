@@ -133,6 +133,14 @@ class ConfigManager {
       delete persisted.npmPath;
     }
 
+    // jvmOptions: 非默认值才保存
+    const defaultJvm = require('../config').normalizeEditableConfig({}).jvmOptions;
+    if (editableDraft.jvmOptions && editableDraft.jvmOptions !== defaultJvm) {
+      persisted.jvmOptions = editableDraft.jvmOptions;
+    } else {
+      delete persisted.jvmOptions;
+    }
+
     const packageConfig = this._buildPersistedPackage(currentRaw.package, editableDraft.package || {}, editableDraft.projectRoot);
     if (packageConfig === undefined) {
       delete persisted.package;
@@ -185,6 +193,13 @@ class ConfigManager {
           nextService.enabled = serviceDraft.enabled !== false;
         } else {
           delete nextService.enabled;
+        }
+
+        // Per-service JVM override
+        if (serviceDraft.jvmOptions) {
+          nextService.jvmOptions = serviceDraft.jvmOptions;
+        } else {
+          delete nextService.jvmOptions;
         }
 
         return [serviceId, nextService];
@@ -253,7 +268,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'jvmOptions']
     };
   }
 

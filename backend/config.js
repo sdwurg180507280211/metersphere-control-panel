@@ -192,7 +192,8 @@ function normalizeServiceDefinition(serviceId, rawService = {}) {
     healthCheckPort,
     healthCheck,
     startOrder: normalizeNumericField(service.startOrder, DEFAULT_SERVICE_START_ORDER),
-    enabled: normalizeBoolean(service.enabled, true)
+    enabled: normalizeBoolean(service.enabled, true),
+    jvmOptions: normalizeString(service.jvmOptions, '')
   };
 }
 
@@ -219,6 +220,7 @@ function normalizeEditableConfig(rawConfig = {}) {
     projectRoot,
     npmPath,
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
+    jvmOptions: normalizeString(config.jvmOptions, '-Xms256m -Xmx512m'),
     redis: config.redis || {},
     properties: {
       metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE || '/opt/metersphere/conf/metersphere.properties'),
@@ -312,6 +314,7 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     projectRootInput: editable.projectRoot,
     npmPath: editable.npmPath,
     maxLogLines: editable.maxLogLines,
+    jvmOptions: editable.jvmOptions,
     properties: editable.properties,
     waifu: editable.waifu,
     claudeCode: editable.claudeCode,

@@ -9,6 +9,12 @@ const serviceController = require('../controllers/serviceController');
 router.get('/catalog', serviceController.getCatalog);
 router.get('/status', serviceController.getAllStatus);
 
+// 基础设施状态
+router.get('/infra/status', serviceController.getInfraStatus);
+
+// SDK 构建
+router.post('/build/sdk', serviceController.buildSdk);
+
 // 批量操作
 router.post('/start-all', serviceController.startAll);
 router.post('/stop-all', serviceController.stopAll);

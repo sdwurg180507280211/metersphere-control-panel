@@ -139,9 +139,45 @@ class ServiceTaskService {
     const resourceKey = await this._acquireServiceLock(serviceId, job);
 
     try {
+      // Infrastructure pre-check stage
       await jobService.startJob(job.jobId, {
+        stage: 'infra_check',
+        progress: 5,
+        message: '检查基础设施可达性'
+      });
+
+      await this._runStage('infra_check', async () => {
+        const infraChecker = require('./infraChecker');
+        const result = await infraChecker.checkAll();
+        infraChecker.broadcastStatus();
+
+        if (!result.allReachable) {
+          const unreachable = [result.mysql, result.redis, result.kafka]
+            .filter(c => !c.reachable)
+            .map(c => `${c.name} (${c.host}:${c.port})`)
+            .join(', ');
+          const warningMessage = `基础设施不可达: ${unreachable}`;
+          logger.broadcast(`⚠️  ${warningMessage}`, 'service', serviceId);
+
+          const blockOnInfraFail = process.env.MS_INFRA_BLOCK_ON_FAIL === 'true';
+          if (blockOnInfraFail) {
+            const { createAppError } = require('../utils/errors');
+            throw createAppError(503, 'INFRA_UNREACHABLE', warningMessage, { infraStatus: result, serviceId });
+          }
+        }
+
+        return result;
+      }, {
+        stageTimeoutMs: 10000,
+        timingContext,
+        details: { serviceId }
+      });
+
+      await jobService.renewLock(resourceKey, job.jobId);
+
+      await jobService.updateJob(job.jobId, {
         stage: 'start_new_process',
-        progress: 20,
+        progress: 25,
         message: '启动新进程'
       });
 
@@ -595,6 +631,31 @@ class ServiceTaskService {
 
   async startAllServices() {
     logger.broadcast('\n========== 启动所有服务 ==========', 'service');
+
+    // Pre-check infra once for batch start
+    try {
+      const infraChecker = require('./infraChecker');
+      const infraStatus = await infraChecker.checkAll();
+      infraChecker.broadcastStatus();
+
+      if (!infraStatus.allReachable) {
+        const unreachable = [infraStatus.mysql, infraStatus.redis, infraStatus.kafka]
+          .filter(c => !c.reachable)
+          .map(c => `${c.name} (${c.host}:${c.port})`)
+          .join(', ');
+        logger.broadcast(`⚠️  基础设施不可达: ${unreachable}`, 'service');
+
+        const blockOnInfraFail = process.env.MS_INFRA_BLOCK_ON_FAIL === 'true';
+        if (blockOnInfraFail) {
+          const { createAppError } = require('../utils/errors');
+          throw createAppError(503, 'INFRA_UNREACHABLE', `基础设施不可达: ${unreachable}`, { infraStatus });
+        }
+      }
+    } catch (error) {
+      if (error.code === 'INFRA_UNREACHABLE') throw error;
+      // Other errors (e.g., config file missing) don't block
+    }
+
     const services = [...configManager.getResolvedConfig().serviceCatalog];
     return this._executeBatchAction({
       type: 'service.batch.start',

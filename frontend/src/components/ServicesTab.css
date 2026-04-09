@@ -527,3 +527,70 @@
     justify-content: center;
   }
 }
+
+/* Infrastructure Status Strip */
+.infra-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.infra-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.infra-icon {
+  font-size: 9px;
+}
+
+.infra-badge-warning {
+  background: rgba(146, 64, 14, 0.25);
+  border: 1px solid rgba(251, 191, 36, 0.26);
+  border-radius: 999px;
+  color: #fde68a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+}
+
+.infra-badge-warning:hover:not(:disabled) {
+  background: rgba(146, 64, 14, 0.4);
+}
+
+.infra-badge-warning:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.infra-refresh-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.32);
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.infra-refresh-btn:hover {
+  background: rgba(148, 163, 184, 0.14);
+  color: #e2e8f0;
+}

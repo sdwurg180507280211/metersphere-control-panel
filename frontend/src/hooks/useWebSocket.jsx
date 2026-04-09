@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
-import { useWebSocketStore, useLogStore, useBuildStore, useServiceStore, usePackageStore } from '../store/useAppStore'
+import { useWebSocketStore, useLogStore, useBuildStore, useServiceStore, usePackageStore, useInfraStore } from '../store/useAppStore'
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss' : 'ws'
 const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
@@ -27,6 +27,8 @@ export function useWebSocket() {
   const fetchServicesRef = useRef(useServiceStore.getState().fetchServices)
   const updatePackageTaskRef = useRef(usePackageStore.getState().updateCurrentTask)
   const fetchPackageActiveTaskRef = useRef(usePackageStore.getState().fetchActiveTask)
+  const setInfraStatusRef = useRef(useInfraStore.getState().setStatus)
+  const fetchInfraStatusRef = useRef(useInfraStore.getState().fetchInfraStatus)
 
   const {
     setConnected,
@@ -237,6 +239,7 @@ export function useWebSocket() {
     if (isServiceJob) {
       if (channel === 'job:progress' && job.targetId) {
         const phaseMap = {
+          infra_check: 'starting',
           prepare: 'starting',
           compile: 'starting',
           stop_old_process: job.type === 'service.stop' ? 'stopping' : 'restarting',
@@ -354,11 +357,12 @@ export function useWebSocket() {
 
         socket.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['logs:service', 'logs:build', 'logs:package', 'build:progress', 'build:completed', 'build:batchCompleted', 'package:started', 'package:heartbeat', 'package:completed', 'package:failed', 'job:progress', 'job:completed', 'job:failed', '*']
+          channels: ['logs:service', 'logs:build', 'logs:package', 'build:progress', 'build:completed', 'build:batchCompleted', 'package:started', 'package:heartbeat', 'package:completed', 'package:failed', 'job:progress', 'job:completed', 'job:failed', 'infra:status', '*']
         }))
 
         fetchServicesRef.current()
         fetchPackageActiveTaskRef.current()
+        fetchInfraStatusRef.current()
 
         heartbeatTimerRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
@@ -411,6 +415,9 @@ export function useWebSocket() {
                 case 'job:completed':
                 case 'job:failed':
                   handleJobEvent(data.channel, data.data)
+                  break
+                case 'infra:status':
+                  setInfraStatusRef.current(data.data)
                   break
                 case 'package:started':
                 case 'package:heartbeat':

@@ -76,8 +76,13 @@ function App() {
   const { fetchServices, fetchCatalog } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
   const { fetchOptions: fetchPackageOptions, fetchActiveTask: fetchActivePackageTask } = usePackageStore()
-  const { clearServiceLogs, clearBuildLogs, clearPackageLogs } = useLogStore()
-  const { fetchConfig, dirtyFields, saving, applying } = useConfigStore()
+  const clearServiceLogs = useLogStore((s) => s.clearServiceLogs)
+  const clearBuildLogs = useLogStore((s) => s.clearBuildLogs)
+  const clearPackageLogs = useLogStore((s) => s.clearPackageLogs)
+  const fetchConfig = useConfigStore((s) => s.fetchConfig)
+  const dirtyFields = useConfigStore((s) => s.dirtyFields)
+  const saving = useConfigStore((s) => s.saving)
+  const applying = useConfigStore((s) => s.applying)
   const hasUnsavedConfigChanges = dirtyFields.length > 0 && !saving && !applying
   const activeTabMeta = TAB_ITEMS.find((item) => item.id === activeTab) || TAB_ITEMS[0]
 
