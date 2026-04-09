@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Live2DController from '../controller/Live2DController'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
+import '../waifu.css'
 
 const WaifuRoot = () => {
   const containerRef = useRef(null)
@@ -68,19 +69,27 @@ const WaifuRoot = () => {
     // 尝试加载保存的状态
     const savedState = loadContainerState()
     if (savedState) {
-      div.style.width = savedState.width + 'px'
-      div.style.height = savedState.height + 'px'
-      div.style.left = savedState.left + 'px'
-      div.style.top = savedState.top + 'px'
+      // 边界检查：确保容器至少部分在可视区域内
+      const sw = window.innerWidth
+      const sh = window.innerHeight
+      const w = savedState.width || 400
+      const h = savedState.height || 500
+      const left = Math.min(savedState.left, sw - 100) // 至少 100px 可见
+      const top = Math.min(savedState.top, sh - 100)
+
+      div.style.width = w + 'px'
+      div.style.height = h + 'px'
+      div.style.left = Math.max(0, left) + 'px'
+      div.style.top = Math.max(0, top) + 'px'
       div.style.right = 'auto'
       div.style.bottom = 'auto'
       currentScaleRef.current = savedState.scale || 1
     } else {
-      // 默认状态
-      div.style.right = '0'
-      div.style.bottom = '0'
-      div.style.width = '800px'
-      div.style.height = '800px'
+      // 默认状态：右下角，合理尺寸
+      div.style.right = '20px'
+      div.style.bottom = '20px'
+      div.style.width = '400px'
+      div.style.height = '500px'
       currentScaleRef.current = 1
     }
 

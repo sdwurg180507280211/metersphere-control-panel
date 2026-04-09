@@ -146,14 +146,26 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
-    const jvmOpts = `-XX:ErrorFile="${errorFilePath}"`;
+    const errorFileOpt = `-XX:ErrorFile="${errorFilePath}"`;
+
+    // Build JAVA_TOOL_OPTIONS: env base + config jvmOptions + per-service override + error file
+    const resolvedConfig = this._getRuntimeConfig();
+    const globalJvmOptions = resolvedConfig.jvmOptions || '';
+    const serviceJvmOverride = serviceConfig.jvmOptions || '';
+    const effectiveJvmOptions = serviceJvmOverride || globalJvmOptions;
+
+    const javaToolOptions = [
+      process.env.JAVA_TOOL_OPTIONS || '',
+      effectiveJvmOptions,
+      errorFileOpt
+    ].filter(Boolean).join(' ').trim();
 
     const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
       cwd: this._getProjectRoot(),
       detached: process.platform !== 'win32',
       env: {
         ...process.env,
-        JAVA_TOOL_OPTIONS: `${process.env.JAVA_TOOL_OPTIONS || ''} ${jvmOpts}`.trim()
+        JAVA_TOOL_OPTIONS: javaToolOptions
       }
     });
 

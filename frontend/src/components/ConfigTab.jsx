@@ -74,7 +74,7 @@ function ConfigTab() {
       const path = err.path || ''
       if (path.startsWith('projectRoot') || path.startsWith('npmPath') || path.startsWith('properties')) counts.environment++
       else if (path.startsWith('services')) counts.services++
-      else if (path.startsWith('redis') || path.startsWith('claudeCode')) counts.integrations++
+      else if (path.startsWith('redis') || path.startsWith('claudeCode') || path.startsWith('tunnel') || path.startsWith('waifu')) counts.integrations++
       else counts.advanced++
     })
     return counts
@@ -349,13 +349,49 @@ function ConfigTab() {
         <ConfigField label="缓存存储模式" path="redis.mode" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings}>
           <CustomSelect value={draft.redis?.mode ?? 'memory'} onChange={val => updateDraft('redis.mode', val)} options={[{ value: 'memory', label: '内置内存 (轻量)' }, { value: 'redis', label: '外部 Redis (高可靠)' }]} />
         </ConfigField>
-        
+
         <ConfigField label="Redis 主机地址" path="redis.host" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings}>
           <input value={draft.redis?.host ?? ''} onChange={e => updateDraft('redis.host', e.target.value)} disabled={draft.redis?.mode !== 'redis'} placeholder="127.0.0.1" />
         </ConfigField>
 
         <ConfigField label="ClaudeCode API 凭据" path="claudeCode.authToken" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="ANTHROPIC_AUTH_TOKEN 环境变量覆盖">
           <input type="password" value={draft.claudeCode?.authToken ?? ''} onChange={e => updateDraft('claudeCode.authToken', e.target.value)} placeholder="sk-ant-..." />
+        </ConfigField>
+      </div>
+
+      <h3 className="config-section-title" style={{ marginTop: '32px' }}>SSH 隧道</h3>
+      <p className="config-section-subtitle">配置 SSH 反向隧道的远程目标主机。修改后无需重启控制面板即可生效。</p>
+
+      <div className="config-form-grid">
+        <ConfigField label="远程主机地址" path="tunnel.remoteHost" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 反向隧道的目标主机 IP 或域名">
+          <input value={draft.tunnel?.remoteHost ?? ''} onChange={e => updateDraft('tunnel.remoteHost', e.target.value)} placeholder="8.152.216.176" />
+        </ConfigField>
+
+        <ConfigField label="远程用户名" path="tunnel.remoteUser" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 登录远程主机的用户名">
+          <input value={draft.tunnel?.remoteUser ?? ''} onChange={e => updateDraft('tunnel.remoteUser', e.target.value)} placeholder="root" />
+        </ConfigField>
+      </div>
+
+      <h3 className="config-section-title" style={{ marginTop: '32px' }}>看板娘</h3>
+      <p className="config-section-subtitle">Live2D 看板娘为可选插件，关闭后不加载任何相关资源（pixi.js、Live2D SDK 等），节省内存和加载时间。</p>
+
+      <div className="config-form-grid">
+        <ConfigField label="启用看板娘" path="waifu.enabled" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="关闭后需应用配置才能生效，页面会刷新">
+          <label className="config-switch">
+            <input type="checkbox" checked={draft.waifu?.enabled !== false} onChange={e => updateDraft('waifu.enabled', e.target.checked)} />
+          </label>
+        </ConfigField>
+
+        <ConfigField label="AI 对话模型" path="waifu.model" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="看板娘 AI 聊天使用的语言模型">
+          <input value={draft.waifu?.model ?? ''} onChange={e => updateDraft('waifu.model', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="qwen3.5-plus" />
+        </ConfigField>
+
+        <ConfigField label="AI API Key" path="waifu.apiKey" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="大模型服务的 API Key">
+          <input type="password" value={draft.waifu?.apiKey ?? ''} onChange={e => updateDraft('waifu.apiKey', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="sk-..." />
+        </ConfigField>
+
+        <ConfigField label="AI API Base URL" path="waifu.baseUrl" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="自定义 API 端点，留空使用默认">
+          <input value={draft.waifu?.baseUrl ?? ''} onChange={e => updateDraft('waifu.baseUrl', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="https://api.example.com/v1" />
         </ConfigField>
       </div>
     </div>

@@ -122,6 +122,8 @@ class ConfigManager {
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
       claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
+      waifu: editableDraft.waifu || currentRaw.waifu,
+      tunnel: editableDraft.tunnel || currentRaw.tunnel,
       sshTunnel: editableDraft.sshTunnel || currentRaw.sshTunnel,
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
@@ -137,6 +139,14 @@ class ConfigManager {
     // 如果 sshTunnel 存在但是 ports 为空，删除整个字段使用默认值
     if (persisted.sshTunnel && (!persisted.sshTunnel.ports || persisted.sshTunnel.ports.length === 0)) {
       delete persisted.sshTunnel;
+    }
+
+    // jvmOptions: 非默认值才保存
+    const defaultJvm = require('../config').normalizeEditableConfig({}).jvmOptions;
+    if (editableDraft.jvmOptions && editableDraft.jvmOptions !== defaultJvm) {
+      persisted.jvmOptions = editableDraft.jvmOptions;
+    } else {
+      delete persisted.jvmOptions;
     }
 
     const packageConfig = this._buildPersistedPackage(currentRaw.package, editableDraft.package || {}, editableDraft.projectRoot);
@@ -191,6 +201,13 @@ class ConfigManager {
           nextService.enabled = serviceDraft.enabled !== false;
         } else {
           delete nextService.enabled;
+        }
+
+        // Per-service JVM override
+        if (serviceDraft.jvmOptions) {
+          nextService.jvmOptions = serviceDraft.jvmOptions;
+        } else {
+          delete nextService.jvmOptions;
         }
 
         return [serviceId, nextService];
@@ -259,7 +276,7 @@ class ConfigManager {
       lastAppliedAt: this.lastAppliedAt,
       hasUnappliedChanges: this._hasUnappliedChanges(),
       requiresRestartFields: ['port'],
-      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'sshTunnel']
+      hotApplySupportedFields: ['projectRoot', 'services', 'package', 'maxLogLines', 'properties', 'claudeCode', 'sshTunnel', 'tunnel', 'jvmOptions']
     };
   }
 

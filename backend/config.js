@@ -150,12 +150,24 @@ function normalizePackageConfig(rawPackage = {}) {
   return normalized;
 }
 
+function normalizeTunnelConfig(rawConfig = {}) {
+  const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
+    ? rawConfig
+    : {};
+
+  return {
+    remoteHost: normalizeString(config.remoteHost, '8.152.216.176'),
+    remoteUser: normalizeString(config.remoteUser, 'root')
+  };
+}
+
 function normalizeWaifuConfig(rawConfig = {}) {
   const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
     ? rawConfig
     : {};
 
   return {
+    enabled: normalizeBoolean(config.enabled, true),
     apiKey: normalizeString(config.apiKey, ''),
     baseUrl: normalizeString(config.baseUrl, ''),
     model: normalizeString(config.model, 'qwen3.5-plus'),
@@ -192,7 +204,8 @@ function normalizeServiceDefinition(serviceId, rawService = {}) {
     healthCheckPort,
     healthCheck,
     startOrder: normalizeNumericField(service.startOrder, DEFAULT_SERVICE_START_ORDER),
-    enabled: normalizeBoolean(service.enabled, true)
+    enabled: normalizeBoolean(service.enabled, true),
+    jvmOptions: normalizeString(service.jvmOptions, '')
   };
 }
 
@@ -240,11 +253,13 @@ function normalizeEditableConfig(rawConfig = {}) {
     projectRoot,
     npmPath,
     maxLogLines: normalizeNumericField(config.maxLogLines, DEFAULT_MAX_LOG_LINES),
+    jvmOptions: normalizeString(config.jvmOptions, '-Xms256m -Xmx512m'),
     redis: config.redis || {},
     properties: {
       metersphere: normalizeString(config.properties?.metersphere, DEFAULT_PROPERTIES_METERSPHERE || '/opt/metersphere/conf/metersphere.properties'),
       redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON || '/opt/metersphere/conf/redisson.yml')
     },
+    tunnel: normalizeTunnelConfig(config.tunnel || {}),
     waifu: normalizeWaifuConfig(config.waifu || {}),
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     sshTunnel: normalizeSshTunnelConfig(config.sshTunnel || {}),
@@ -347,6 +362,8 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     projectRootInput: editable.projectRoot,
     npmPath: editable.npmPath,
     maxLogLines: editable.maxLogLines,
+    jvmOptions: editable.jvmOptions,
+    tunnel: editable.tunnel,
     properties: editable.properties,
     waifu: editable.waifu,
     claudeCode: editable.claudeCode,
@@ -398,6 +415,7 @@ module.exports = {
   EXTRA_FRONTEND_MODULES,
   loadConfigFromFile,
   normalizeEditableConfig,
+  normalizeTunnelConfig,
   normalizeWaifuConfig,
   normalizeClaudeCodeConfig,
   normalizePackageConfig,

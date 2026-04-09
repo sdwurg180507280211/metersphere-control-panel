@@ -286,6 +286,30 @@ export const useWebSocketStore = create((set) => ({
   resetReconnect: () => set({ reconnectAttempts: 0 })
 }))
 
+export const useInfraStore = create((set) => ({
+  status: {
+    mysql: { name: 'MySQL', reachable: null, host: 'localhost', port: 3306, error: null },
+    redis: { name: 'Redis', reachable: null, host: 'localhost', port: 6379, error: null },
+    kafka: { name: 'Kafka', reachable: null, host: 'localhost', port: 9092, error: null },
+    allReachable: null,
+    checkedAt: null
+  },
+
+  setStatus: (status) => set({ status }),
+
+  fetchInfraStatus: async () => {
+    try {
+      const res = await fetch('/api/services/infra/status')
+      const data = await res.json()
+      if (data.success) {
+        set({ status: data.data })
+      }
+    } catch (error) {
+      console.error('获取基础设施状态失败:', error)
+    }
+  }
+}))
+
 export const useConfigStore = create((set, get) => ({
   snapshot: null,
   draft: null,

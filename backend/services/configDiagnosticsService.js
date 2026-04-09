@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const cacheService = require('./cacheService');
 const redisConfig = require('../config/redis');
 const packageConfig = require('../config/package');
@@ -30,6 +31,7 @@ class ConfigDiagnosticsService {
     diagnostics.npmPath = this._buildNpmPathDiagnostics(normalizedEditable, errors, warnings);
     diagnostics.services = this._buildServiceDiagnostics(normalizedEditable, resolvedConfig, diagnostics.ports, errors, warnings);
     diagnostics.packageScript = this._buildPackageDiagnostics(resolvedConfig, errors, warnings);
+    diagnostics.sdkBuild = this._buildSdkBuildDiagnostics(normalizedEditable, warnings);
 
     return {
       valid: errors.length === 0,
@@ -417,11 +419,77 @@ class ConfigDiagnosticsService {
     return pathName === 'projectRoot'
       || pathName === 'services'
       || pathName === 'maxLogLines'
+      || pathName === 'jvmOptions'
       || pathName.startsWith('package');
   }
 
   _requiresRestart(pathName) {
     return pathName === 'port';
+  }
+
+  _buildSdkBuildDiagnostics(editableConfig, warnings) {
+    const projectRoot = editableConfig.projectRoot;
+    const m2Dir = path.join(os.homedir(), '.m2', 'repository', 'io', 'metersphere');
+
+    let sdkInstalled = false;
+    let sdkVersion = null;
+    let sdkArtifactPath = null;
+
+    if (fs.existsSync(m2Dir)) {
+      const frameworkDir = path.join(m2Dir, 'framework');
+      if (fs.existsSync(frameworkDir)) {
+        try {
+          const versions = fs.readdirSync(frameworkDir)
+            .filter(v => fs.existsSync(path.join(frameworkDir, v, `framework-${v}.pom`)));
+          if (versions.length > 0) {
+            sdkInstalled = true;
+            sdkVersion = versions[versions.length - 1];
+            sdkArtifactPath = path.join(frameworkDir, sdkVersion);
+          }
+        } catch (err) {
+          // ignore read errors
+        }
+      }
+
+      // Also check for sdk directory
+      if (!sdkInstalled) {
+        const sdkDir = path.join(m2Dir, 'sdk');
+        if (fs.existsSync(sdkDir)) {
+          try {
+            const versions = fs.readdirSync(sdkDir)
+              .filter(v => fs.existsSync(path.join(sdkDir, v)));
+            if (versions.length > 0) {
+              sdkInstalled = true;
+              sdkVersion = versions[versions.length - 1];
+              sdkArtifactPath = path.join(sdkDir, sdkVersion);
+            }
+          } catch (err) {
+            // ignore read errors
+          }
+        }
+      }
+    }
+
+    const sdkSourcePath = projectRoot ? path.join(projectRoot, 'framework', 'sdk-parent', 'pom.xml') : null;
+    const sdkSourceExists = sdkSourcePath ? fs.existsSync(sdkSourcePath) : false;
+
+    if (!sdkInstalled && sdkSourceExists) {
+      warnings.push(this._createIssue('warning', 'sdk.build',
+        'SDK (framework) 未安装到本地 Maven 仓库，首次启动服务可能失败', {
+          suggestion: '运行 mvn install -pl framework/sdk-parent -DskipTests',
+          m2Dir,
+          sdkSourcePath
+        }));
+    }
+
+    return {
+      installed: sdkInstalled,
+      version: sdkVersion,
+      artifactPath: sdkArtifactPath,
+      sourceExists: sdkSourceExists,
+      sourcePath: sdkSourcePath,
+      m2Dir
+    };
   }
 
   _isValidPort(port) {

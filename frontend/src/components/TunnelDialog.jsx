@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useConfigStore } from '../store/useAppStore'
 import './TunnelDialog.css'
 
 const DEFAULT_PORT_MAPPINGS = [
@@ -9,6 +10,11 @@ const DEFAULT_PORT_MAPPINGS = [
 ]
 
 function TunnelDialog({ isOpen, onClose }) {
+  const resolved = useConfigStore((s) => s.resolved)
+  const tunnelConfig = resolved?.tunnel || {}
+  const remoteHost = tunnelConfig.remoteHost || '8.152.216.176'
+  const remoteUser = tunnelConfig.remoteUser || 'root'
+
   const [portMappings, setPortMappings] = useState(() =>
     DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m }))
   )
@@ -184,7 +190,7 @@ function TunnelDialog({ isOpen, onClose }) {
         <form className="tunnel-dialog-body" onSubmit={handleSubmit}>
           <div className="tunnel-dialog-target">
             <span className="tunnel-dialog-target-label">目标:</span>
-            root@8.152.216.176
+            {remoteUser}@{remoteHost}
           </div>
 
           {/* 端口映射表格 */}

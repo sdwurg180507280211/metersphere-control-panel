@@ -3,12 +3,16 @@
  */
 const processManager = require('../services/processManager');
 const healthChecker = require('../services/healthChecker');
+const infraChecker = require('../services/infraChecker');
 const validator = require('../utils/validator');
 const logger = require('../utils/logger');
 const configManager = require('../services/configManager');
 const serviceTaskService = require('../services/serviceTaskService');
 const systemCommandService = require('../services/systemCommandService');
+const jobService = require('../services/jobService');
 const { createAppError, sendError } = require('../utils/errors');
+const fs = require('fs');
+const path = require('path');
 
 async function enqueueServiceTask(res, taskFn, actionLabel) {
   try {
@@ -215,6 +219,94 @@ const serviceController = {
       });
     } catch (error) {
       logger.broadcast(`SSH 隧道配置保存失败: ${error.message}`, 'service');
+      return sendError(res, error);
+    }
+  },
+
+  async getInfraStatus(req, res) {
+    try {
+      const status = await infraChecker.checkAll();
+      res.json({ success: true, data: status });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
+  async buildSdk(req, res) {
+    try {
+      const resolvedConfig = configManager.getResolvedConfig();
+      const projectRoot = resolvedConfig.projectRoot;
+
+      if (!projectRoot || !fs.existsSync(path.join(projectRoot, 'framework', 'sdk-parent', 'pom.xml'))) {
+        return sendError(res, createAppError(400, 'SDK_SOURCE_NOT_FOUND', 'SDK 源码目录不存在', {
+          expectedPath: path.join(projectRoot || '', 'framework', 'sdk-parent')
+        }));
+      }
+
+      const resourceKey = 'build:sdk';
+      await jobService.assertWritableRequestAllowed(resourceKey, { action: 'build-sdk' });
+
+      const job = await jobService.createJob({
+        type: 'sdk.build',
+        targetType: 'infrastructure',
+        targetId: 'sdk-parent',
+        stage: 'prepare',
+        message: '准备构建 SDK'
+      });
+
+      const lockResult = await jobService.acquireLock(resourceKey, job);
+      if (!lockResult.acquired) {
+        await jobService.deleteJob(job.jobId);
+        return sendError(res, createAppError(409, 'SDK_BUILD_BUSY', 'SDK 构建任务正在进行中', {
+          lock: lockResult.lock
+        }));
+      }
+
+      await jobService.startJob(job.jobId, {
+        stage: 'building',
+        progress: 10,
+        message: '正在构建 SDK (mvn install -pl framework/sdk-parent -DskipTests)'
+      });
+
+      res.status(202).json({
+        success: true,
+        message: 'SDK 构建任务已创建',
+        jobId: job.jobId
+      });
+
+      // Execute build asynchronously
+      (async () => {
+        try {
+          const mavenCommand = processManager._resolveMavenCommand();
+          const result = await processManager._runCommand({
+            command: mavenCommand,
+            args: ['install', '-pl', 'framework/sdk-parent', '-DskipTests', '-am'],
+            cwd: projectRoot,
+            logType: 'service',
+            serviceId: 'sdk-build',
+            env: process.env,
+            timeoutMs: 600000
+          });
+
+          await jobService.completeJob(job.jobId, result, {
+            stage: 'completed',
+            message: 'SDK 构建完成'
+          });
+
+          logger.broadcast('SDK 构建完成，可以启动服务', 'service');
+        } catch (error) {
+          await jobService.failJob(job.jobId, error, {
+            stage: 'failed',
+            message: `SDK 构建失败: ${error.message}`
+          });
+        } finally {
+          await jobService.releaseLock(resourceKey, job.jobId);
+        }
+      })().catch((error) => {
+        logger.broadcast(`SDK 构建后台执行失败: ${error.message}`, 'service');
+      });
+    } catch (error) {
+      logger.broadcast(`SDK 构建失败: ${error.message}`, 'service');
       return sendError(res, error);
     }
   }

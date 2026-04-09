@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState, memo } from 'react'
 import { toast } from 'react-hot-toast'
-import { useServiceStore, useWebSocketStore, useLogStore } from '../store/useAppStore'
+import { useServiceStore, useWebSocketStore, useLogStore, useInfraStore, useConfigStore } from '../store/useAppStore'
 import LogViewer from './LogViewer'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
@@ -80,6 +80,84 @@ const STATE_CONFIG = {
   }
 }
 
+function InfraStatusBadge({ component }) {
+  const { name, reachable, host, port, error } = component
+  const isUnknown = reachable === null
+
+  const color = isUnknown ? '#94a3b8' : reachable ? '#4ade80' : '#f87171'
+  const bgColor = isUnknown ? '#182237' : reachable ? '#102617' : '#311818'
+  const borderColor = isUnknown ? '#334155' : reachable ? '#24653b' : '#8f3434'
+  const icon = isUnknown ? '?' : reachable ? '\u25CF' : '\u2715'
+  const label = isUnknown ? name : reachable ? name : `${name} \u4E0D\u53EF\u8FBE`
+
+  return (
+    <Tooltip
+      content={reachable === null
+        ? `${name}: \u672A\u68C0\u6D4B (${host}:${port})`
+        : reachable
+          ? `${name}: \u53EF\u8FBE (${host}:${port})`
+          : `${name}: \u4E0D\u53EF\u8FBE (${host}:${port}) - ${error || '\u8FDE\u63A5\u5931\u8D25'}`
+      }
+      position="bottom"
+    >
+      <span
+        className="infra-badge"
+        style={{
+          backgroundColor: bgColor,
+          borderColor,
+          color,
+          border: `1px solid ${borderColor}`
+        }}
+      >
+        <span className="infra-icon">{icon}</span>
+        {label}
+      </span>
+    </Tooltip>
+  )
+}
+
+function InfraStatusStrip({ status, onRefresh, sdkDiagnostics }) {
+  const [building, setBuilding] = useState(false)
+
+  const handleBuildSdk = async () => {
+    if (building) return
+    setBuilding(true)
+    try {
+      const res = await fetch('/api/services/build/sdk', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('SDK \u6784\u5EFA\u4EFB\u52A1\u5DF2\u521B\u5EFA')
+      } else {
+        toast.error(data.error?.message || 'SDK \u6784\u5EFA\u5931\u8D25')
+      }
+    } catch (error) {
+      toast.error(`SDK \u6784\u5EFA\u5931\u8D25: ${error.message}`)
+    } finally {
+      setTimeout(() => setBuilding(false), 3000)
+    }
+  }
+
+  return (
+    <div className="infra-status-strip">
+      <InfraStatusBadge component={status.mysql} />
+      <InfraStatusBadge component={status.redis} />
+      <InfraStatusBadge component={status.kafka} />
+      {sdkDiagnostics && !sdkDiagnostics.installed && sdkDiagnostics.sourceExists && (
+        <button
+          className="infra-badge infra-badge-warning"
+          onClick={handleBuildSdk}
+          disabled={building}
+        >
+          {building ? '\u6784\u5EFA\u4E2D...' : '\u6784\u5EFA SDK'}
+        </button>
+      )}
+      <button className="infra-refresh-btn" onClick={onRefresh} title="\u5237\u65B0\u57FA\u7840\u8BBE\u65BD\u72B6\u6001">
+        \u21BB
+      </button>
+    </div>
+  )
+}
+
 function ServicesTab({ searchInputRef }) {
   const {
     catalog,
@@ -91,6 +169,8 @@ function ServicesTab({ searchInputRef }) {
     updateServiceStatus
   } = useServiceStore()
   const { connected } = useWebSocketStore()
+  const { status: infraStatus, fetchInfraStatus } = useInfraStore()
+  const { diagnostics, resolved } = useConfigStore()
   const [expandedErrors, setExpandedErrors] = useState(new Set())
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({
@@ -108,6 +188,12 @@ function ServicesTab({ searchInputRef }) {
     }
     loadData()
   }, [fetchCatalog, fetchServices])
+
+  useEffect(() => {
+    fetchInfraStatus()
+    const interval = setInterval(fetchInfraStatus, 30000)
+    return () => clearInterval(interval)
+  }, [fetchInfraStatus])
 
   useEffect(() => {
     if (connected) {
@@ -304,7 +390,7 @@ function ServicesTab({ searchInputRef }) {
         <section className="card services-control-panel">
           <div className="card-header">
             <div className="batch-actions">
-              <Tooltip content="建立 SSH 反向隧道到 8.152.216.176" position="bottom">
+              <Tooltip content={`建立 SSH 反向隧道到 ${resolved?.tunnel?.remoteHost || '8.152.216.176'}`} position="bottom">
                 <button className="btn-batch btn-tunnel" onClick={() => setTunnelDialogOpen(true)}>
                   <span className="btn-icon-text">SSH</span>
                   隧道
@@ -330,6 +416,11 @@ function ServicesTab({ searchInputRef }) {
               </Tooltip>
             </div>
           </div>
+          <InfraStatusStrip
+            status={infraStatus}
+            onRefresh={fetchInfraStatus}
+            sdkDiagnostics={diagnostics?.sdkBuild}
+          />
           <div className="btn-grid">
             {catalog.map((service, index) => (
               <ServiceButton
@@ -340,23 +431,25 @@ function ServicesTab({ searchInputRef }) {
                 isErrorExpanded={expandedErrors.has(service.id)}
                 onToggle={() => toggleService(service.id)}
                 onRestart={(e) => handleRestart(service.id, e)}
-                onForceStop={(e) => {
-                  e.stopPropagation()
+                onForceStop={async (e) => {
+                  if (e) e.stopPropagation()
                   const serviceStatus = services[service.id] || { running: false, phase: 'stopped' }
                   setLoading(service.id, true)
-                  fetch(`/api/services/${service.id}/stop`, { method: 'POST' })
-                    .then((res) => res.json())
-                    .then((data) => {
-                      if (data.success) {
-                        toast.success('停止命令已发送', { icon: '🛑' })
-                        updateServiceStatus(service.id, { ...serviceStatus, phase: 'stopping', running: false, error: null })
-                        if (!connected) setTimeout(fetchServices, 2000)
-                      } else {
-                        toast.error(extractError(data, '停止失败'))
-                      }
-                    })
-                    .catch((err) => toast.error(`网络错误: ${err.message}`))
-                    .finally(() => setTimeout(() => setLoading(service.id, false), 2000))
+                  try {
+                    const res = await fetch(`/api/services/${service.id}/stop`, { method: 'POST' })
+                    const data = await res.json()
+                    if (data.success) {
+                      toast.success('停止命令已发送', { icon: '🛑' })
+                      updateServiceStatus(service.id, { ...serviceStatus, phase: 'stopping', running: false, error: null })
+                      if (!connected) setTimeout(fetchServices, 2000)
+                    } else {
+                      toast.error(extractError(data, '停止失败'))
+                    }
+                  } catch (err) {
+                    toast.error(`网络错误: ${err.message}`)
+                  } finally {
+                    setTimeout(() => setLoading(service.id, false), 2000)
+                  }
                 }}
                 onToggleError={() => toggleErrorExpand(service.id)}
                 animationDelay={index * 50}

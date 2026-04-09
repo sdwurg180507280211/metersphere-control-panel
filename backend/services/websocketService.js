@@ -208,6 +208,10 @@ class WebSocketService {
     this.broadcast('service:status', status);
   }
 
+  broadcastInfraStatus(status) {
+    this.broadcast('infra:status', status);
+  }
+
   broadcastPackageEvent(event, data) {
     this.broadcast(`package:${event}`, data);
   }
