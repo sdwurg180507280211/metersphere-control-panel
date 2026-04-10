@@ -65,19 +65,99 @@ class InfraChecker {
     }
   }
 
-  /**
-   * 从 configManager 获取 Redis 连接信息
-   * Redis host/port 已在 config pipeline 中解析完毕
-   */
-  _readRedisConfig() {
-    const resolved = configManager.getResolvedConfig();
-    const redisSection = resolved.redis || {};
+/**
+ * 获取 Redis 连接信息
+ * 解析优先级：环境变量 > config.json > redisson.yml > metersphere.properties > 默认值
+ */
+_readRedisConfig() {
+  // 环境变量优先级最高
+  if (process.env.MS_REDIS_HOST) {
     return {
-      host: redisSection.host || process.env.MS_REDIS_HOST || 'localhost',
-      port: parseInt(redisSection.port || process.env.MS_REDIS_PORT || '6379', 10),
-      source: 'config'
+      host: process.env.MS_REDIS_HOST,
+      port: parseInt(process.env.MS_REDIS_PORT || '6379', 10),
+      source: 'env'
     };
   }
+
+  // config.json 中的 redis 配置
+  const resolved = configManager.getResolvedConfig();
+  const redisSection = resolved.redis || {};
+  if (redisSection.host) {
+    return {
+      host: redisSection.host,
+      port: parseInt(redisSection.port || '6379', 10),
+      source: 'config.json'
+    };
+  }
+
+  // redisson.yml
+  const redissonPath = resolved.properties?.redisson || '/opt/metersphere/conf/redisson.yml';
+  const redisson = this._readRedissonFile(redissonPath);
+  if (redisson.host) {
+    return { host: redisson.host, port: redisson.port, source: 'redisson.yml' };
+  }
+
+  // metersphere.properties 中的 spring.redis 配置
+  const msPropsPath = resolved.properties?.metersphere || '/opt/metersphere/conf/metersphere.properties';
+  const msRedis = this._readRedisFromProperties(msPropsPath);
+  if (msRedis.host) {
+    return { host: msRedis.host, port: msRedis.port, source: 'properties' };
+  }
+
+  return { host: 'localhost', port: 6379, source: 'default' };
+}
+
+/**
+ * 从 redisson.yml 文件解析 Redis 连接地址
+ * 支持单节点（singleServerConfig）和集群（clusterServersConfig）模式
+ */
+_readRedissonFile(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    // 单节点：address: "redis://host:port"
+    const singleMatch = content.match(/address:\s*["']?redis:\/\/([^:]+):(\d+)/);
+    if (singleMatch) {
+      return { host: singleMatch[1], port: parseInt(singleMatch[2], 10) };
+    }
+
+    // 集群：nodeAddresses 列表，取第一个节点
+    const clusterMatch = content.match(/nodeAddresses:[\s\S]*?-\s*["']?redis:\/\/([^:]+):(\d+)/);
+    if (clusterMatch) {
+      return { host: clusterMatch[1], port: parseInt(clusterMatch[2], 10) };
+    }
+  } catch (err) {
+    // ignore parse errors
+  }
+
+  return {};
+}
+
+/**
+ * 从 metersphere.properties 读取 spring.redis.host / spring.redis.port
+ */
+_readRedisFromProperties(filePath) {
+  if (!fs.existsSync(filePath)) return {};
+
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const hostMatch = content.match(/spring\.redis\.host\s*=\s*(.+)/);
+    const portMatch = content.match(/spring\.redis\.port\s*=\s*(\d+)/);
+
+    if (hostMatch) {
+      return {
+        host: hostMatch[1].trim(),
+        port: portMatch ? parseInt(portMatch[1], 10) : 6379
+      };
+    }
+  } catch (err) {
+    // ignore parse errors
+  }
+
+  return {};
+}
 
   /**
    * 从 metersphere.properties 读取 Kafka 连接信息
