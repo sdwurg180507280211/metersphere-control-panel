@@ -142,15 +142,13 @@ function InfraStatusStrip({ status, onRefresh, sdkDiagnostics }) {
       <InfraStatusBadge component={status.mysql} />
       <InfraStatusBadge component={status.redis} />
       <InfraStatusBadge component={status.kafka} />
-      {sdkDiagnostics && !sdkDiagnostics.installed && sdkDiagnostics.sourceExists && (
-        <button
-          className="infra-badge infra-badge-warning"
-          onClick={handleBuildSdk}
-          disabled={building}
-        >
-          {building ? '\u6784\u5EFA\u4E2D...' : '\u6784\u5EFA SDK'}
-        </button>
-      )}
+      <button
+        className="infra-badge infra-badge-warning"
+        onClick={handleBuildSdk}
+        disabled={building}
+      >
+        {building ? '构建中...' : '构建 SDK'}
+      </button>
     </div>
   )
 }
