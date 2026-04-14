@@ -9,11 +9,6 @@ router.post('/query', async (req, res) => {
     return res.status(400).json({ error: '无效的 SQL 查询' });
   }
 
-  // 只允许 SELECT 查询
-  if (!/^\s*SELECT/i.test(sql)) {
-    return res.status(403).json({ error: '只允许 SELECT 查询' });
-  }
-
   const result = await executeQuery(sql, 30000, limit || 1000);
 
   if (result.success) {

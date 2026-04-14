@@ -336,6 +336,77 @@
 .cell-number { color: #f59e0b; }
 .cell-boolean { color: #8b5cf6; font-weight: 700; }
 
+/* 分页 */
+.result-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  background: rgba(15, 23, 42, 0.5);
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.page-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.page-indicator {
+  padding: 0 8px;
+  font-family: 'Menlo', monospace;
+  font-size: 12px;
+  color: #f1f5f9;
+}
+
+.page-size-select {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+
+.page-size-select:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.page-size-select option {
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
 /* 历史记录侧边栏 */
 .sql-history-sidebar {
   width: 280px;

@@ -15,6 +15,8 @@ export default function SqlTab() {
     }
   });
   const [status, setStatus] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
 
   useEffect(() => {
     fetchStatus();
@@ -36,6 +38,7 @@ export default function SqlTab() {
 
     setLoading(true);
     setError(null);
+    setCurrentPage(1);
     
     try {
       const res = await fetch('/api/sql/query', {
@@ -110,6 +113,9 @@ export default function SqlTab() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const totalPages = result ? Math.max(1, Math.ceil(result.rows.length / pageSize)) : 1;
+  const pagedRows = result ? result.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize) : [];
 
   const renderCellValue = (value) => {
     if (value === null) return <span className="cell-null">NULL</span>;
@@ -238,19 +244,74 @@ export default function SqlTab() {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.rows.map((row, i) => (
-                      <tr key={i}>
-                        <td className="row-index">{i + 1}</td>
-                        {result.columns.map(col => (
-                          <td key={col} title={String(row[col])}>
-                            {renderCellValue(row[col])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {pagedRows.map((row, i) => {
+                      const globalIndex = (currentPage - 1) * pageSize + i + 1;
+                      return (
+                        <tr key={i}>
+                          <td className="row-index">{globalIndex}</td>
+                          {result.columns.map(col => (
+                            <td key={col} title={String(row[col])}>
+                              {renderCellValue(row[col])}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+              {totalPages > 1 && (
+                <div className="result-pagination">
+                  <div className="pagination-info">
+                    第 {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, result.rows.length)} 条，共 {result.rows.length} 条
+                  </div>
+                  <div className="pagination-controls">
+                    <button
+                      className="page-btn"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                    >
+                      «
+                    </button>
+                    <button
+                      className="page-btn"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      ‹
+                    </button>
+                    <span className="page-indicator">{currentPage} / {totalPages}</span>
+                    <button
+                      className="page-btn"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      ›
+                    </button>
+                    <button
+                      className="page-btn"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                    >
+                      »
+                    </button>
+                  </div>
+                  <select
+                    className="page-size-select"
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value={50}>50 条/页</option>
+                    <option value={100}>100 条/页</option>
+                    <option value={200}>200 条/页</option>
+                    <option value={500}>500 条/页</option>
+                    <option value={1000}>1000 条/页</option>
+                  </select>
+                </div>
+              )}
             </div>
           )}
         </section>

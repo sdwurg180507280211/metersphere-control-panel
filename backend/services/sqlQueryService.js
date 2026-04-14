@@ -46,8 +46,9 @@ async function executeQuery(sql, timeout = 30000, limit = 1000) {
   const pool = createPool();
   const startTime = Date.now();
 
-  // 自动注入 LIMIT
-  if (!/LIMIT\s+\d+/i.test(sql)) {
+  // 仅对 SELECT 查询自动注入 LIMIT
+  const isSelect = /^\s*SELECT\s/i.test(sql);
+  if (isSelect && !/LIMIT\s+\d+/i.test(sql)) {
     sql = `${sql} LIMIT ${limit}`;
   }
 
