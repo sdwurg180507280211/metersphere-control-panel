@@ -82,17 +82,14 @@ function BuildTab({ searchInputRef }) {
     return () => window.removeEventListener('buildComplete', handleBuildComplete)
   }, [])
 
-  const isBuilding = activeBuilds.some((build) => build.status === 'running')
-  const buildCount = activeBuilds.length
-  const successCount = activeBuilds.filter((build) => build.status === 'success').length
-  const failedCount = activeBuilds.filter((build) => build.status === 'failed').length
 
   const handleBuildClick = useCallback((moduleId) => {
     const module = modules.find((item) => item.id === moduleId)
     if (!module) return
 
-    if (isBuilding) {
-      toast.error('已有构建任务进行中，请等待完成')
+    const isBuildingThis = activeBuilds.some(b => b.moduleId === moduleId && b.status === 'running')
+    if (isBuildingThis) {
+      toast.error('该模块已有构建任务进行中，请等待完成')
       return
     }
 
@@ -101,7 +98,7 @@ function BuildTab({ searchInputRef }) {
       moduleId,
       moduleName: module.name
     })
-  }, [isBuilding, modules])
+  }, [activeBuilds, modules])
 
   const handleConfirmBuild = useCallback(async () => {
     const { moduleId } = confirmDialog
@@ -310,7 +307,7 @@ function BuildTab({ searchInputRef }) {
                               <button
                                 className="btn-dev-server btn-start"
                                 onClick={() => handleStartDevServer(module.id)}
-                                disabled={isLoading || isBuilding}
+                                disabled={isLoading || isBuildingThis}
                                 style={{ width: '100%' }}
                               >
                                 {isLoading ? '启动中...' : '启动开发服务器'}
@@ -339,10 +336,10 @@ function BuildTab({ searchInputRef }) {
                             <button
                               className="btn-dev-server btn-start"
                               onClick={() => handleBuildClick(module.id)}
-                              disabled={isBuilding || isRunningDev}
+                              disabled={isBuildingThis}
                               style={{ width: '100%' }}
                             >
-                              构建生产版本
+                              {isRunningDev ? '构建（开发服务器保持运行）' : '构建生产版本'}
                             </button>
                           </div>
                         </div>
