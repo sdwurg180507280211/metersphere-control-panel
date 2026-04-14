@@ -156,16 +156,32 @@ class PackageTaskService {
     };
 
     logger.broadcast('\n========== 开始执行 MeterSphere 打包 ==========', 'package');
-    logger.broadcast(`脚本路径: ${options.scriptPath}`, 'package');
-    logger.broadcast(`目标服务: ${options.services.join(', ')}`, 'package');
-    for (const [serviceId, version] of Object.entries(options.serviceImageVersions || {})) {
-      logger.broadcast(`  - ${serviceId}: ${version}`, 'package');
-    }
-    logger.broadcast(`并行构建: ${options.parallelBuild} / 最大线程: ${options.maxJobs}`, 'package');
+    const packageCmd = `${options.scriptPath} ${options.services.join(' ')}`;
+    logger.broadcastCommand(packageCmd, 'package');
+
+    // 有实质意义的外部命令，才作为 CMD 级别显示
+    // 也匹配 if !、time、nice 等前缀包装的命令
+    const REAL_COMMAND = /^(?:if ! |time |nice |ionice |sudo |nohup |setsid |eval |exec )*(mvn|maven|docker|npm|npx|yarn|pnpm|git|curl|wget|tar|zip|unzip|cp|mv|rm|mkdir|chmod|chown|ssh|scp|rsync|java|javac|javap|gradle|make|cmake|gcc|g\+\+|podman|buildah|skopeo|crane|helm|kubectl|aws|az|gcloud|s2i)\b/;
 
     const child = packageService.spawnPackageProcess(options, {
       onStdout: (message) => logger.broadcast(message, 'package'),
-      onStderr: (message) => logger.broadcast(message, 'package')
+      onStderr: (message) => {
+        const lines = message.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('+ ') || trimmed.startsWith('++ ')) {
+            const cmd = trimmed.replace(/^\++\s*/, '');
+            // 变量赋值 (VAR=...) 和非外部命令 → 普通日志
+            if (/^[A-Z_][A-Z_0-9]*=/.test(cmd) || !REAL_COMMAND.test(cmd)) {
+              logger.broadcast(line, 'package');
+            } else {
+              logger.broadcastCommand(cmd, 'package');
+            }
+          } else if (trimmed) {
+            logger.broadcast(line, 'package');
+          }
+        }
+      }
     });
 
     await jobService.updateJob(job.jobId, {

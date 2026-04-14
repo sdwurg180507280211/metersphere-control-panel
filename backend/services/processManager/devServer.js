@@ -216,7 +216,7 @@ module.exports = function applyDevServer(proto) {
     }
 
     const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
-    const fullCommand = `${npmCommand} ${npmArgsPrefix.join(' ')} run ${devScript}`;
+    const fullCommand = `cd ${moduleConfig.frontendPath} && ${npmCommand} ${npmArgsPrefix.join(' ')} run ${devScript}`;
     logger.broadcastCommand(fullCommand, 'devserver', moduleId);
 
     return new Promise((resolve) => {

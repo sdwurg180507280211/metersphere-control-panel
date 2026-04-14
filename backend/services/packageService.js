@@ -144,8 +144,10 @@ function serviceIdToEnvKey(serviceId) {
 function buildPackageEnvironment(options) {
   // IMAGE_VERSION 仍传递（取第一个服务版本），用于脚本全局 fallback 兼容
   const firstVersion = Object.values(options.serviceImageVersions || {})[0] || packageConfig.DEFAULT_SEED_VERSION;
+  const resolvedConfig = getResolvedConfig();
   const env = {
     ...process.env,
+    PROJECT_PATH: resolvedConfig.projectRoot || '',
     IMAGE_VERSION: firstVersion,
     PARALLEL_BUILD: String(options.parallelBuild),
     MAX_JOBS: String(options.maxJobs),
@@ -163,11 +165,34 @@ function buildPackageEnvironment(options) {
     }
   }
 
+  // 传递模块列表，供脚本动态解析（格式: "module1:path1,module2:path2"）
+  const services = resolvedConfig.services || {};
+  const moduleList = Object.entries(services)
+    .map(([id, svc]) => {
+      // 从 pom 路径推导模块路径，如 "api-test/backend/pom.xml" -> "api-test"
+      const pom = svc.pom || '';
+      const modulePath = pom.replace(/\/backend\/pom\.xml$/, '').replace(/\/pom\.xml$/, '') || id;
+      return `${id}:${modulePath}`;
+    })
+    .join(',');
+  if (moduleList) {
+    env.MODULE_LIST = moduleList;
+    // 简单模块（无 backend 子目录）：从 pom 路径判断
+    const simpleModules = Object.entries(services)
+      .filter(([, svc]) => svc.pom && !svc.pom.includes('/backend/'))
+      .map(([id]) => id)
+      .join(',');
+    if (simpleModules) {
+      env.SIMPLE_MODULE_LIST = simpleModules;
+    }
+  }
+
   return env;
 }
 
 function spawnPackageProcess(options, hooks = {}) {
-  const child = spawn(options.scriptPath, options.services, {
+  const args = ['-x', options.scriptPath, ...options.services];
+  const child = spawn('bash', args, {
     cwd: path.dirname(options.scriptPath),
     env: buildPackageEnvironment(options),
     stdio: ['ignore', 'pipe', 'pipe']

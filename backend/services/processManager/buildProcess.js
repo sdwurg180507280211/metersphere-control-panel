@@ -208,7 +208,7 @@ module.exports = function applyBuildProcess(proto) {
         logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
 
         const fullArgs = [...npmArgsPrefix, installCommand];
-        logger.broadcastCommand(`${npmCommand} ${fullArgs.join(' ')}`, 'build');
+        logger.broadcastCommand(`cd ${moduleConfig.frontendPath} && ${npmCommand} ${fullArgs.join(' ')}`, 'build');
 
         await this._runCommandWithProgress({
           command: npmCommand,

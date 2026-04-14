@@ -87,7 +87,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const compileArgs = ['-f', serviceConfig.pom, '-DskipTests', 'compile'];
     logger.broadcast(`
 ========== 编译 ${serviceConfig.name} ==========`, 'service', serviceId);
-    logger.broadcastCommand(`${mavenCommand} ${compileArgs.join(' ')}`, 'service', serviceId);
+    logger.broadcastCommand(`cd ${this._getProjectRoot()} && ${mavenCommand} ${compileArgs.join(' ')}`, 'service', serviceId);
 
     await this._runCommand({
       command: mavenCommand,
@@ -136,7 +136,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }, { serviceConfig });
 
     const mavenCommand = this._resolveMavenCommand();
-    const startCmd = `${mavenCommand} -f ${serviceConfig.pom} clean spring-boot:run`;
+    const startCmd = `cd ${this._getProjectRoot()} && ${mavenCommand} -f ${serviceConfig.pom} clean spring-boot:run`;
     logger.broadcast(`
 ========== 启动 ${serviceConfig.name} ==========`, 'service', serviceId);
 
