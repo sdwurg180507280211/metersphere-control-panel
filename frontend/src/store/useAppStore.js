@@ -661,6 +661,7 @@ function appendLogChunk(state, type, logData) {
 // 从文本检测日志级别（前端回退处理）
 function detectLogLevel(text) {
   if (!text) return 'info'
+  if (text.match(/^\[?\d{2}:\d{2}:\d{2}\]?\s*\$\s/) || text.startsWith('$ ') || text.startsWith('▶ ')) return 'cmd'
   const upper = text.toUpperCase()
   if (upper.includes('ERROR')) return 'error'
   if (upper.includes('WARN')) return 'warn'

@@ -15,6 +15,8 @@ const LOG_PATTERNS = {
   WITH_THREAD: /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[.,]?\d*)\s+\[.*?\]\s+(ERROR|WARN|WARNING|INFO|DEBUG|TRACE)\s+/i,
   // Log4j2 格式: [2026-03-08 01:13:45] [ERROR] ...
   LOG4J2: /^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[.,]?\d*)\]\s*\[(ERROR|WARN|WARNING|INFO|DEBUG|TRACE)\]/i,
+  // 命令行特征: $ ... 或 ▶ ...
+  CMD_PREFIX: /^\s*[$▶]\s+/,
   // 简单级别标记: ERROR: ... 或 [ERROR] ...
   SIMPLE: /^(\[)?(ERROR|WARN|WARNING|INFO|DEBUG|TRACE)(\])?:/i,
   // 异常堆栈特征行: at ... (File.java:123) 或 Caused by: ...
@@ -27,8 +29,9 @@ const LOG_LEVEL_PRIORITY = {
   'warn': 1,
   'warning': 1,
   'info': 2,
-  'debug': 3,
-  'trace': 4
+  'cmd': 3,
+  'debug': 4,
+  'trace': 5
 };
 
 class Logger {
@@ -105,8 +108,13 @@ class Logger {
     }
 
     // 尝试匹配各种日志格式
+    // 命令行检测
+    if (LOG_PATTERNS.CMD_PREFIX.test(line)) {
+      return { level: 'cmd', isStackTrace: false };
+    }
+
     for (const [patternName, pattern] of Object.entries(LOG_PATTERNS)) {
-      if (patternName === 'STACK_TRACE') continue;
+      if (patternName === 'STACK_TRACE' || patternName === 'CMD_PREFIX') continue;
       
       const match = line.match(pattern);
       if (match) {
@@ -414,6 +422,49 @@ class Logger {
     });
     
     return files.sort((a, b) => b.mtime - a.mtime);
+  }
+
+  /**
+   * 广播命令行日志（自动标记为 cmd 级别）
+   * @param {string} command - 执行的命令字符串
+   * @param {string} type - 日志类型 (service/build/devserver/package)
+   * @param {string} serviceId - 服务标识
+   */
+  broadcastCommand(command, type = 'service', serviceId = null) {
+    const prefixedCommand = command.startsWith('$ ') || command.startsWith('▶ ') ? command : `$ ${command}`;
+    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    const timestampedMessage = `[${timestamp}] ${prefixedCommand}`;
+
+    const logData = {
+      message: timestampedMessage,
+      type,
+      timestamp: new Date().toISOString(),
+      serviceId: serviceId || 'unknown',
+      lines: [{
+        text: timestampedMessage,
+        level: 'cmd',
+        isStackTrace: false,
+        isEmpty: false
+      }]
+    };
+
+    this.logClients.forEach((client) => {
+      try {
+        client.write(`data: ${JSON.stringify(logData)}\n\n`);
+      } catch (error) {
+        // ignore disconnected SSE clients
+      }
+    });
+
+    if (websocketService && websocketService.broadcastLog) {
+      try {
+        websocketService.broadcastLog(type, logData);
+      } catch (error) {
+        // ignore websocket availability issues
+      }
+    }
+
+    this.writeToFile(timestampedMessage, type);
   }
 
   /**

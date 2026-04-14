@@ -87,7 +87,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const compileArgs = ['-f', serviceConfig.pom, '-DskipTests', 'compile'];
     logger.broadcast(`
 ========== 编译 ${serviceConfig.name} ==========`, 'service', serviceId);
-    logger.broadcast(`执行命令: ${mavenCommand} ${compileArgs.join(' ')}`, 'service', serviceId);
+    logger.broadcastCommand(`${mavenCommand} ${compileArgs.join(' ')}`, 'service', serviceId);
 
     await this._runCommand({
       command: mavenCommand,
@@ -136,9 +136,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }, { serviceConfig });
 
     const mavenCommand = this._resolveMavenCommand();
+    const startCmd = `${mavenCommand} -f ${serviceConfig.pom} clean spring-boot:run`;
     logger.broadcast(`
 ========== 启动 ${serviceConfig.name} ==========`, 'service', serviceId);
-    logger.broadcast(`执行命令: ${mavenCommand} -f ${serviceConfig.pom} spring-boot:run`, 'service', serviceId);
 
     const logDir = path.join(__dirname, '../../../logs');
     if (!fs.existsSync(logDir)) {
@@ -146,7 +146,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
-    const errorFileOpt = `-XX:ErrorFile="${errorFilePath}"`;
+    const errorFileOpt = `-XX:ErrorFile=${errorFilePath}`;
 
     // Build JAVA_TOOL_OPTIONS: env base + config jvmOptions + per-service override + error file
     const resolvedConfig = this._getRuntimeConfig();
@@ -160,7 +160,13 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       errorFileOpt
     ].filter(Boolean).join(' ').trim();
 
-    const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'spring-boot:run'], {
+    if (javaToolOptions) {
+      logger.broadcastCommand(`JAVA_TOOL_OPTIONS="${javaToolOptions}" ${startCmd}`, 'service', serviceId);
+    } else {
+      logger.broadcastCommand(startCmd, 'service', serviceId);
+    }
+
+    const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'clean', 'spring-boot:run'], {
       cwd: this._getProjectRoot(),
       detached: process.platform !== 'win32',
       env: {
@@ -230,6 +236,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       }, { serviceConfig });
       return { success: true, method: 'none', phase: options.finalPhase || 'stopped' };
     }
+
+    const pids = [...pidCandidates.values()].map(({ pid, sources }) => `${pid}(${[...sources].join('/')})`).join(', ');
+    logger.broadcastCommand(`kill ${serviceConfig.name} [${pids}]`, 'service', serviceId);
 
     for (const { pid } of pidCandidates.values()) {
       await this._terminateProcess(pid);

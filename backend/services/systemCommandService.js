@@ -24,6 +24,7 @@ class SystemCommandService {
     }
 
     logger.broadcast('\n========== 执行系统 msctl reload ==========', 'service');
+    logger.broadcastCommand('sudo -S -k -p "" msctl reload', 'service');
 
     return new Promise((resolve, reject) => {
       const child = spawn('sudo', ['-S', '-k', '-p', '', 'msctl', 'reload'], {
@@ -160,10 +161,7 @@ class SystemCommandService {
     ];
 
     logger.broadcast('\n========== 建立 SSH 反向隧道 ==========', 'service');
-    logger.broadcast(`目标: ${REMOTE_USER}@${REMOTE_HOST}`, 'service');
-    ports.forEach(({ remotePort, localPort }) => {
-      logger.broadcast(`  端口映射: 远程:${remotePort} → 本地:${localPort}`, 'service');
-    });
+    logger.broadcastCommand(`ssh ${sshArgs.join(' ')}`, 'service');
 
     return new Promise((resolve, reject) => {
       // 直接启动 ssh，不使用 nohup/setsid 的 shell 包装
@@ -255,6 +253,7 @@ class SystemCommandService {
    */
   async stopTunnel() {
     logger.broadcast('\n========== 停止 SSH 反向隧道 ==========', 'service');
+    logger.broadcastCommand(`pkill -f ssh.*${escapedHost}`, 'service');
 
     return new Promise((resolve, reject) => {
       const resolvedConfig = configManager.getResolvedConfig();

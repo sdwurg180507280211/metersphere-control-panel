@@ -208,7 +208,7 @@ module.exports = function applyBuildProcess(proto) {
         logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
 
         const fullArgs = [...npmArgsPrefix, installCommand];
-        logger.broadcast(`${npmCommand} ${fullArgs.join(' ')}`, 'build');
+        logger.broadcastCommand(`${npmCommand} ${fullArgs.join(' ')}`, 'build');
 
         await this._runCommandWithProgress({
           command: npmCommand,
@@ -228,8 +228,7 @@ module.exports = function applyBuildProcess(proto) {
       await buildProgressService.updateStep(buildId, 2, 'running', 0, '开始编译...');
 
       const buildArgs = [...npmArgsPrefix, 'run', 'build'];
-      logger.broadcast(`cd ${moduleConfig.frontendPath}`, 'build');
-      logger.broadcast(`${npmCommand} ${buildArgs.join(' ')}`, 'build');
+      logger.broadcastCommand(`cd ${moduleConfig.frontendPath} && ${npmCommand} ${buildArgs.join(' ')}`, 'build');
 
       await this._runCommandWithProgress({
         command: npmCommand,

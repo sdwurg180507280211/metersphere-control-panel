@@ -12,8 +12,9 @@ const LOG_LEVEL_PRIORITY = {
   'error': 0,
   'warn': 1,
   'info': 2,
-  'debug': 3,
-  'trace': 4
+  'cmd': 3,
+  'debug': 4,
+  'trace': 5
 }
 
 // 本地过滤函数
@@ -22,20 +23,27 @@ function filterLogLines(lines, level, searchTerm) {
 
   // 处理带级别信息的日志行对象
   if (level !== 'all') {
-    const targetPriority = LOG_LEVEL_PRIORITY[level]
-    nextLines = nextLines.filter((line) => {
-      // 如果是对象格式（新格式）
-      if (typeof line === 'object' && line.level) {
-        const linePriority = LOG_LEVEL_PRIORITY[line.level] ?? 2
-        return linePriority <= targetPriority
-      }
-      // 如果是字符串格式（旧格式），回退到字符串匹配
-      const lineStr = String(line)
-      if (level === 'error') return lineStr.includes('ERROR') || lineStr.includes('✗') || lineStr.includes('失败')
-      if (level === 'warn') return lineStr.includes('WARN') || lineStr.includes('warning')
-      if (level === 'info') return !lineStr.includes('ERROR') && !lineStr.includes('WARN')
-      return true
-    })
+    // CMD 级别只显示命令行，不按优先级累积
+    if (level === 'cmd') {
+      nextLines = nextLines.filter((line) => {
+        if (typeof line === 'object' && line.level) return line.level === 'cmd'
+        const lineStr = String(line)
+        return lineStr.startsWith('$ ') || lineStr.startsWith('▶ ')
+      })
+    } else {
+      const targetPriority = LOG_LEVEL_PRIORITY[level]
+      nextLines = nextLines.filter((line) => {
+        if (typeof line === 'object' && line.level) {
+          const linePriority = LOG_LEVEL_PRIORITY[line.level] ?? 2
+          return linePriority <= targetPriority
+        }
+        const lineStr = String(line)
+        if (level === 'error') return lineStr.includes('ERROR') || lineStr.includes('✗') || lineStr.includes('失败')
+        if (level === 'warn') return lineStr.includes('WARN') || lineStr.includes('warning')
+        if (level === 'info') return !lineStr.includes('ERROR') && !lineStr.includes('WARN') && !lineStr.startsWith('$ ')
+        return true
+      })
+    }
   }
 
   if (searchTerm) {
@@ -54,6 +62,7 @@ const LOG_LEVEL_CONFIG = {
   error: { label: 'ERROR', color: '#ff4d4f', bgColor: '#fff1f0', borderColor: '#ffccc7' },
   warn: { label: 'WARN', color: '#faad14', bgColor: '#fffbe6', borderColor: '#ffe58f' },
   info: { label: 'INFO', color: '#52c41a', bgColor: 'transparent', borderColor: 'transparent' },
+  cmd: { label: 'CMD', color: '#36cfc9', bgColor: '#e6fffb', borderColor: '#87e8de' },
   debug: { label: 'DEBUG', color: '#8c8c8c', bgColor: '#f5f5f5', borderColor: '#d9d9d9' },
   trace: { label: 'TRACE', color: '#bfbfbf', bgColor: 'transparent', borderColor: 'transparent' },
   separator: { label: '', color: '#1890ff', bgColor: '#e6f7ff', borderColor: '#91d5ff' },
@@ -268,6 +277,32 @@ function LogViewer({ type, searchInputRef }) {
       )
     }
 
+    // CMD 行特殊处理：显示 $ 前缀
+    if (level === 'cmd') {
+      const cmdConfig = LOG_LEVEL_CONFIG.cmd;
+      const cmdText = text.replace(/^\[\d{2}:\d{2}:\d{2}\]\s*\$\s*/, '$ ');
+      return (
+        <div
+          key={`${startIndex + index}-${text.slice(0, 50)}`}
+          className="log-line log-line-cmd"
+          style={{
+            color: cmdConfig.color,
+            backgroundColor: cmdConfig.bgColor,
+            borderLeft: `3px solid ${cmdConfig.borderColor}`,
+            paddingLeft: '8px'
+          }}
+        >
+          <span className="log-level-badge" style={{
+            backgroundColor: cmdConfig.borderColor,
+            color: cmdConfig.color
+          }}>
+            {cmdConfig.label}
+          </span>
+          <span className="log-line-content" style={{ fontFamily: 'monospace' }}>{highlightSearchTerm(cmdText, searchTerm)}</span>
+        </div>
+      );
+    }
+
     // 普通日志行
     const levelConfig = LOG_LEVEL_CONFIG[level] || LOG_LEVEL_CONFIG.info
     
@@ -318,6 +353,7 @@ function LogViewer({ type, searchInputRef }) {
             <option value="error">错误 (ERROR)</option>
             <option value="warn">警告 (WARN)</option>
             <option value="info">信息 (INFO)</option>
+            <option value="cmd">命令 (CMD)</option>
             <option value="debug">调试 (DEBUG)</option>
           </select>
 

@@ -216,6 +216,8 @@ module.exports = function applyDevServer(proto) {
     }
 
     const moduleInfo = { id: moduleConfig.id, name: moduleConfig.name, port: devPort };
+    const fullCommand = `${npmCommand} ${npmArgsPrefix.join(' ')} run ${devScript}`;
+    logger.broadcastCommand(fullCommand, 'devserver', moduleId);
 
     return new Promise((resolve) => {
       const child = spawn(npmCommand, [...npmArgsPrefix, 'run', devScript], {
@@ -265,6 +267,7 @@ module.exports = function applyDevServer(proto) {
   };
 
   proto.stopDevServer = async function(moduleId) {
+    logger.broadcastCommand(`stop dev-server ${moduleId}`, 'devserver', moduleId);
     if (!moduleId && devServerProcesses.size > 0) {
       moduleId = devServerProcesses.keys().next().value;
     }
