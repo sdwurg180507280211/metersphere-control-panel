@@ -166,7 +166,7 @@ function normalizeWaifuConfig(rawConfig = {}) {
     : {};
 
   return {
-    enabled: normalizeBoolean(config.enabled, true),
+    enabled: normalizeBoolean(config.enabled, false),
     apiKey: normalizeString(config.apiKey, ''),
     baseUrl: normalizeString(config.baseUrl, ''),
     model: normalizeString(config.model, 'qwen3.5-plus'),

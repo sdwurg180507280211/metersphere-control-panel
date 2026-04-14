@@ -460,21 +460,32 @@ function ConfigTab() {
         <ConfigField label="启用看板娘" path="waifu.enabled" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="关闭后需应用配置才能生效，页面会刷新">
           <label className="config-switch">
             <input type="checkbox" checked={draft.waifu?.enabled !== false} onChange={e => updateDraft('waifu.enabled', e.target.checked)} />
+            <span className="slider round" />
           </label>
         </ConfigField>
+      </div>
 
+      <div className="config-form-grid" style={{ opacity: draft.waifu?.enabled === false ? 0.5 : 1, transition: 'opacity 0.2s' }}>
         <ConfigField label="AI 对话模型" path="waifu.model" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="看板娘 AI 聊天使用的语言模型">
-          <input value={draft.waifu?.model ?? ''} onChange={e => updateDraft('waifu.model', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="qwen3.5-plus" />
+          <input value={draft.waifu?.model ?? ''} onChange={e => updateDraft('waifu.model', e.target.value)} placeholder="qwen3.5-plus" />
         </ConfigField>
 
-        <ConfigField label="AI API Key" path="waifu.apiKey" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="大模型服务的 API Key">
-          <input type="password" value={draft.waifu?.apiKey ?? ''} onChange={e => updateDraft('waifu.apiKey', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="sk-..." />
+        <ConfigField label="AI API Key" path="waifu.apiKey" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="大模型服务的 API Key，启用看板娘聊天时必填">
+          <input type="password" value={draft.waifu?.apiKey ?? ''} onChange={e => updateDraft('waifu.apiKey', e.target.value)} placeholder="sk-..." />
         </ConfigField>
 
-        <ConfigField label="AI API Base URL" path="waifu.baseUrl" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="自定义 API 端点，留空使用默认">
-          <input value={draft.waifu?.baseUrl ?? ''} onChange={e => updateDraft('waifu.baseUrl', e.target.value)} disabled={draft.waifu?.enabled === false} placeholder="https://api.example.com/v1" />
+        <ConfigField label="AI API Base URL" path="waifu.baseUrl" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="自定义 API 端点，留空使用默认（通义千问）">
+          <input value={draft.waifu?.baseUrl ?? ''} onChange={e => updateDraft('waifu.baseUrl', e.target.value)} placeholder="https://api.example.com/v1" />
+        </ConfigField>
+
+        <ConfigField label="系统提示词" path="waifu.systemPrompt" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="自定义看板娘角色设定，留空使用默认">
+          <textarea value={draft.waifu?.systemPrompt ?? ''} onChange={e => updateDraft('waifu.systemPrompt', e.target.value)} placeholder="你是一个名为小梦的看板娘..." rows={3} style={{ width: '100%', resize: 'vertical' }} />
         </ConfigField>
       </div>
+
+      {draft.waifu?.enabled !== false && !draft.waifu?.apiKey && (
+        <p className="config-section-subtitle" style={{ color: '#faad14', marginTop: '4px' }}>提示：AI 聊天功能需要配置 API Key 才能使用</p>
+      )}
     </div>
   )
 

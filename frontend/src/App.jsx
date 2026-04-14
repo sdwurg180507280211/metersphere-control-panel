@@ -99,7 +99,7 @@ function App() {
     const live2dPlugin = getPlugin('live2d')
     if (!live2dPlugin) return
 
-    const waifuEnabled = resolved?.waifu?.enabled !== false
+    const waifuEnabled = resolved?.waifu?.enabled === true
     if (waifuEnabled && !live2dPlugin.enabled) {
       live2dPlugin.activate().then(() => {
         setWaifuReady(true)
