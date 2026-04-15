@@ -175,6 +175,21 @@ function ServicesTab({ searchInputRef }) {
     message: ''
   })
   const [tunnelDialogOpen, setTunnelDialogOpen] = useState(false)
+  const [tunnelRunning, setTunnelRunning] = useState(false)
+
+  // 轮询 SSH 隧道状态
+  useEffect(() => {
+    let mounted = true
+    const check = () => {
+      fetch('/api/services/tunnel/status')
+        .then(r => r.json())
+        .then(d => { if (mounted && d.success) setTunnelRunning(d.data.status === 'RUNNING') })
+        .catch(() => {})
+    }
+    check()
+    const interval = setInterval(check, 5000)
+    return () => { mounted = false; clearInterval(interval) }
+  }, [])
 
   useEffect(() => {
     const loadData = async () => {
@@ -386,9 +401,9 @@ function ServicesTab({ searchInputRef }) {
           <div className="card-header">
             <div className="batch-actions">
               <Tooltip content={`建立 SSH 反向隧道到 ${resolved?.tunnel?.remoteHost || '8.152.216.176'}`} position="bottom">
-                <button className="btn-batch btn-tunnel" onClick={() => setTunnelDialogOpen(true)}>
+                <button className={`btn-batch btn-tunnel${tunnelRunning ? ' tunnel-active' : ''}`} onClick={() => setTunnelDialogOpen(true)}>
                   <span className="btn-icon-text">SSH</span>
-                  隧道
+                  {tunnelRunning ? '隧道已连接' : '隧道'}
                 </button>
               </Tooltip>
               <Tooltip content="启动所有服务" position="bottom">
