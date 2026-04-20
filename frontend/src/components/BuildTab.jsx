@@ -32,16 +32,14 @@ function BuildTab({ searchInputRef }) {
         const data = await res.json()
         if (data.success && data.data) {
           const newRunningModules = new Map()
-          // 兼容旧版单模块返回格式
-          if (data.data.module) {
-            if (data.data.running && data.data.module) {
-              newRunningModules.set(data.data.module.id, data.data.module)
-            }
-          } else if (data.data.runningModules) {
-            // 新版多模块返回格式
+          // 优先使用多模块返回格式
+          if (data.data.runningModules) {
             Object.entries(data.data.runningModules).forEach(([id, module]) => {
               newRunningModules.set(parseInt(id) || id, module)
             })
+          } else if (data.data.module && data.data.running) {
+            // 兼容旧版单模块返回格式
+            newRunningModules.set(data.data.module.id, data.data.module)
           }
 
           setDevServers(prev => {

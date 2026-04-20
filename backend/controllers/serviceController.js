@@ -265,7 +265,7 @@ const serviceController = {
       await jobService.startJob(job.jobId, {
         stage: 'building',
         progress: 10,
-        message: '正在构建 SDK (mvn install -pl framework/sdk-parent -DskipTests)'
+        message: '正在构建 SDK (mvn clean install -pl framework/sdk-parent -DskipTests)'
       });
 
       res.status(202).json({
@@ -278,9 +278,11 @@ const serviceController = {
       (async () => {
         try {
           const mavenCommand = processManager._resolveMavenCommand();
+          const args = ['clean', 'install', '-pl', 'framework/sdk-parent', '-DskipTests', '-am'];
+          logger.broadcastCommand(`${mavenCommand} ${args.join(' ')}`, 'service', 'sdk-build');
           const result = await processManager._runCommand({
             command: mavenCommand,
-            args: ['install', '-pl', 'framework/sdk-parent', '-DskipTests', '-am'],
+            args,
             cwd: projectRoot,
             logType: 'service',
             serviceId: 'sdk-build',
