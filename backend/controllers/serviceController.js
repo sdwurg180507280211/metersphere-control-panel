@@ -265,7 +265,7 @@ const serviceController = {
       await jobService.startJob(job.jobId, {
         stage: 'building',
         progress: 10,
-        message: '正在构建 SDK (mvn clean install -pl framework/sdk-parent -DskipTests)'
+        message: '正在构建 SDK (mvn install -N + mvn clean install -pl framework,...)'
       });
 
       res.status(202).json({
@@ -278,11 +278,30 @@ const serviceController = {
       (async () => {
         try {
           const mavenCommand = processManager._resolveMavenCommand();
-          const args = ['clean', 'install', '-pl', 'framework/sdk-parent', '-DskipTests', '-am'];
-          logger.broadcastCommand(`${mavenCommand} ${args.join(' ')}`, 'service', 'sdk-build');
+
+          // 第一步：安装根 POM（-N 只安装根，不递归子模块）
+          const rootArgs = ['install', '-N', '-DskipTests'];
+          logger.broadcastCommand(`${mavenCommand} ${rootArgs.join(' ')}`, 'service', 'sdk-build');
+          await processManager._runCommand({
+            command: mavenCommand,
+            args: rootArgs,
+            cwd: projectRoot,
+            logType: 'service',
+            serviceId: 'sdk-build',
+            env: process.env,
+            timeoutMs: 300000
+          });
+
+          // 第二步：构建 framework 及 sdk-parent 全部子模块
+          const sdkArgs = [
+            'clean', 'install',
+            '-pl', 'framework,framework/sdk-parent,framework/sdk-parent/domain,framework/sdk-parent/sdk,framework/sdk-parent/xpack-interface,framework/sdk-parent/jmeter',
+            '-DskipTests'
+          ];
+          logger.broadcastCommand(`${mavenCommand} ${sdkArgs.join(' ')}`, 'service', 'sdk-build');
           const result = await processManager._runCommand({
             command: mavenCommand,
-            args,
+            args: sdkArgs,
             cwd: projectRoot,
             logType: 'service',
             serviceId: 'sdk-build',
