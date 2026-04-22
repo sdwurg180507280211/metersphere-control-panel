@@ -44,6 +44,7 @@ class Logger {
     // 按级别分目录的路径
     this.errorLogDir = path.join(this.logDir, 'error');
     this.warnLogDir = path.join(this.logDir, 'warn');
+    this.cmdLogDir = path.join(this.logDir, 'cmd');
     
     // 确保所有日志目录存在
     this._ensureDirectories();
@@ -53,7 +54,7 @@ class Logger {
    * 确保日志目录结构存在
    */
   _ensureDirectories() {
-    [this.logDir, this.errorLogDir, this.warnLogDir].forEach(dir => {
+    [this.logDir, this.errorLogDir, this.warnLogDir, this.cmdLogDir].forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
@@ -324,7 +325,7 @@ class Logger {
    * @param {string} content - 日志内容
    */
   _writeToLevelFile(level, serviceId, date, content) {
-    const dir = level === 'error' ? this.errorLogDir : this.warnLogDir;
+    const dir = level === 'error' ? this.errorLogDir : level === 'cmd' ? this.cmdLogDir : this.warnLogDir;
     const logFile = path.join(dir, `${serviceId}-${date}.log`);
 
     // 确保目录存在（增强健壮性：即使目录被删除也能自动重建）
@@ -398,6 +399,9 @@ class Logger {
     if (!level || level === 'error') {
       dirs.push(this.errorLogDir);
     }
+    if (!level || level === 'cmd') {
+      dirs.push(this.cmdLogDir);
+    }
     if (!level || level === 'warn') {
       dirs.push(this.warnLogDir);
     }
@@ -414,7 +418,7 @@ class Logger {
             name: file,
             path: filePath,
             size: stats.size,
-            level: dir === this.errorLogDir ? 'error' : (dir === this.warnLogDir ? 'warn' : 'all'),
+            level: dir === this.errorLogDir ? 'error' : (dir === this.warnLogDir ? 'warn' : dir === this.cmdLogDir ? 'cmd' : 'all'),
             mtime: stats.mtime
           });
         }
@@ -463,6 +467,9 @@ class Logger {
         // ignore websocket availability issues
       }
     }
+
+    // 持久化到 cmd 级别日志文件
+    this._writeToLevelFile('cmd', serviceId || 'unknown', new Date().toISOString().split('T')[0], timestampedMessage + '\n');
 
     this.writeToFile(timestampedMessage, type);
   }

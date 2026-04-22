@@ -99,16 +99,14 @@ const logController = {
         return res.status(400).json({ success: false, error: '缺少 serviceId 参数' });
       }
       
-      if (!['error', 'warn'].includes(level)) {
-        return res.status(400).json({ success: false, error: 'level 必须是 error 或 warn' });
+      if (!['error', 'warn', 'cmd'].includes(level)) {
+        return res.status(400).json({ success: false, error: 'level 必须是 error、warn 或 cmd' });
       }
       
       // 确定日期，默认今天
       const targetDate = date || new Date().toISOString().split('T')[0];
-      const logFile = path.join(
-        level === 'error' ? logger.errorLogDir : logger.warnLogDir,
-        `${serviceId}-${targetDate}.log`
-      );
+      const levelDir = level === 'error' ? logger.errorLogDir : level === 'cmd' ? logger.cmdLogDir : logger.warnLogDir;
+      const logFile = path.join(levelDir, `${serviceId}-${targetDate}.log`);
       
       if (!fs.existsSync(logFile)) {
         return res.json({ 
@@ -153,10 +151,8 @@ const logController = {
       }
       
       const targetDate = date || new Date().toISOString().split('T')[0];
-      const logFile = path.join(
-        level === 'error' ? logger.errorLogDir : logger.warnLogDir,
-        `${serviceId}-${targetDate}.log`
-      );
+      const levelDir = level === 'error' ? logger.errorLogDir : level === 'cmd' ? logger.cmdLogDir : logger.warnLogDir;
+      const logFile = path.join(levelDir, `${serviceId}-${targetDate}.log`);
       
       if (!fs.existsSync(logFile)) {
         return res.status(404).json({ success: false, error: '日志文件不存在' });
@@ -165,6 +161,52 @@ const logController = {
       res.setHeader('Content-Type', 'text/plain');
       res.setHeader('Content-Disposition', `attachment; filename="${serviceId}-${level}-${targetDate}.log"`);
       res.sendFile(logFile);
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
+  /**
+   * 获取命令历史
+   */
+  getCommandHistory(req, res) {
+    try {
+      const { date, lines = 200 } = req.query;
+      const targetDate = date || new Date().toISOString().split('T')[0];
+      const cmdDir = logger.cmdLogDir;
+
+      if (!fs.existsSync(cmdDir)) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // 读取所有匹配日期的 cmd 日志文件
+      const cmdFiles = fs.readdirSync(cmdDir)
+        .filter(f => f.endsWith(`-${targetDate}.log`))
+        .sort();
+
+      if (cmdFiles.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      // 合并所有文件的命令行
+      const allLines = [];
+      for (const file of cmdFiles) {
+        const content = fs.readFileSync(path.join(cmdDir, file), 'utf8');
+        const fileLines = content.split('\n').filter(line => line.trim());
+        allLines.push(...fileLines);
+      }
+
+      const lastLines = allLines.slice(-parseInt(lines, 10));
+
+      res.json({
+        success: true,
+        data: lastLines,
+        meta: {
+          date: targetDate,
+          totalLines: allLines.length,
+          returnedLines: lastLines.length
+        }
+      });
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }

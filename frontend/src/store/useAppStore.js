@@ -83,6 +83,40 @@ export const useLogStore = create((set, get) => ({
   appendBuildLog: (message) => set((state) => appendLogChunk(state, 'build', message)),
   appendPackageLog: (message) => set((state) => appendLogChunk(state, 'package', message)),
 
+  loadCommandHistory: async () => {
+    try {
+      const res = await fetch('/api/logs/commands')
+      const data = await res.json()
+      if (data.success && data.data?.length > 0) {
+        const cmdLines = data.data.map(line => ({
+          text: line,
+          level: 'cmd',
+          isStackTrace: false,
+          isEmpty: false
+        }))
+        set((state) => {
+          // 将历史命令合并到各日志类型中（去重）
+          const mergeCmdHistory = (existingLines) => {
+            const existingCmdTexts = new Set(
+              existingLines.filter(l => typeof l === 'object' && l.level === 'cmd').map(l => l.text)
+            )
+            const newCmds = cmdLines.filter(l => !existingCmdTexts.has(l.text))
+            if (newCmds.length === 0) return existingLines
+            // 将历史命令按时间顺序插入（历史在前，实时在后）
+            return [...newCmds, ...existingLines]
+          }
+          return {
+            serviceLogLines: mergeCmdHistory(state.serviceLogLines),
+            buildLogLines: mergeCmdHistory(state.buildLogLines),
+            packageLogLines: mergeCmdHistory(state.packageLogLines)
+          }
+        })
+      }
+    } catch (e) {
+      console.error('加载命令历史失败:', e)
+    }
+  },
+
   clearServiceLogs: () => set((state) => ({
     serviceLogLines: [],
     logTails: { ...state.logTails, service: '' }

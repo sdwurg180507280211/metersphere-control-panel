@@ -380,6 +380,7 @@ export function useWebSocket() {
         fetchServicesRef.current()
         fetchPackageActiveTaskRef.current()
         fetchInfraStatusRef.current()
+        useLogStore.getState().loadCommandHistory()
 
         heartbeatTimerRef.current = setInterval(() => {
           if (socket.readyState === WebSocket.OPEN) {
