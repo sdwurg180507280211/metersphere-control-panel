@@ -500,6 +500,52 @@ class ProcessManager {
       .filter((pid) => !Number.isNaN(pid) && pid !== process.pid);
   }
 
+  /**
+   * 检查 PID 是否属于其他已追踪的服务
+   */
+  _isTrackedByOtherService(pid, excludeServiceId) {
+    for (const [svcId, svcInfo] of serviceProcesses.entries()) {
+      if (svcId === excludeServiceId) continue;
+      if (svcInfo.pid === pid) return svcId;
+    }
+    return null;
+  }
+
+  /**
+   * 检查 PID 是否属于其他已追踪的服务（包括子进程）
+   */
+  async _isOwnedByOtherService(pid, excludeServiceId) {
+    for (const [svcId, svcInfo] of serviceProcesses.entries()) {
+      if (svcId === excludeServiceId || !svcInfo.pid) continue;
+      if (svcInfo.pid === pid) return svcId;
+      if (await this._isProcessDescendantOf(svcInfo.pid, pid)) return svcId;
+    }
+    return null;
+  }
+
+  /**
+   * 获取进程命令行，用于验证 PID 归属
+   */
+  async _getProcessCmdline(pid) {
+    const stdout = await this._execFileSafe('ps', ['-p', String(pid), '-o', 'command=']);
+    return stdout.trim();
+  }
+
+  /**
+   * 验证 PID 是否属于目标服务（命令行包含 pom 路径或是其子进程）
+   */
+  async _isPidBelongsToService(pid, serviceConfig, trackedPid) {
+    // 如果是追踪的 PID 或其子进程，直接可信
+    if (trackedPid) {
+      if (pid === trackedPid) return true;
+      if (await this._isProcessDescendantOf(trackedPid, pid)) return true;
+    }
+    // 检查命令行是否包含 pom 路径
+    const cmdline = await this._getProcessCmdline(pid);
+    if (cmdline && serviceConfig.pom && cmdline.includes(serviceConfig.pom)) return true;
+    return false;
+  }
+
   async _terminateProcess(pid, options = {}) {
     if (!pid || !this._isProcessRunning(pid)) {
       return;

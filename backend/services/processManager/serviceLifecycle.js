@@ -200,6 +200,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }, { serviceConfig });
 
     const pidCandidates = new Map();
+    const skippedPids = [];
     const registerPid = (pid, source) => {
       if (!pid) {
         return;
@@ -223,8 +224,40 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       registerPid(pid, 'pom');
     }
 
-    for (const pid of await this._findPidsByPort(serviceConfig.port)) {
-      registerPid(pid, 'port');
+    // 对 port 来源的 PID 做归属验证，防止误杀其他服务
+    const portPids = await this._findPidsByPort(serviceConfig.port);
+    for (const pid of portPids) {
+      // 跳过已注册的 PID（tracked/pom 来源已验证）
+      if (pidCandidates.has(pid)) continue;
+
+      // 检查是否属于其他已追踪服务
+      const ownerServiceId = this._isTrackedByOtherService(pid, serviceId);
+      if (ownerServiceId) {
+        const ownerConfig = this._getServiceConfig(ownerServiceId);
+        skippedPids.push({ pid, reason: `属于 ${ownerConfig?.name || ownerServiceId}` });
+        continue;
+      }
+
+      // 验证命令行是否包含目标 pom，或是追踪进程的子进程
+      const belongs = await this._isPidBelongsToService(pid, serviceConfig, trackedPid);
+      if (belongs) {
+        registerPid(pid, 'port');
+      } else {
+        // 最后检查是否属于其他已追踪服务的子进程
+        const ownerByTree = await this._isOwnedByOtherService(pid, serviceId);
+        if (ownerByTree) {
+          const ownerConfig = this._getServiceConfig(ownerByTree);
+          skippedPids.push({ pid, reason: `属于 ${ownerConfig?.name || ownerByTree} 子进程` });
+        } else {
+          // 无法确认归属，保守跳过并记录警告
+          skippedPids.push({ pid, reason: '无法确认归属' });
+        }
+      }
+    }
+
+    if (skippedPids.length > 0) {
+      const skipInfo = skippedPids.map(({ pid, reason }) => `PID ${pid}(${reason})`).join(', ');
+      logger.broadcast(`跳过可能不属于本服务的进程: ${skipInfo}`, 'service', serviceId);
     }
 
     if (pidCandidates.size === 0) {
