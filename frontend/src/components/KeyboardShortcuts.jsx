@@ -79,15 +79,7 @@ function KeyboardShortcuts({ onSwitchTab, onRefresh, onClearLogs, onFocusSearch 
   }, [handleKeyDown])
 
   if (!visible) {
-    return (
-      <button 
-        className="keyboard-shortcuts-trigger" 
-        onClick={() => setVisible(true)}
-        title="快捷键帮助 (?)"
-      >
-        ⌨️
-      </button>
-    )
+    return null
   }
 
   return (
