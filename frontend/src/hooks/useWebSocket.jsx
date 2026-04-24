@@ -315,6 +315,28 @@ export function useWebSocket() {
     }
   }, [scheduleRefresh])
 
+  // SSH 隧道事件处理
+  const handleTunnelEvent = useCallback((data) => {
+    if (!data) return
+    const { event } = data
+    if (event === 'connected') {
+      if (data.reconnected) {
+        toast.success('SSH 隧道已自动重连')
+      }
+      window.dispatchEvent(new CustomEvent('tunnelStatusChange', { detail: 'RUNNING' }))
+    } else if (event === 'reconnecting') {
+      toast.loading(`SSH 隧道已断开，正在重连 (${data.attempt}/${data.maxRetries})...`, {
+        id: 'tunnel-reconnect',
+        duration: Math.min(data.delay + 1000, 30000)
+      })
+      window.dispatchEvent(new CustomEvent('tunnelStatusChange', { detail: 'RECONNECTING' }))
+    } else if (event === 'disconnected') {
+      toast.dismiss('tunnel-reconnect')
+      toast.error('SSH 隧道已断开，自动重连失败，请手动重连')
+      window.dispatchEvent(new CustomEvent('tunnelStatusChange', { detail: 'STOPPED' }))
+    }
+  }, [])
+
   // 重启服务
   const restartService = async (serviceId, serviceName) => {
     try {
@@ -374,7 +396,7 @@ export function useWebSocket() {
 
         socket.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['logs:service', 'logs:build', 'logs:package', 'build:progress', 'build:completed', 'build:batchCompleted', 'package:started', 'package:heartbeat', 'package:completed', 'package:failed', 'job:progress', 'job:completed', 'job:failed', 'infra:status', '*']
+          channels: ['logs:service', 'logs:build', 'logs:package', 'build:progress', 'build:completed', 'build:batchCompleted', 'package:started', 'package:heartbeat', 'package:completed', 'package:failed', 'job:progress', 'job:completed', 'job:failed', 'infra:status', 'tunnel:status', '*']
         }))
 
         fetchServicesRef.current()
@@ -436,6 +458,9 @@ export function useWebSocket() {
                   break
                 case 'infra:status':
                   setInfraStatusRef.current(data.data)
+                  break
+                case 'tunnel:status':
+                  handleTunnelEvent(data.data)
                   break
                 case 'package:started':
                 case 'package:heartbeat':

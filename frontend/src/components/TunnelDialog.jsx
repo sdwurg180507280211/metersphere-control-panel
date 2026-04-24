@@ -30,7 +30,7 @@ function TunnelDialog({ isOpen, onClose }) {
     }
   }, [isOpen])
 
-  // 打开时加载保存的配置并轮询状态
+  // 打开时加载保存的配置并轮询状态 + WebSocket 事件
   useEffect(() => {
     if (!isOpen) return
 
@@ -75,7 +75,16 @@ function TunnelDialog({ isOpen, onClose }) {
         .catch(() => {})
     }, 3000)
 
-    return () => clearInterval(interval)
+    // WebSocket 事件即时更新
+    const handleTunnelChange = (e) => {
+      setStatus(e.detail)
+    }
+    window.addEventListener('tunnelStatusChange', handleTunnelChange)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('tunnelStatusChange', handleTunnelChange)
+    }
   }, [isOpen])
 
   const updatePort = useCallback((index, field, value) => {
@@ -164,7 +173,7 @@ function TunnelDialog({ isOpen, onClose }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (status === 'RUNNING') {
+    if (status === 'RUNNING' || status === 'RECONNECTING') {
       handleStop()
     } else {
       handleStart()
@@ -174,6 +183,7 @@ function TunnelDialog({ isOpen, onClose }) {
   if (!isOpen) return null
 
   const isRunning = status === 'RUNNING'
+  const isReconnecting = status === 'RECONNECTING'
 
   return (
     <div className="tunnel-dialog-overlay" onClick={loading ? undefined : onClose}>
@@ -181,9 +191,9 @@ function TunnelDialog({ isOpen, onClose }) {
         <div className="tunnel-dialog-header">
           <span className="tunnel-dialog-icon">🔗</span>
           <h3>SSH 反向隧道</h3>
-          <span className={`tunnel-status-indicator ${isRunning ? 'running' : 'stopped'}`}>
+          <span className={`tunnel-status-indicator ${isRunning ? 'running' : isReconnecting ? 'reconnecting' : 'stopped'}`}>
             <span className="tunnel-status-dot" />
-            {isRunning ? '运行中' : '已停止'}
+            {isRunning ? '运行中' : isReconnecting ? '重连中' : '已停止'}
           </span>
         </div>
 
@@ -269,6 +279,10 @@ function TunnelDialog({ isOpen, onClose }) {
             {isRunning ? (
               <button className="btn-tunnel-stop" type="submit" disabled={loading}>
                 {loading ? '停止中...' : '断开隧道'}
+              </button>
+            ) : isReconnecting ? (
+              <button className="btn-tunnel-stop" type="submit" disabled={loading}>
+                {loading ? '停止中...' : '取消重连'}
               </button>
             ) : (
               <button className="btn-tunnel-start" type="submit" disabled={loading}>

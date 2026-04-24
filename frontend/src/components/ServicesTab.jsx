@@ -177,7 +177,7 @@ function ServicesTab({ searchInputRef }) {
   const [tunnelDialogOpen, setTunnelDialogOpen] = useState(false)
   const [tunnelRunning, setTunnelRunning] = useState(false)
 
-  // 轮询 SSH 隧道状态
+  // 轮询 SSH 隧道状态 + WebSocket 事件
   useEffect(() => {
     let mounted = true
     const check = () => {
@@ -188,7 +188,18 @@ function ServicesTab({ searchInputRef }) {
     }
     check()
     const interval = setInterval(check, 5000)
-    return () => { mounted = false; clearInterval(interval) }
+
+    const handleTunnelChange = (e) => {
+      if (!mounted) return
+      setTunnelRunning(e.detail === 'RUNNING')
+    }
+    window.addEventListener('tunnelStatusChange', handleTunnelChange)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+      window.removeEventListener('tunnelStatusChange', handleTunnelChange)
+    }
   }, [])
 
   useEffect(() => {

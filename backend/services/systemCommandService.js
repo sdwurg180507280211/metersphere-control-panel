@@ -2,11 +2,15 @@ const { spawn } = require('child_process');
 const logger = require('../utils/logger');
 const { createAppError } = require('../utils/errors');
 const configManager = require('./configManager');
+const websocketService = require('./websocketService');
 
 const COMMAND_TIMEOUT_MS = 30000;
 const INVALID_PASSWORD_PATTERN = /(sorry, try again|incorrect password|a password is required|no password was provided|incorrect password attempt)/i;
 const COMMAND_NOT_FOUND_PATTERN = /(msctl: command not found|command not found|sudo: msctl: command not found)/i;
 const MAX_OUTPUT_LENGTH = 1000;
+
+const TUNNEL_MAX_RETRIES = 5;
+const TUNNEL_RETRY_BASE_DELAY = 3000;
 
 function sanitizeOutput(output = '') {
   const normalized = String(output || '').trim();
@@ -17,7 +21,21 @@ function sanitizeOutput(output = '') {
   return `${normalized.slice(0, MAX_OUTPUT_LENGTH)}...`;
 }
 
+function broadcastTunnelEvent(event, data = {}) {
+  if (websocketService && websocketService.broadcast) {
+    websocketService.broadcast('tunnel:status', { event, ...data });
+  }
+}
+
 class SystemCommandService {
+  constructor() {
+    this._tunnelChild = null;
+    this._tunnelPorts = null;
+    this._tunnelRetryCount = 0;
+    this._tunnelRetryTimer = null;
+    this._tunnelIntentionalStop = false;
+    this._tunnelMonitorTimer = null;
+  }
   async reloadMsctl(password) {
     if (typeof password !== 'string' || password.length === 0) {
       throw createAppError(400, 'SUDO_PASSWORD_REQUIRED', '请输入管理员密码');
@@ -145,6 +163,15 @@ class SystemCommandService {
       throw createAppError(409, 'TUNNEL_ALREADY_RUNNING', 'SSH 隧道已在运行中');
     }
 
+    // 清理之前的状态
+    this._clearTunnelRetry();
+    this._tunnelIntentionalStop = false;
+    this._tunnelPorts = ports;
+
+    return this._doStartTunnel(ports, REMOTE_USER, REMOTE_HOST);
+  }
+
+  async _doStartTunnel(ports, remoteUser, remoteHost) {
     // 构建 -R 参数
     const reverseArgs = ports.flatMap(({ remotePort, localPort }) => [
       '-R', `${remotePort}:localhost:${localPort}`
@@ -157,15 +184,18 @@ class SystemCommandService {
       '-o', 'ExitOnForwardFailure=yes',
       '-N',
       ...reverseArgs,
-      `${REMOTE_USER}@${REMOTE_HOST}`
+      `${remoteUser}@${remoteHost}`
     ];
 
-    logger.broadcast('\n========== 建立 SSH 反向隧道 ==========', 'service');
+    const isReconnect = this._tunnelRetryCount > 0;
+    if (isReconnect) {
+      logger.broadcast(`\n========== 重连 SSH 隧道 (第 ${this._tunnelRetryCount} 次) ==========`, 'service');
+    } else {
+      logger.broadcast('\n========== 建立 SSH 反向隧道 ==========', 'service');
+    }
     logger.broadcastCommand(`ssh ${sshArgs.join(' ')}`, 'service');
 
     return new Promise((resolve, reject) => {
-      // 直接启动 ssh，不使用 nohup/setsid 的 shell 包装
-      // 让 Node.js 管理子进程，通过 detached 和 unref 让它在后台运行
       const child = spawn('ssh', sshArgs, {
         detached: true,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -211,23 +241,35 @@ class SystemCommandService {
       connectTimer = setTimeout(async () => {
         connectTimer = null;
         try {
-          // 检查进程是否仍在运行
           process.kill(child.pid, 0);
-          // 进程还在，让它脱离父进程继续运行
+          // 进程还在，保留引用并监听退出
+          this._tunnelChild = child;
+          this._tunnelRetryCount = 0; // 连接成功，重置重试计数
           child.unref();
-          logger.broadcast(`SSH 隧道已建立，PID: ${child.pid}`, 'service');
+
+          // 监听进程退出，触发自动重连
+          child.on('close', (code) => {
+            this._tunnelChild = null;
+            if (this._tunnelIntentionalStop) return;
+            this._handleTunnelExit(code, ports, remoteUser, remoteHost);
+          });
+
+          const msg = isReconnect
+            ? `SSH 隧道重连成功，PID: ${child.pid}`
+            : `SSH 隧道已建立，PID: ${child.pid}`;
+          logger.broadcast(msg, 'service');
+          broadcastTunnelEvent('connected', { pid: child.pid, reconnected: isReconnect });
           finishResolve({ pid: child.pid });
         } catch {
-          // 进程已退出，连接失败
           finishReject(createAppError(500, 'TUNNEL_CONNECT_FAILED',
             stderr.trim() || 'SSH 隧道连接失败，进程已退出'));
         }
       }, 3000);
 
       child.on('error', (error) => {
+        this._tunnelChild = null;
         if (error.code === 'ENOENT') {
-          finishReject(createAppError(500, 'SSH_NOT_FOUND',
-            '未找到 ssh 命令'));
+          finishReject(createAppError(500, 'SSH_NOT_FOUND', '未找到 ssh 命令'));
           return;
         }
         finishReject(createAppError(500, 'TUNNEL_EXEC_ERROR',
@@ -236,6 +278,7 @@ class SystemCommandService {
 
       child.on('close', (code) => {
         if (code !== 0 && !settled) {
+          this._tunnelChild = null;
           const output = stderr.trim();
           if (/permission denied|authentication failure/i.test(output)) {
             finishReject(createAppError(401, 'INVALID_SSH_PASSWORD', '远程主机密码错误'));
@@ -249,16 +292,59 @@ class SystemCommandService {
   }
 
   /**
+   * 处理隧道进程意外退出，尝试自动重连
+   */
+  _handleTunnelExit(exitCode, ports, remoteUser, remoteHost) {
+    this._tunnelRetryCount += 1;
+
+    if (this._tunnelRetryCount > TUNNEL_MAX_RETRIES) {
+      const msg = `SSH 隧道已断开，重连 ${TUNNEL_MAX_RETRIES} 次后仍失败，请手动重连`;
+      logger.broadcast(msg, 'service');
+      broadcastTunnelEvent('disconnected', { reason: 'max_retries_exceeded', exitCode });
+      this._tunnelRetryCount = 0;
+      return;
+    }
+
+    const delay = Math.min(TUNNEL_RETRY_BASE_DELAY * this._tunnelRetryCount, 30000);
+    const msg = `SSH 隧道已断开 (退出码: ${exitCode})，${delay / 1000} 秒后尝试第 ${this._tunnelRetryCount} 次重连...`;
+    logger.broadcast(msg, 'service');
+    broadcastTunnelEvent('reconnecting', { attempt: this._tunnelRetryCount, maxRetries: TUNNEL_MAX_RETRIES, delay, exitCode });
+
+    this._tunnelRetryTimer = setTimeout(async () => {
+      this._tunnelRetryTimer = null;
+      if (this._tunnelIntentionalStop) return;
+
+      try {
+        await this._doStartTunnel(ports, remoteUser, remoteHost);
+      } catch (error) {
+        // 重连失败，继续尝试或放弃
+        this._handleTunnelExit(1, ports, remoteUser, remoteHost);
+      }
+    }, delay);
+  }
+
+  _clearTunnelRetry() {
+    if (this._tunnelRetryTimer) {
+      clearTimeout(this._tunnelRetryTimer);
+      this._tunnelRetryTimer = null;
+    }
+    this._tunnelRetryCount = 0;
+  }
+
+  /**
    * 停止 SSH 反向隧道
    */
   async stopTunnel() {
     logger.broadcast('\n========== 停止 SSH 反向隧道 ==========', 'service');
-    logger.broadcastCommand(`pkill -f ssh.*${escapedHost}`, 'service');
+    this._tunnelIntentionalStop = true;
+    this._clearTunnelRetry();
+    this._tunnelChild = null;
 
     return new Promise((resolve, reject) => {
       const resolvedConfig = configManager.getResolvedConfig();
       const remoteHost = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
       const escapedHost = remoteHost.replace(/\./g, '\\.');
+      logger.broadcastCommand(`pkill -f ssh.*${escapedHost}`, 'service');
       const child = spawn('pkill', ['-f', `ssh.*${escapedHost}`], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
