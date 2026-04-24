@@ -18,7 +18,7 @@
   border-radius: 16px;
   width: 90%;
   max-width: 400px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   animation: scaleIn 0.2s ease-out;
 }

@@ -8,6 +8,7 @@ function ConfirmDialog({
   confirmText = '确认', 
   cancelText = '取消',
   type = 'warning',
+  children,
   onConfirm, 
   onCancel 
 }) {
@@ -51,6 +52,12 @@ function ConfirmDialog({
         {message && (
           <div className="confirm-dialog-body">
             <p>{message}</p>
+          </div>
+        )}
+
+        {children && (
+          <div className="confirm-dialog-body">
+            {children}
           </div>
         )}
         

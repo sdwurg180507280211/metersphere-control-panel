@@ -13,6 +13,7 @@ function BuildTab({ searchInputRef }) {
   const { modules, activeBuilds, fetchModules, fetchActiveBuilds, addActiveBuild } = useBuildStore()
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, moduleId: null, moduleName: '' })
+  const [forceInstall, setForceInstall] = useState(false)
   const [backendPrompt, setBackendPrompt] = useState({ isOpen: false })
   const [devServers, setDevServers] = useState({
     runningModules: new Map(), // key: moduleId, value: module info
@@ -96,6 +97,7 @@ function BuildTab({ searchInputRef }) {
       moduleId,
       moduleName: module.name
     })
+    setForceInstall(false)
   }, [activeBuilds, modules])
 
   const handleConfirmBuild = useCallback(async () => {
@@ -109,7 +111,7 @@ function BuildTab({ searchInputRef }) {
       const res = await fetch('/api/build/frontend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: moduleId })
+        body: JSON.stringify({ module: moduleId, forceInstall })
       })
 
       const data = await res.json()
@@ -137,7 +139,7 @@ function BuildTab({ searchInputRef }) {
     } catch (error) {
       toast.error(`网络错误: ${error.message}`)
     }
-  }, [confirmDialog, modules, addActiveBuild])
+  }, [confirmDialog, modules, addActiveBuild, forceInstall])
 
   const handleBuildBackend = useCallback(() => {
     setBackendPrompt({ isOpen: false })
@@ -367,7 +369,19 @@ function BuildTab({ searchInputRef }) {
         type="info"
         onConfirm={handleConfirmBuild}
         onCancel={() => setConfirmDialog({ isOpen: false, moduleId: null, moduleName: '' })}
-      />
+      >
+        <label className="build-force-install-option">
+          <input
+            type="checkbox"
+            checked={forceInstall}
+            onChange={e => setForceInstall(e.target.checked)}
+          />
+          <span className="build-force-install-text">强制重装依赖</span>
+          <Tooltip text="忽略现有依赖，强制 npm install">
+            <span className="build-force-install-hint">?</span>
+          </Tooltip>
+        </label>
+      </ConfirmDialog>
 
       <BackendBuildPromptDialog
         isOpen={backendPrompt.isOpen}

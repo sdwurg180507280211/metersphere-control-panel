@@ -50,9 +50,16 @@ module.exports = function applyBuildProcess(proto) {
     }
 
     const content = fs.readFileSync(fingerprintSource);
+    const { command: npmCommand } = this._resolveNpmCommand();
+    const hash = crypto.createHash('sha256')
+      .update(content)
+      .update(npmCommand)
+      .digest('hex');
+
     return {
       source: path.basename(fingerprintSource),
-      hash: crypto.createHash('sha256').update(content).digest('hex')
+      npmPath: npmCommand,
+      hash
     };
   };
 
@@ -91,6 +98,12 @@ module.exports = function applyBuildProcess(proto) {
       return { shouldInstall: true, reason: '未检测到 node_modules，需要先安装依赖' };
     }
 
+    // node_modules 存在但 .bin 缺失或为空，说明安装不完整
+    const binDir = path.join(frontendDir, 'node_modules', '.bin');
+    if (!fs.existsSync(binDir) || fs.readdirSync(binDir).length === 0) {
+      return { shouldInstall: true, reason: 'node_modules/.bin 缺失或为空，依赖安装不完整' };
+    }
+
     const fingerprint = this._computeDependencyFingerprint(frontendDir);
     if (!fingerprint) {
       return { shouldInstall: false, reason: '未检测到 lockfile，沿用现有 node_modules' };
@@ -102,8 +115,15 @@ module.exports = function applyBuildProcess(proto) {
       return { shouldInstall: false, reason: `已记录当前 ${fingerprint.source} 指纹，沿用现有 node_modules`, fingerprint };
     }
 
-    if (previousState.hash !== fingerprint.hash || previousState.source !== fingerprint.source) {
-      return { shouldInstall: true, reason: `${fingerprint.source} 已变更，需要重新安装依赖`, fingerprint };
+    if (previousState.hash !== fingerprint.hash || previousState.source !== fingerprint.source || previousState.npmPath !== fingerprint.npmPath) {
+      const reasons = [];
+      if (previousState.hash !== fingerprint.hash || previousState.source !== fingerprint.source) {
+        reasons.push(`${fingerprint.source} 已变更`);
+      }
+      if (previousState.npmPath !== fingerprint.npmPath) {
+        reasons.push(`npm 路径已变更 (${previousState.npmPath || '未记录'} → ${fingerprint.npmPath})`);
+      }
+      return { shouldInstall: true, reason: `${reasons.join('，')}，需要重新安装依赖`, fingerprint };
     }
 
     return { shouldInstall: false, reason: `${fingerprint.source} 未变化，跳过依赖安装`, fingerprint };

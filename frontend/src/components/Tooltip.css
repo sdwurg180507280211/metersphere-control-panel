@@ -1,89 +1,54 @@
-.tooltip-trigger {
+.tooltip-container {
+  position: relative;
   display: inline-flex;
 }
 
 .tooltip {
-  position: fixed;
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.85);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.82);
   backdrop-filter: blur(4px);
-  color: white;
-  font-size: 12px;
-  border-radius: 8px;
-  white-space: nowrap;
-  z-index: 1000;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 6px;
+  white-space: normal;
+  width: max-content;
+  max-width: 220px;
+  z-index: 2100;
   pointer-events: none;
-  animation: tooltipIn 0.2s ease-out;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: tooltipIn 0.15s ease-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
-.tooltip::before {
+.tooltip::after {
   content: '';
   position: absolute;
-  width: 0;
-  height: 0;
-  border: 6px solid transparent;
-}
-
-.tooltip-top {
-  transform: translate(-50%, -100%);
-}
-
-.tooltip-top::before {
-  bottom: -12px;
+  top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  border-top-color: rgba(0, 0, 0, 0.85);
-}
-
-.tooltip-bottom {
-  transform: translate(-50%, 0);
-}
-
-.tooltip-bottom::before {
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-bottom-color: rgba(0, 0, 0, 0.85);
-}
-
-.tooltip-left {
-  transform: translate(-100%, -50%);
-}
-
-.tooltip-left::before {
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-left-color: rgba(0, 0, 0, 0.85);
-}
-
-.tooltip-right {
-  transform: translate(0, -50%);
-}
-
-.tooltip-right::before {
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-right-color: rgba(0, 0, 0, 0.85);
+  border: 5px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.82);
 }
 
 @keyframes tooltipIn {
   from {
     opacity: 0;
-    transform: translate(var(--tx, -50%), var(--ty, -100%)) scale(0.9);
+    transform: translateX(-50%) translateY(4px);
   }
   to {
     opacity: 1;
-    transform: translate(var(--tx, -50%), var(--ty, -100%)) scale(1);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
 /* 移动端优化 */
 @media (max-width: 768px) {
   .tooltip {
-    font-size: 11px;
-    padding: 6px 10px;
+    font-size: 10px;
+    max-width: 180px;
   }
 }

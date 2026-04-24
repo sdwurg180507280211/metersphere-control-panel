@@ -538,3 +538,55 @@
   border-color: rgba(103, 126, 234, 0.4);
   color: #60a5fa;
 }
+
+/* 构建确认弹窗 - 强制重装依赖选项 */
+.build-force-install-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.build-force-install-option:hover {
+  color: #333;
+}
+
+.build-force-install-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1890ff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.build-force-install-option .build-force-install-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.build-force-install-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #999;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.build-force-install-hint:hover {
+  background: #e0e0e0;
+  color: #666;
+}
