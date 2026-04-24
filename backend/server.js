@@ -269,6 +269,23 @@ async function initServices() {
     console.error('恢复开发服务器失败:', error.message);
   }
 
+  // 自动连接 SSH 隧道（配置 sshTunnel.autoConnect 为 true 时）
+  try {
+    const resolvedConfig = configManager.getResolvedConfig();
+    const sshTunnelConfig = resolvedConfig.sshTunnel || {};
+    if (sshTunnelConfig.autoConnect && sshTunnelConfig.ports?.length > 0) {
+      const systemCommandService = require('./services/systemCommandService');
+      const currentStatus = await systemCommandService.getTunnelStatus();
+      if (currentStatus === 'STOPPED') {
+        console.log('自动连接 SSH 隧道...');
+        await systemCommandService.startTunnel(sshTunnelConfig.ports);
+        console.log('SSH 隧道自动连接成功');
+      }
+    }
+  } catch (error) {
+    console.error('SSH 隧道自动连接失败:', error.message);
+  }
+
   console.log('服务初始化完成');
 }
 

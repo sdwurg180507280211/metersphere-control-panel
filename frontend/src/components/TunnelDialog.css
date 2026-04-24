@@ -123,6 +123,41 @@
   font-size: 13px;
 }
 
+/* ===== 自动连接 ===== */
+.tunnel-autoconnect-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.tunnel-autoconnect-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tunnel-autoconnect-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #7c3aed;
+  cursor: pointer;
+}
+
+.tunnel-autoconnect-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 /* ===== 端口映射表格 ===== */
 .tunnel-ports-section {
   margin-bottom: 16px;

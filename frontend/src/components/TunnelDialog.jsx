@@ -21,6 +21,7 @@ function TunnelDialog({ isOpen, onClose }) {
   const [status, setStatus] = useState('STOPPED')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [autoConnect, setAutoConnect] = useState(false)
 
   // 重置状态
   useEffect(() => {
@@ -53,13 +54,16 @@ function TunnelDialog({ isOpen, onClose }) {
             remotePort: Number(m.remotePort),
             localPort: Number(m.localPort)
           })))
+          setAutoConnect(!!dataConfig.data.autoConnect)
         } else {
           // 使用默认配置
           setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
+          setAutoConnect(false)
         }
       } catch {
         // 如果获取失败，使用默认配置
         setPortMappings(DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m })))
+        setAutoConnect(false)
       }
     }
 
@@ -127,7 +131,7 @@ function TunnelDialog({ isOpen, onClose }) {
       await fetch('/api/services/tunnel/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ports })
+        body: JSON.stringify({ ports, autoConnect })
       })
 
       // 再启动隧道
@@ -201,6 +205,20 @@ function TunnelDialog({ isOpen, onClose }) {
           <div className="tunnel-dialog-target">
             <span className="tunnel-dialog-target-label">目标:</span>
             {remoteUser}@{remoteHost}
+          </div>
+
+          {/* 自动连接 */}
+          <div className="tunnel-autoconnect-row">
+            <label className="tunnel-autoconnect-label">
+              <input
+                type="checkbox"
+                checked={autoConnect}
+                onChange={(e) => setAutoConnect(e.target.checked)}
+                disabled={loading}
+              />
+              启动时自动连接
+            </label>
+            <span className="tunnel-autoconnect-hint">项目启动时自动建立 SSH 隧道</span>
           </div>
 
           {/* 端口映射表格 */}

@@ -236,7 +236,8 @@ function normalizeSshTunnelConfig(rawTunnel = {}) {
   }
 
   return {
-    ports: ports.length > 0 ? ports : null
+    ports: ports.length > 0 ? ports : null,
+    autoConnect: !!tunnel.autoConnect
   };
 }
 

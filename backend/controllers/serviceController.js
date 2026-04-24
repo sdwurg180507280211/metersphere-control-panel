@@ -186,9 +186,10 @@ const serviceController = {
     try {
       const editableConfig = configManager.getEditableConfig();
       const savedPorts = editableConfig.sshTunnel?.ports;
+      const autoConnect = editableConfig.sshTunnel?.autoConnect;
       return res.json({
         success: true,
-        data: { ports: savedPorts || null }
+        data: { ports: savedPorts || null, autoConnect: !!autoConnect }
       });
     } catch (error) {
       return sendError(res, error);
@@ -200,13 +201,13 @@ const serviceController = {
    */
   async saveTunnelConfig(req, res) {
     try {
-      const { ports } = req.body || {};
+      const { ports, autoConnect } = req.body || {};
 
       // 获取当前配置
       const currentConfig = configManager.getEditableConfig();
       const newConfig = {
         ...currentConfig,
-        sshTunnel: { ports }
+        sshTunnel: { ports, autoConnect: !!autoConnect }
       };
 
       // 保存草稿
