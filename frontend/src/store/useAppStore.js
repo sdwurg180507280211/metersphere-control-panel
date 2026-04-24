@@ -380,6 +380,8 @@ export const useConfigStore = create((set, get) => ({
   applying: false,
   diagnosticsLoading: false,
   scanning: false,
+  nodeVersions: [],
+  scanningNodeVersions: false,
 
   fetchConfig: async () => runInFlightRequest('config:fetch', async () => {
     set({ loading: true })
@@ -438,6 +440,21 @@ export const useConfigStore = create((set, get) => ({
       return data.data
     } finally {
       set({ scanning: false })
+    }
+  },
+
+  scanNodeVersions: async () => {
+    set({ scanningNodeVersions: true })
+    try {
+      const res = await fetch('/api/config/node-versions')
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || '扫描 Node 版本失败')
+      }
+      set({ nodeVersions: data.data.versions || [] })
+      return data.data
+    } finally {
+      set({ scanningNodeVersions: false })
     }
   },
 

@@ -1,4 +1,5 @@
 const configManager = require('../services/configManager');
+const nodeVersionService = require('../services/nodeVersionService');
 const sudoFileService = require('../services/sudoFileService');
 const { sendError } = require('../utils/errors');
 
@@ -62,6 +63,15 @@ const configController = {
     try {
       const { projectRoot } = req.body || {};
       const result = await configManager.scanProject(projectRoot);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
+  scanNodeVersions(req, res) {
+    try {
+      const result = nodeVersionService.scan();
       res.json({ success: true, data: result });
     } catch (error) {
       sendError(res, error);

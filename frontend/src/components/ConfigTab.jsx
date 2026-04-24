@@ -49,6 +49,8 @@ function ConfigTab() {
     applying,
     scanning,
     diagnosticsLoading,
+    nodeVersions,
+    scanningNodeVersions,
     fetchConfig,
     updateDraft,
     addService,
@@ -59,7 +61,8 @@ function ConfigTab() {
     applyConfig,
     resetDraft,
     refreshDiagnostics,
-    scanProject
+    scanProject,
+    scanNodeVersions
   } = useConfigStore()
 
   const { fetchCatalog, fetchServices } = useServiceStore()
@@ -106,6 +109,40 @@ function ConfigTab() {
     const term = serviceFilter.toLowerCase()
     return entries.filter(([id, s]) => id.toLowerCase().includes(term) || (s.name || '').toLowerCase().includes(term))
   }, [draft?.services, serviceFilter])
+
+  const [showNodeVersionDropdown, setShowNodeVersionDropdown] = useState(false)
+  const nodeVersionDropdownRef = useRef(null)
+
+  const handleScanNodeVersions = async () => {
+    try {
+      const result = await scanNodeVersions()
+      if (result.versions.length > 0) {
+        setShowNodeVersionDropdown(true)
+      } else {
+        toast('未发现其他 Node.js 安装')
+      }
+    } catch (error) {
+      toast.error(error.message || '扫描 Node 版本失败')
+    }
+  }
+
+  const handleSelectNodeVersion = (ver) => {
+    if (ver.npmPath) {
+      updateDraft('npmPath', ver.npmPath)
+    }
+    setShowNodeVersionDropdown(false)
+  }
+
+  useEffect(() => {
+    if (!showNodeVersionDropdown) return
+    const handleClickOutside = (e) => {
+      if (nodeVersionDropdownRef.current && !nodeVersionDropdownRef.current.contains(e.target)) {
+        setShowNodeVersionDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showNodeVersionDropdown])
 
   const handleScan = async () => {
     try {
@@ -280,7 +317,38 @@ function ConfigTab() {
         </ConfigField>
 
         <ConfigField label="npm 执行路径" path="npmPath" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} checkPath={true} hint={resolved?.npmPath ? `当前自动识别: ${resolved.npmPath}` : "系统将尝试在 PATH 中自动探测"}>
-          <input value={draft.npmPath ?? ''} onChange={e => updateDraft('npmPath', e.target.value)} placeholder="例如: /usr/local/bin/npm" />
+          <div className="npm-path-field">
+            <div className="npm-path-input-row">
+              <input value={draft.npmPath ?? ''} onChange={e => updateDraft('npmPath', e.target.value)} placeholder="例如: /usr/local/bin/npm" />
+              <button
+                className={`config-scan-btn ${scanningNodeVersions ? 'scanning' : ''}`}
+                onClick={handleScanNodeVersions}
+                disabled={scanningNodeVersions}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {scanningNodeVersions ? <span className="config-spinner-mini" /> : <span>🔍</span>}
+                {scanningNodeVersions ? '扫描中...' : '扫描版本'}
+              </button>
+            </div>
+            {showNodeVersionDropdown && nodeVersions.length > 0 && (
+              <div className="node-version-dropdown" ref={nodeVersionDropdownRef}>
+                {nodeVersions.map((ver, idx) => (
+                  <div
+                    key={ver.nodePath}
+                    className={`node-version-item ${ver.npmPath === draft.npmPath ? 'selected' : ''}`}
+                    onClick={() => handleSelectNodeVersion(ver)}
+                  >
+                    <div className="node-version-main">
+                      <span className="node-version-label">{ver.version}</span>
+                      <span className={`node-version-source source-${ver.source}`}>{ver.source}</span>
+                      {ver.npmPath === (draft.npmPath || resolved?.npmPath) && <span className="node-version-current-badge">当前</span>}
+                    </div>
+                    <div className="node-version-path">{ver.npmPath || ver.nodePath}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </ConfigField>
 
         <ConfigField label="metersphere.properties" path="properties.metersphere" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} checkPath={true} hint={resolved?.properties?.metersphere || "未找到默认配置文件"}>
