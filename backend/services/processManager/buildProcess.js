@@ -186,6 +186,39 @@ module.exports = function applyBuildProcess(proto) {
     return buildProgressService.startBuild(moduleConfig, options);
   };
 
+  /**
+   * 检查共享模块（如 sdk-parent）的依赖完整性
+   * 当构建业务模块时，如果其依赖共享模块的前端，需确保共享模块的 node_modules 已就绪
+   */
+  proto._ensureSharedModuleDependencies = async function(projectRoot, buildId, npmCommand, npmArgsPrefix) {
+    const sdkFrontendDir = path.join(projectRoot, 'framework/sdk-parent/frontend');
+    if (!fs.existsSync(sdkFrontendDir)) {
+      return;
+    }
+
+    const decision = this._getDependencyInstallDecision(sdkFrontendDir);
+    if (!decision.shouldInstall) {
+      logger.broadcast(`SDK 前端依赖检查: ${decision.reason}`, 'build');
+      return;
+    }
+
+    logger.broadcast(`SDK 前端依赖需要安装: ${decision.reason}`, 'build');
+    const installCommand = fs.existsSync(path.join(sdkFrontendDir, 'package-lock.json')) ? 'ci' : 'install';
+    const fullArgs = [...npmArgsPrefix, installCommand];
+    logger.broadcastCommand(`cd framework/sdk-parent/frontend && ${npmCommand} ${fullArgs.join(' ')}`, 'build');
+
+    await this._runCommandWithProgress({
+      command: npmCommand,
+      args: fullArgs,
+      cwd: sdkFrontendDir,
+      buildId,
+      stepIndex: 1,
+      stepName: '安装 SDK 前端依赖',
+      logType: 'build'
+    });
+    this._writeDependencyState(sdkFrontendDir, decision.fingerprint || this._computeDependencyFingerprint(sdkFrontendDir));
+  };
+
   proto.executeBuild = async function(moduleConfig, buildId, options = {}) {
     const frontendDir = path.join(this._getProjectRoot(), moduleConfig.frontendPath);
     const targetDir = path.join(this._getProjectRoot(), moduleConfig.targetPath);
@@ -222,6 +255,11 @@ module.exports = function applyBuildProcess(proto) {
         this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || this._computeDependencyFingerprint(frontendDir));
       } else {
         await buildProgressService.updateStep(buildId, 1, 'completed', 100, dependencyDecision.reason);
+      }
+
+      // 非 SDK 模块：构建前确保 SDK 前端依赖完整
+      if (moduleConfig.id !== 'sdk-parent') {
+        await this._ensureSharedModuleDependencies(this._getProjectRoot(), buildId, npmCommand, npmArgsPrefix);
       }
 
       this._throwIfCancelled(buildId);
