@@ -3,20 +3,72 @@
  * 包含服务启动、停止、重启、状态查询、批量操作
  */
 const { spawn } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 const logger = require('../../utils/logger');
 const healthChecker = require('../healthChecker');
-const { serviceProcesses, serviceStatuses, BATCH_START_HEALTH_TIMEOUT, BATCH_START_HEALTH_INTERVAL } = require('./shared');
+const { LOG_DIR, serviceProcesses, serviceStatuses, BATCH_START_HEALTH_TIMEOUT, BATCH_START_HEALTH_INTERVAL } = require('./shared');
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'"'"'`)}'`;
+}
 
 module.exports = function applyServiceLifecycle(proto) {
 
+  proto._spawnDetachedService = function(mavenCommand, serviceConfig, javaToolOptions, serviceLogFile) {
+    return new Promise((resolve, reject) => {
+      const logRedirect = `>> ${shellQuote(serviceLogFile)} 2>&1`;
+      const command = [
+        javaToolOptions ? `JAVA_TOOL_OPTIONS=${shellQuote(javaToolOptions)}` : '',
+        'nohup',
+        shellQuote(mavenCommand),
+        '-f',
+        shellQuote(serviceConfig.pom),
+        'clean',
+        'spring-boot:run',
+        `${logRedirect} & echo $!`
+      ].filter(Boolean).join(' ');
+
+      const launcher = spawn('sh', ['-c', command], {
+        cwd: this._getProjectRoot(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env
+      });
+
+      let stdout = '';
+      let stderr = '';
+      launcher.stdout.on('data', (data) => {
+        stdout += data.toString();
+      });
+      launcher.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+      launcher.on('error', reject);
+      launcher.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(stderr.trim() || `服务启动命令失败，退出码: ${code}`));
+          return;
+        }
+
+        const pid = parseInt(stdout.trim(), 10);
+        if (!pid || Number.isNaN(pid)) {
+          reject(new Error(stderr.trim() || '服务启动成功但未获取到 PID'));
+          return;
+        }
+
+        resolve({ pid });
+      });
+    });
+  };
+
   proto._attachServiceProcess = function(serviceId, serviceConfig, child) {
+    const tailProcess = this._attachServiceLogTail(serviceId);
+
     serviceProcesses.set(serviceId, {
       pid: child.pid,
       pom: serviceConfig.pom,
       port: serviceConfig.port,
-      child
+      child,
+      tailProcess
     });
     this._savePid(serviceId, child.pid);
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
@@ -26,60 +78,59 @@ module.exports = function applyServiceLifecycle(proto) {
       pid: child.pid
     }, { serviceConfig });
 
-    child.stdout?.on('data', (data) => {
-      logger.broadcast(data.toString(), 'service', serviceId);
-    });
+    if (typeof child.on === 'function') {
+      child.on('close', (code, signal) => {
+        if (this.isControlPanelShuttingDown()) {
+          return;
+        }
 
-    child.stderr?.on('data', (data) => {
-      logger.broadcast(data.toString(), 'service', serviceId);
-    });
-
-    child.on('close', (code, signal) => {
-      logger.broadcast(`
+        logger.broadcast(`
 ${serviceConfig.name} 进程退出，代码: ${code ?? 'null'}${signal ? `，信号: ${signal}` : ''}`, 'service');
-      this._clearPid(serviceId, child.pid);
-      this._clearHealthMonitor(serviceId);
 
-      const currentStatus = this._getCurrentServiceStatus(serviceId, serviceConfig);
-      if (currentStatus.phase === 'restarting') {
-        this._setServiceStatus(serviceId, {
-          phase: 'restarting',
-          running: false,
-          pid: null
-        }, { serviceConfig });
-        return;
-      }
+        this._clearPid(serviceId, child.pid);
+        this._clearHealthMonitor(serviceId);
 
-      if (currentStatus.phase === 'stopping') {
+        const currentStatus = this._getCurrentServiceStatus(serviceId, serviceConfig);
+        if (currentStatus.phase === 'restarting') {
+          this._setServiceStatus(serviceId, {
+            phase: 'restarting',
+            running: false,
+            pid: null
+          }, { serviceConfig });
+          return;
+        }
+
+        if (currentStatus.phase === 'stopping') {
+          this._setServiceStatus(serviceId, {
+            phase: 'stopped',
+            running: false,
+            pid: null,
+            error: null
+          }, { serviceConfig });
+          return;
+        }
+
         this._setServiceStatus(serviceId, {
-          phase: 'stopped',
+          phase: 'failed',
           running: false,
           pid: null,
-          error: null
+          error: code === 0 && !signal ? null : `${serviceConfig.name} 进程异常退出`
         }, { serviceConfig });
-        return;
-      }
+      });
 
-      this._setServiceStatus(serviceId, {
-        phase: 'failed',
-        running: false,
-        pid: null,
-        error: code === 0 && !signal ? null : `${serviceConfig.name} 进程异常退出`
-      }, { serviceConfig });
-    });
-
-    child.on('error', (err) => {
-      logger.broadcast(`
+      child.on('error', (err) => {
+        logger.broadcast(`
 ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
-      this._clearPid(serviceId, child.pid);
-      this._clearHealthMonitor(serviceId);
-      this._setServiceStatus(serviceId, {
-        phase: 'failed',
-        running: false,
-        pid: null,
-        error: err.message
-      }, { serviceConfig });
-    });
+        this._clearPid(serviceId, child.pid);
+        this._clearHealthMonitor(serviceId);
+        this._setServiceStatus(serviceId, {
+          phase: 'failed',
+          running: false,
+          pid: null,
+          error: err.message
+        }, { serviceConfig });
+      });
+    }
   };
 
   proto.compileService = async function(serviceId, serviceConfig, options = {}) {
@@ -140,13 +191,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     logger.broadcast(`
 ========== 启动 ${serviceConfig.name} ==========`, 'service', serviceId);
 
-    const logDir = path.join(__dirname, '../../../logs');
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    const errorFilePath = path.join(logDir, `hs_err_pid%p_${serviceId}.log`);
+    const errorFilePath = path.join(LOG_DIR, `hs_err_pid%p_${serviceId}.log`);
     const errorFileOpt = `-XX:ErrorFile=${errorFilePath}`;
+    const serviceLogFile = path.join(LOG_DIR, `${serviceId}.log`);
 
     // Build JAVA_TOOL_OPTIONS: env base + config jvmOptions + per-service override + error file
     const resolvedConfig = this._getRuntimeConfig();
@@ -166,20 +213,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       logger.broadcastCommand(startCmd, 'service', serviceId);
     }
 
-    const child = spawn(mavenCommand, ['-f', serviceConfig.pom, 'clean', 'spring-boot:run'], {
-      cwd: this._getProjectRoot(),
-      detached: process.platform !== 'win32',
-      env: {
-        ...process.env,
-        JAVA_TOOL_OPTIONS: javaToolOptions
-      }
-    });
+    const child = await this._spawnDetachedService(mavenCommand, serviceConfig, javaToolOptions, serviceLogFile);
 
     this._attachServiceProcess(serviceId, serviceConfig, child);
-
-    if (process.platform !== 'win32') {
-      child.unref();
-    }
 
     if (options.monitorHealth !== false) {
       this._monitorServiceHealth(serviceId, serviceConfig, {
@@ -193,6 +229,8 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
   proto.stop = async function(serviceId, serviceConfig, options = {}) {
     this._clearHealthMonitor(serviceId);
+    this._stopServiceLogTail(serviceId);
+
     this._setServiceStatus(serviceId, {
       phase: options.phase || 'stopping',
       running: false,

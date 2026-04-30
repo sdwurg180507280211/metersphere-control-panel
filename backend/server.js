@@ -26,6 +26,7 @@ const configRoutes = require('./routes/config');
 const sqlRoutes = require('./routes/sql');
 const chatRoutes = require('./routes/chat');
 const jobService = require('./services/jobService');
+const processManager = require('./services/processManager');
 
 const app = express();
 const server = http.createServer(app);
@@ -245,7 +246,6 @@ async function initServices() {
 
   // 恢复后端服务进程跟踪
   try {
-    const processManager = require('./services/processManager');
     if (processManager.restoreServices) {
       const restoredCount = await processManager.restoreServices();
       if (restoredCount > 0) {
@@ -291,6 +291,7 @@ async function initServices() {
 
 // 优雅关闭处理
 async function gracefulShutdown(signal) {
+  processManager.markControlPanelShuttingDown();
   console.log(`收到 ${signal} 信号，正在优雅关闭...`);
 
   try {
@@ -347,6 +348,7 @@ async function gracefulShutdown(signal) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.once('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
 
 // 未捕获的异常处理
 process.on('uncaughtException', (err) => {

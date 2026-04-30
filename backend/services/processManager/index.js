@@ -37,6 +37,7 @@ class ProcessManager {
     this.logDir = LOG_DIR;
     this.serviceHealthMonitors = new Map();
     this.cleanupInterval = null;
+    this.controlPanelShuttingDown = false;
     this._startPeriodicCleanup();
   }
 
@@ -63,6 +64,7 @@ class ProcessManager {
     let cleanedCount = 0;
     for (const [serviceId, info] of serviceProcesses.entries()) {
       if (info.pid && !this._isProcessRunning(info.pid)) {
+        this._stopServiceLogTail(serviceId);
         this._clearPid(serviceId, info.pid);
         const current = this._getCurrentServiceStatus(serviceId);
         if (current.phase === 'running' || current.phase === 'checking_health') {
@@ -116,6 +118,14 @@ class ProcessManager {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+  }
+
+  markControlPanelShuttingDown() {
+    this.controlPanelShuttingDown = true;
+  }
+
+  isControlPanelShuttingDown() {
+    return this.controlPanelShuttingDown;
   }
 
   // ── 配置访问 ──
@@ -257,6 +267,40 @@ class ProcessManager {
     });
   }
 
+  // ── 服务日志监听 ──
+
+  _stopServiceLogTail(serviceId) {
+    const existing = serviceProcesses.get(serviceId);
+    if (!existing?.tailProcess) {
+      return;
+    }
+
+    try {
+      existing.tailProcess.kill();
+    } catch {}
+    existing.tailProcess = null;
+  }
+
+  _attachServiceLogTail(serviceId) {
+    const serviceLogFile = path.join(this.logDir, `${serviceId}.log`);
+    fs.closeSync(fs.openSync(serviceLogFile, 'a'));
+    this._stopServiceLogTail(serviceId);
+
+    const tailProcess = spawn('tail', ['-f', '-n', '0', serviceLogFile], {
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+
+    tailProcess.stdout.on('data', (data) => {
+      logger.broadcast(data.toString(), 'service', serviceId);
+    });
+
+    tailProcess.on('error', (err) => {
+      logger.broadcast(`日志监控错误: ${err.message}`, 'service', serviceId);
+    });
+
+    return tailProcess;
+  }
+
   // ── PID 管理 ──
 
   _getPidFile(serviceId) {
@@ -312,12 +356,15 @@ class ProcessManager {
           continue;
         }
 
+        const tailProcess = this._attachServiceLogTail(serviceId);
+
         // 恢复到内存状态
         serviceProcesses.set(serviceId, {
           pid,
           pom: serviceConfig.pom,
           port: serviceConfig.port,
-          child: null  // spawn 引用丢失，无法获取新日志，这是已知限制
+          child: null,
+          tailProcess
         });
 
         // 设置状态为 checking_health，触发健康检查
@@ -371,6 +418,7 @@ class ProcessManager {
       return;
     }
 
+    this._stopServiceLogTail(serviceId);
     serviceProcesses.delete(serviceId);
     this._clearPidFile(serviceId, expectedPid);
   }
