@@ -93,6 +93,27 @@
   border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.btn-build-all {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(37, 99, 235, 0.15));
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  color: #a78bfa;
+  white-space: nowrap;
+}
+
+.btn-build-all:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(37, 99, 235, 0.25));
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #c4b5fd;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+}
+
 .module-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

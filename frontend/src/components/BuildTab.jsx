@@ -14,6 +14,8 @@ function BuildTab({ searchInputRef }) {
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, moduleId: null, moduleName: '' })
   const [forceInstall, setForceInstall] = useState(false)
+  const [batchDialog, setBatchDialog] = useState({ isOpen: false })
+  const [batchForceInstall, setBatchForceInstall] = useState(false)
   const [backendPrompt, setBackendPrompt] = useState({ isOpen: false })
   const [devServers, setDevServers] = useState({
     runningModules: new Map(), // key: moduleId, value: module info
@@ -99,6 +101,39 @@ function BuildTab({ searchInputRef }) {
     })
     setForceInstall(false)
   }, [activeBuilds, modules])
+
+  const handleBuildAll = useCallback(() => {
+    const isAnyBuilding = activeBuilds.some(b => b.status === 'running')
+    if (isAnyBuilding) {
+      toast.error('有构建任务进行中，请等待完成')
+      return
+    }
+    setBatchForceInstall(false)
+    setBatchDialog({ isOpen: true })
+  }, [activeBuilds])
+
+  const handleConfirmBuildAll = useCallback(async () => {
+    setBatchDialog({ isOpen: false })
+    const moduleIds = modules.map(m => m.id)
+
+    try {
+      const res = await fetch('/api/build/frontend/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modules: moduleIds, forceInstall: batchForceInstall })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        toast.success(`已启动 ${moduleIds.length} 个模块的批量构建`, { icon: '🚀' })
+      } else {
+        const errorMsg = typeof data.error === 'string' ? data.error : data.error?.message || '启动批量构建失败'
+        toast.error(errorMsg)
+      }
+    } catch (error) {
+      toast.error(`网络错误: ${error.message}`)
+    }
+  }, [modules, batchForceInstall])
 
   const handleConfirmBuild = useCallback(async () => {
     const { moduleId } = confirmDialog
@@ -273,7 +308,12 @@ function BuildTab({ searchInputRef }) {
             <>
               <div className="build-control-header">
                 <h3 className="section-title">前端模块</h3>
-                <span className="module-count">{modules.length} 个模块</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span className="module-count">{modules.length} 个模块</span>
+                  <button className="btn-build-all" onClick={handleBuildAll}>
+                    全部构建
+                  </button>
+                </div>
               </div>
 
               <div className="module-list">
@@ -375,6 +415,29 @@ function BuildTab({ searchInputRef }) {
             type="checkbox"
             checked={forceInstall}
             onChange={e => setForceInstall(e.target.checked)}
+          />
+          <span className="build-force-install-text">强制重装依赖</span>
+          <Tooltip text="忽略现有依赖，强制 npm install">
+            <span className="build-force-install-hint">?</span>
+          </Tooltip>
+        </label>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        isOpen={batchDialog.isOpen}
+        title="全部构建"
+        message={`确定要构建全部 ${modules.length} 个前端模块吗？将按顺序逐个构建。`}
+        confirmText="开始构建"
+        cancelText="取消"
+        type="info"
+        onConfirm={handleConfirmBuildAll}
+        onCancel={() => setBatchDialog({ isOpen: false })}
+      >
+        <label className="build-force-install-option">
+          <input
+            type="checkbox"
+            checked={batchForceInstall}
+            onChange={e => setBatchForceInstall(e.target.checked)}
           />
           <span className="build-force-install-text">强制重装依赖</span>
           <Tooltip text="忽略现有依赖，强制 npm install">
