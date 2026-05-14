@@ -188,9 +188,11 @@ const serviceController = {
       const savedPorts = editableConfig.sshTunnel?.ports;
       const autoConnect = editableConfig.sshTunnel?.autoConnect;
       const enabled = editableConfig.sshTunnel?.enabled;
+      const remoteHost = editableConfig.sshTunnel?.remoteHost || editableConfig.tunnel?.remoteHost || '';
+      const remoteUser = editableConfig.sshTunnel?.remoteUser || editableConfig.tunnel?.remoteUser || '';
       return res.json({
         success: true,
-        data: { ports: savedPorts || null, autoConnect: !!autoConnect, enabled: !!enabled }
+        data: { ports: savedPorts || null, autoConnect: !!autoConnect, enabled: !!enabled, remoteHost, remoteUser }
       });
     } catch (error) {
       return sendError(res, error);
@@ -202,13 +204,20 @@ const serviceController = {
    */
   async saveTunnelConfig(req, res) {
     try {
-      const { ports, autoConnect, enabled } = req.body || {};
+      const { ports, autoConnect, enabled, remoteHost, remoteUser } = req.body || {};
 
       // 获取当前配置
       const currentConfig = configManager.getEditableConfig();
       const newConfig = {
         ...currentConfig,
-        sshTunnel: { ports, autoConnect: !!autoConnect, enabled: !!enabled }
+        sshTunnel: {
+          ...(currentConfig.sshTunnel || {}),
+          remoteHost: remoteHost ?? currentConfig.sshTunnel?.remoteHost ?? currentConfig.tunnel?.remoteHost ?? '',
+          remoteUser: remoteUser ?? currentConfig.sshTunnel?.remoteUser ?? currentConfig.tunnel?.remoteUser ?? '',
+          ports,
+          autoConnect: !!autoConnect,
+          enabled: !!enabled
+        }
       };
 
       // 保存草稿

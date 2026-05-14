@@ -29,8 +29,8 @@ function broadcastTunnelEvent(event, data = {}) {
 }
 
 function validateTunnelEndpoint(config) {
-  const remoteHost = config.tunnel?.remoteHost || '';
-  const remoteUser = config.tunnel?.remoteUser || '';
+  const remoteHost = config.sshTunnel?.remoteHost || config.tunnel?.remoteHost || '';
+  const remoteUser = config.sshTunnel?.remoteUser || config.tunnel?.remoteUser || '';
 
   if (!/^[a-zA-Z0-9.-]{1,253}$/.test(remoteHost)) {
     throw createAppError(400, 'INVALID_TUNNEL_HOST', 'SSH 隧道远程主机未配置或格式不合法');
@@ -370,7 +370,7 @@ class SystemCommandService {
 
     return new Promise((resolve, reject) => {
       const resolvedConfig = configManager.getResolvedConfig();
-      const remoteHost = resolvedConfig.tunnel?.remoteHost || '';
+      const remoteHost = resolvedConfig.sshTunnel?.remoteHost || resolvedConfig.tunnel?.remoteHost || '';
       if (!remoteHost) {
         resolve({ message: '无需停止，隧道未配置' });
         return;
@@ -408,7 +408,7 @@ class SystemCommandService {
   async getTunnelStatus() {
     return new Promise((resolve) => {
       const resolvedConfig = configManager.getResolvedConfig();
-      const remoteHost = resolvedConfig.tunnel?.remoteHost || '';
+      const remoteHost = resolvedConfig.sshTunnel?.remoteHost || resolvedConfig.tunnel?.remoteHost || '';
       if (!remoteHost) {
         resolve('STOPPED');
         return;

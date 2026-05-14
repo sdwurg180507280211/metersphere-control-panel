@@ -28,7 +28,7 @@ class WebSocketService {
       }
 
       const token = requestUrl.searchParams.get('token') || '';
-      if (!localAuthService.verifyToken(token)) {
+      if (localAuthService.requiresToken(req) && !localAuthService.verifyToken(token)) {
         socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
         socket.destroy();
         return;

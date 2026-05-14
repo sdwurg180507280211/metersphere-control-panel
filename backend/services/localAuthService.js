@@ -41,7 +41,34 @@ function verifyToken(token) {
   return safeEqual(token, TOKEN);
 }
 
+function normalizeIp(value = '') {
+  return String(value)
+    .replace(/^::ffff:/, '')
+    .replace(/^\[|\]$/g, '');
+}
+
+function isLoopbackAddress(value = '') {
+  const ip = normalizeIp(value);
+  return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost';
+}
+
+function isLoopbackRequest(req) {
+  const remoteAddress = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+  const host = String(req.headers.host || '').split(':')[0];
+  return isLoopbackAddress(remoteAddress) && (!host || isLoopbackAddress(host));
+}
+
+function requiresToken(req) {
+  if (process.env.MS_REQUIRE_LOCAL_TOKEN === '1' || process.env.MS_REQUIRE_LOCAL_TOKEN === 'true') {
+    return true;
+  }
+  return !isLoopbackRequest(req);
+}
+
 function verifyRequest(req) {
+  if (!requiresToken(req)) {
+    return true;
+  }
   return verifyToken(extractToken(req));
 }
 
@@ -49,5 +76,7 @@ module.exports = {
   getToken,
   extractToken,
   verifyToken,
-  verifyRequest
+  verifyRequest,
+  requiresToken,
+  isLoopbackRequest
 };

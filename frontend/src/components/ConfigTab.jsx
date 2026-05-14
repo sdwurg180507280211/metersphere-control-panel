@@ -512,12 +512,12 @@ function ConfigTab() {
       <p className="config-section-subtitle">配置 SSH 反向隧道的远程目标主机。修改后无需重启控制面板即可生效。</p>
 
       <div className="config-form-grid">
-        <ConfigField label="远程主机地址" path="tunnel.remoteHost" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 反向隧道的目标主机 IP 或域名">
-          <input value={draft.tunnel?.remoteHost ?? ''} onChange={e => updateDraft('tunnel.remoteHost', e.target.value)} placeholder="example.com" />
+        <ConfigField label="远程主机地址" path="sshTunnel.remoteHost" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 反向隧道的目标主机 IP 或域名">
+          <input value={draft.sshTunnel?.remoteHost ?? draft.tunnel?.remoteHost ?? ''} onChange={e => updateDraft('sshTunnel.remoteHost', e.target.value)} placeholder="example.com" />
         </ConfigField>
 
-        <ConfigField label="远程用户名" path="tunnel.remoteUser" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 登录远程主机的用户名">
-          <input value={draft.tunnel?.remoteUser ?? ''} onChange={e => updateDraft('tunnel.remoteUser', e.target.value)} placeholder="ssh-user" />
+        <ConfigField label="远程用户名" path="sshTunnel.remoteUser" fieldErrors={fieldErrors} fieldWarnings={fieldWarnings} hint="SSH 登录远程主机的用户名">
+          <input value={draft.sshTunnel?.remoteUser ?? draft.tunnel?.remoteUser ?? ''} onChange={e => updateDraft('sshTunnel.remoteUser', e.target.value)} placeholder="ssh-user" />
         </ConfigField>
       </div>
 

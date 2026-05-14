@@ -125,7 +125,12 @@ class ConfigManager {
       claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
       waifu: editableDraft.waifu || currentRaw.waifu,
       tunnel: editableDraft.tunnel || currentRaw.tunnel,
-      sshTunnel: editableDraft.sshTunnel || currentRaw.sshTunnel,
+      sshTunnel: {
+        ...(currentRaw.sshTunnel || {}),
+        ...(editableDraft.sshTunnel || {}),
+        remoteHost: editableDraft.sshTunnel?.remoteHost || editableDraft.tunnel?.remoteHost || currentRaw.sshTunnel?.remoteHost || currentRaw.tunnel?.remoteHost || '',
+        remoteUser: editableDraft.sshTunnel?.remoteUser || editableDraft.tunnel?.remoteUser || currentRaw.sshTunnel?.remoteUser || currentRaw.tunnel?.remoteUser || ''
+      },
       services: this._buildPersistedServices(currentRaw.services || {}, editableDraft.services || {})
     };
 

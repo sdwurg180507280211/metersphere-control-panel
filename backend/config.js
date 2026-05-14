@@ -219,9 +219,12 @@ function normalizeServices(rawServices = {}) {
   );
 }
 
-function normalizeSshTunnelConfig(rawTunnel = {}) {
+function normalizeSshTunnelConfig(rawTunnel = {}, legacyTunnel = {}) {
   const tunnel = rawTunnel && typeof rawTunnel === 'object' && !Array.isArray(rawTunnel)
     ? rawTunnel
+    : {};
+  const legacy = legacyTunnel && typeof legacyTunnel === 'object' && !Array.isArray(legacyTunnel)
+    ? legacyTunnel
     : {};
 
   let ports = [];
@@ -236,6 +239,8 @@ function normalizeSshTunnelConfig(rawTunnel = {}) {
   }
 
   return {
+    remoteHost: normalizeString(tunnel.remoteHost, normalizeString(legacy.remoteHost, '')),
+    remoteUser: normalizeString(tunnel.remoteUser, normalizeString(legacy.remoteUser, '')),
     enabled: !!tunnel.enabled,
     ports: ports.length > 0 ? ports : null,
     autoConnect: !!tunnel.autoConnect
@@ -264,7 +269,7 @@ function normalizeEditableConfig(rawConfig = {}) {
     tunnel: normalizeTunnelConfig(config.tunnel || {}),
     waifu: normalizeWaifuConfig(config.waifu || {}),
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
-    sshTunnel: normalizeSshTunnelConfig(config.sshTunnel || {}),
+    sshTunnel: normalizeSshTunnelConfig(config.sshTunnel || {}, config.tunnel || {}),
     package: normalizePackageConfig(config.package || {}),
     services: normalizeServices(config.services || {})
   };

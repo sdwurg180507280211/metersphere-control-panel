@@ -11,7 +11,7 @@ const DEFAULT_PORT_MAPPINGS = [
 
 function TunnelDialog({ isOpen, onClose }) {
   const resolved = useConfigStore((s) => s.resolved)
-  const tunnelConfig = resolved?.tunnel || {}
+  const tunnelConfig = resolved?.sshTunnel || resolved?.tunnel || {}
   const remoteHost = tunnelConfig.remoteHost || ''
   const remoteUser = tunnelConfig.remoteUser || ''
 

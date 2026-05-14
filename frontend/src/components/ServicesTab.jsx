@@ -411,7 +411,7 @@ function ServicesTab({ searchInputRef }) {
         <section className="card services-control-panel">
           <div className="card-header">
             <div className="batch-actions">
-              <Tooltip content={resolved?.tunnel?.remoteHost ? `建立 SSH 反向隧道到 ${resolved.tunnel.remoteHost}` : 'SSH 隧道未配置目标主机'} position="bottom">
+              <Tooltip content={resolved?.sshTunnel?.remoteHost ? `建立 SSH 反向隧道到 ${resolved.sshTunnel.remoteHost}` : 'SSH 隧道未配置目标主机'} position="bottom">
                 <button className={`btn-batch btn-tunnel${tunnelRunning ? ' tunnel-active' : ''}`} onClick={() => setTunnelDialogOpen(true)}>
                   <span className="btn-icon-text">SSH</span>
                   {tunnelRunning ? '隧道已连接' : '隧道'}
