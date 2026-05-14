@@ -13,6 +13,8 @@ const configManager = require('./services/configManager');
 const logger = require('./utils/logger');
 const cacheService = require('./services/cacheService');
 const websocketService = require('./services/websocketService');
+const localAuthService = require('./services/localAuthService');
+const localAuth = require('./middleware/localAuth');
 const { sendError } = require('./utils/errors');
 
 // 导入路由
@@ -32,7 +34,8 @@ const app = express();
 const server = http.createServer(app);
 
 // 中间件
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use('/api', localAuth);
 
 // API 路由
 app.use('/api/services', serviceRoutes);
@@ -366,10 +369,17 @@ async function startServer(port) {
   logger.updateOptions({ maxLogLines: startupConfig.maxLogLines });
 
   const listenPort = port || startupConfig.port;
+  const bindHost = process.env.MS_BIND_HOST || '127.0.0.1';
+  const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
+  const accessUrl = `http://${displayHost}:${listenPort}/?token=${encodeURIComponent(localAuthService.getToken())}`;
 
   return new Promise((resolve, reject) => {
-    server.listen(listenPort, async () => {
-      console.log(`控制面板运行在 http://localhost:${listenPort}`);
+    server.listen(listenPort, bindHost, async () => {
+      console.log(`控制面板运行在 http://${bindHost}:${listenPort}`);
+      console.log(`本地访问地址: ${accessUrl}`);
+      if (bindHost === '0.0.0.0') {
+        console.warn('警告: 控制面板正在监听 0.0.0.0，请确认当前网络环境可信并妥善保管访问令牌');
+      }
       console.log(`项目根目录: ${startupConfig.projectRoot}`);
 
       await initServices();

@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const validator = require('../utils/validator');
 
 const logController = {
   /**
@@ -95,19 +96,23 @@ const logController = {
     try {
       const { serviceId, level = 'error', date, lines = 100 } = req.query;
       
-      if (!serviceId) {
-        return res.status(400).json({ success: false, error: '缺少 serviceId 参数' });
+      if (!serviceId || !validator.isSafeServiceId(serviceId)) {
+        return res.status(400).json({ success: false, error: '无效的 serviceId 参数' });
       }
-      
+
       if (!['error', 'warn', 'cmd'].includes(level)) {
         return res.status(400).json({ success: false, error: 'level 必须是 error、warn 或 cmd' });
       }
-      
+
       // 确定日期，默认今天
       const targetDate = date || new Date().toISOString().split('T')[0];
+      if (!validator.isValidDate(targetDate)) {
+        return res.status(400).json({ success: false, error: 'date 必须是 YYYY-MM-DD' });
+      }
+      const safeLines = validator.clampLines(lines, 100, 5000);
       const levelDir = level === 'error' ? logger.errorLogDir : level === 'cmd' ? logger.cmdLogDir : logger.warnLogDir;
       const logFile = path.join(levelDir, `${serviceId}-${targetDate}.log`);
-      
+
       if (!fs.existsSync(logFile)) {
         return res.json({ 
           success: true, 
@@ -118,9 +123,10 @@ const logController = {
       }
       
       // 读取最后 N 行
-      const content = fs.readFileSync(logFile, 'utf8');
+      const safeLogFile = validator.resolveLogFilePath(logFile, levelDir);
+      const content = fs.readFileSync(safeLogFile, 'utf8');
       const allLines = content.split('\n').filter(line => line.trim());
-      const lastLines = allLines.slice(-parseInt(lines, 10));
+      const lastLines = allLines.slice(-safeLines);
       
       res.json({
         success: true,
@@ -146,21 +152,29 @@ const logController = {
     try {
       const { serviceId, level = 'error', date } = req.query;
       
-      if (!serviceId) {
-        return res.status(400).json({ success: false, error: '缺少 serviceId 参数' });
+      if (!serviceId || !validator.isSafeServiceId(serviceId)) {
+        return res.status(400).json({ success: false, error: '无效的 serviceId 参数' });
       }
-      
+
+      if (!['error', 'warn', 'cmd'].includes(level)) {
+        return res.status(400).json({ success: false, error: 'level 必须是 error、warn 或 cmd' });
+      }
+
       const targetDate = date || new Date().toISOString().split('T')[0];
+      if (!validator.isValidDate(targetDate)) {
+        return res.status(400).json({ success: false, error: 'date 必须是 YYYY-MM-DD' });
+      }
       const levelDir = level === 'error' ? logger.errorLogDir : level === 'cmd' ? logger.cmdLogDir : logger.warnLogDir;
       const logFile = path.join(levelDir, `${serviceId}-${targetDate}.log`);
-      
+
       if (!fs.existsSync(logFile)) {
         return res.status(404).json({ success: false, error: '日志文件不存在' });
       }
       
+      const safeLogFile = validator.resolveLogFilePath(logFile, levelDir);
       res.setHeader('Content-Type', 'text/plain');
       res.setHeader('Content-Disposition', `attachment; filename="${serviceId}-${level}-${targetDate}.log"`);
-      res.sendFile(logFile);
+      res.sendFile(safeLogFile);
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
@@ -173,6 +187,10 @@ const logController = {
     try {
       const { date, lines = 200 } = req.query;
       const targetDate = date || new Date().toISOString().split('T')[0];
+      if (!validator.isValidDate(targetDate)) {
+        return res.status(400).json({ success: false, error: 'date 必须是 YYYY-MM-DD' });
+      }
+      const safeLines = validator.clampLines(lines, 200, 5000);
       const cmdDir = logger.cmdLogDir;
 
       if (!fs.existsSync(cmdDir)) {
@@ -196,7 +214,7 @@ const logController = {
         allLines.push(...fileLines);
       }
 
-      const lastLines = allLines.slice(-parseInt(lines, 10));
+      const lastLines = allLines.slice(-safeLines);
 
       res.json({
         success: true,

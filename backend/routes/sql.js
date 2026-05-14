@@ -14,7 +14,7 @@ router.post('/query', async (req, res) => {
   if (result.success) {
     res.json(result);
   } else {
-    res.status(500).json(result);
+    res.status(result.readonlyViolation ? 400 : 500).json(result);
   }
 });
 

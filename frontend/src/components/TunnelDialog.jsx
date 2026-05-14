@@ -12,8 +12,8 @@ const DEFAULT_PORT_MAPPINGS = [
 function TunnelDialog({ isOpen, onClose }) {
   const resolved = useConfigStore((s) => s.resolved)
   const tunnelConfig = resolved?.tunnel || {}
-  const remoteHost = tunnelConfig.remoteHost || '8.152.216.176'
-  const remoteUser = tunnelConfig.remoteUser || 'root'
+  const remoteHost = tunnelConfig.remoteHost || ''
+  const remoteUser = tunnelConfig.remoteUser || ''
 
   const [portMappings, setPortMappings] = useState(() =>
     DEFAULT_PORT_MAPPINGS.map((m) => ({ ...m }))
@@ -110,6 +110,27 @@ function TunnelDialog({ isOpen, onClose }) {
     setPortMappings((prev) => prev.filter((_, i) => i !== index))
   }, [loading])
 
+  const saveTunnelConfig = useCallback(async (nextPorts = portMappings, nextAutoConnect = autoConnect) => {
+    const ports = nextPorts
+      .filter((m) => m.remotePort && m.localPort)
+      .map((m) => ({
+        remotePort: Number(m.remotePort),
+        localPort: Number(m.localPort),
+        description: m.description || ''
+      }))
+
+    const res = await fetch('/api/services/tunnel/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ports, autoConnect: nextAutoConnect })
+    })
+    const data = await res.json()
+    if (!data.success) {
+      throw new Error(data?.error?.message || data?.message || 'SSH 隧道配置保存失败')
+    }
+    return ports
+  }, [portMappings, autoConnect])
+
   const handleStart = useCallback(async () => {
     const validPorts = portMappings.filter((m) => m.remotePort && m.localPort)
     if (validPorts.length === 0) {
@@ -128,11 +149,7 @@ function TunnelDialog({ isOpen, onClose }) {
 
     try {
       // 先保存配置到文件
-      await fetch('/api/services/tunnel/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ports, autoConnect })
-      })
+      await saveTunnelConfig(portMappings, autoConnect)
 
       // 再启动隧道
       const res = await fetch('/api/services/tunnel/start', {
@@ -153,7 +170,7 @@ function TunnelDialog({ isOpen, onClose }) {
     } finally {
       setLoading(false)
     }
-  }, [portMappings])
+  }, [portMappings, autoConnect, saveTunnelConfig])
 
   const handleStop = useCallback(async () => {
     setLoading(true)
@@ -204,7 +221,7 @@ function TunnelDialog({ isOpen, onClose }) {
         <form className="tunnel-dialog-body" onSubmit={handleSubmit}>
           <div className="tunnel-dialog-target">
             <span className="tunnel-dialog-target-label">目标:</span>
-            {remoteUser}@{remoteHost}
+            {remoteUser && remoteHost ? `${remoteUser}@${remoteHost}` : '未配置，请先在配置管理中填写 SSH 目标'}
           </div>
 
           {/* 自动连接 */}
@@ -213,7 +230,11 @@ function TunnelDialog({ isOpen, onClose }) {
               <input
                 type="checkbox"
                 checked={autoConnect}
-                onChange={(e) => setAutoConnect(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setAutoConnect(checked)
+                  saveTunnelConfig(portMappings, checked).catch((err) => setError(err.message))
+                }}
                 disabled={loading}
               />
               启动时自动连接

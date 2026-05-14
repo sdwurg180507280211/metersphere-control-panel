@@ -3,7 +3,7 @@ import { toast } from 'react-hot-toast'
 import { useWebSocketStore, useLogStore, useBuildStore, useServiceStore, usePackageStore, useInfraStore } from '../store/useAppStore'
 
 const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss' : 'ws'
-const WS_URL = `${WS_PROTOCOL}://${window.location.host}/ws`
+const LOCAL_TOKEN_KEY = 'msLocalToken'
 const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_DELAY = 3000
 
@@ -380,7 +380,9 @@ export function useWebSocket() {
 
       isConnectingRef.current = true
 
-      const socket = new WebSocket(WS_URL)
+      const token = localStorage.getItem(LOCAL_TOKEN_KEY) || ''
+      const wsUrl = `${WS_PROTOCOL}://${window.location.host}/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`
+      const socket = new WebSocket(wsUrl)
       wsRef.current = socket
 
       socket.onopen = () => {

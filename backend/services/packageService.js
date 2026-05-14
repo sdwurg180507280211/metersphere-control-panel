@@ -4,6 +4,7 @@ const { spawn } = require('child_process');
 const packageConfig = require('../config/package');
 const configManager = require('./configManager');
 const { createAppError } = require('../utils/errors');
+const validator = require('../utils/validator');
 
 function normalizeBoolean(value, fallback) {
   if (typeof value === 'boolean') {
@@ -41,22 +42,23 @@ function resolvePackageScriptPath(explicitPath = null, resolvedConfig = getResol
     });
   }
 
-  const stats = fs.statSync(existingPath);
+  const safeScriptPath = validator.resolvePackageScriptPath(existingPath);
+  const stats = fs.statSync(safeScriptPath);
   if (!stats.isFile()) {
     throw createAppError(500, 'PACKAGE_SCRIPT_INVALID', '打包脚本路径不是文件', {
-      scriptPath: existingPath
+      scriptPath: safeScriptPath
     });
   }
 
   try {
-    fs.accessSync(existingPath, fs.constants.X_OK);
+    fs.accessSync(safeScriptPath, fs.constants.X_OK);
   } catch (error) {
     throw createAppError(500, 'PACKAGE_SCRIPT_NOT_EXECUTABLE', '打包脚本不可执行', {
-      scriptPath: existingPath
+      scriptPath: safeScriptPath
     });
   }
 
-  return existingPath;
+  return safeScriptPath;
 }
 
 function validateServices(rawServices, resolvedConfig = getResolvedConfig()) {

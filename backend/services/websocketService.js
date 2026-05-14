@@ -3,6 +3,7 @@
  * 替代 SSE，支持双向通信和自动重连
  */
 const { WebSocketServer } = require('ws');
+const localAuthService = require('./localAuthService');
 
 class WebSocketService {
   constructor() {
@@ -11,7 +12,32 @@ class WebSocketService {
   }
 
   init(server) {
-    this.wss = new WebSocketServer({ server, path: '/ws' });
+    this.wss = new WebSocketServer({ noServer: true });
+
+    server.on('upgrade', (req, socket, head) => {
+      let requestUrl;
+      try {
+        requestUrl = new URL(req.url, 'http://127.0.0.1');
+      } catch (error) {
+        socket.destroy();
+        return;
+      }
+
+      if (requestUrl.pathname !== '/ws') {
+        return;
+      }
+
+      const token = requestUrl.searchParams.get('token') || '';
+      if (!localAuthService.verifyToken(token)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      this.wss.handleUpgrade(req, socket, head, (ws) => {
+        this.wss.emit('connection', ws, req);
+      });
+    });
 
     this.wss.on('connection', (ws, req) => {
       const clientId = this._generateClientId();

@@ -1,4 +1,6 @@
 const { spawn } = require('child_process');
+const path = require('path');
+const validator = require('../utils/validator');
 const { createAppError } = require('../utils/errors');
 
 const COMMAND_TIMEOUT_MS = 10000;
@@ -77,12 +79,14 @@ class SudoCommandService {
   }
 
   async readFile(filePath, password) {
-    const { stdout } = await this.execute('cat', [filePath], password);
+    const safePath = validator.resolveConfigFilePath(filePath, path.basename(filePath));
+    const { stdout } = await this.execute('cat', [safePath], password);
     return stdout;
   }
 
   async writeFile(filePath, content, password) {
-    await this.execute('tee', [filePath], password, { stdin: content || '' });
+    const safePath = validator.resolveConfigFilePath(filePath, path.basename(filePath));
+    await this.execute('tee', [safePath], password, { stdin: content || '' });
   }
 }
 

@@ -155,8 +155,8 @@ function normalizeTunnelConfig(rawConfig = {}) {
     : {};
 
   return {
-    remoteHost: normalizeString(config.remoteHost, '8.152.216.176'),
-    remoteUser: normalizeString(config.remoteUser, 'root')
+    remoteHost: normalizeString(config.remoteHost, ''),
+    remoteUser: normalizeString(config.remoteUser, '')
   };
 }
 
@@ -236,6 +236,7 @@ function normalizeSshTunnelConfig(rawTunnel = {}) {
   }
 
   return {
+    enabled: !!tunnel.enabled,
     ports: ports.length > 0 ? ports : null,
     autoConnect: !!tunnel.autoConnect
   };

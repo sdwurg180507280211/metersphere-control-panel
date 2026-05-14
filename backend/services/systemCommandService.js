@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const { createAppError } = require('../utils/errors');
 const configManager = require('./configManager');
 const websocketService = require('./websocketService');
+const validator = require('../utils/validator');
 
 const COMMAND_TIMEOUT_MS = 30000;
 const INVALID_PASSWORD_PATTERN = /(sorry, try again|incorrect password|a password is required|no password was provided|incorrect password attempt)/i;
@@ -25,6 +26,38 @@ function broadcastTunnelEvent(event, data = {}) {
   if (websocketService && websocketService.broadcast) {
     websocketService.broadcast('tunnel:status', { event, ...data });
   }
+}
+
+function validateTunnelEndpoint(config) {
+  const remoteHost = config.tunnel?.remoteHost || '';
+  const remoteUser = config.tunnel?.remoteUser || '';
+
+  if (!/^[a-zA-Z0-9.-]{1,253}$/.test(remoteHost)) {
+    throw createAppError(400, 'INVALID_TUNNEL_HOST', 'SSH 隧道远程主机未配置或格式不合法');
+  }
+  if (!/^[a-zA-Z0-9._-]{1,64}$/.test(remoteUser)) {
+    throw createAppError(400, 'INVALID_TUNNEL_USER', 'SSH 隧道远程用户未配置或格式不合法');
+  }
+
+  return { remoteHost, remoteUser };
+}
+
+function validateTunnelPorts(ports) {
+  if (!Array.isArray(ports) || ports.length === 0) {
+    throw createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射');
+  }
+  if (ports.length > 20) {
+    throw createAppError(400, 'TOO_MANY_TUNNEL_PORTS', '端口映射数量不能超过 20 个');
+  }
+
+  return ports.map((item) => {
+    const remotePort = Number.parseInt(item.remotePort, 10);
+    const localPort = Number.parseInt(item.localPort, 10);
+    if (!validator.isValidPort(remotePort) || !validator.isValidPort(localPort)) {
+      throw createAppError(400, 'INVALID_TUNNEL_PORT', '端口必须是 1 到 65535 之间的整数');
+    }
+    return { remotePort, localPort };
+  });
 }
 
 class SystemCommandService {
@@ -149,13 +182,9 @@ class SystemCommandService {
    * @returns {Promise<{pid: number}>}
    */
   async startTunnel(ports) {
-    if (!Array.isArray(ports) || ports.length === 0) {
-      throw createAppError(400, 'PORTS_REQUIRED', '请选择至少一个端口映射');
-    }
-
     const resolvedConfig = configManager.getResolvedConfig();
-    const REMOTE_HOST = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
-    const REMOTE_USER = resolvedConfig.tunnel?.remoteUser || 'root';
+    const safePorts = validateTunnelPorts(ports);
+    const { remoteHost, remoteUser } = validateTunnelEndpoint(resolvedConfig);
 
     // 检查是否已有隧道进程
     const currentStatus = await this.getTunnelStatus();
@@ -166,9 +195,9 @@ class SystemCommandService {
     // 清理之前的状态
     this._clearTunnelRetry();
     this._tunnelIntentionalStop = false;
-    this._tunnelPorts = ports;
+    this._tunnelPorts = safePorts;
 
-    return this._doStartTunnel(ports, REMOTE_USER, REMOTE_HOST);
+    return this._doStartTunnel(safePorts, remoteUser, remoteHost);
   }
 
   async _doStartTunnel(ports, remoteUser, remoteHost) {
@@ -178,7 +207,6 @@ class SystemCommandService {
     ]);
 
     const sshArgs = [
-      '-o', 'StrictHostKeyChecking=no',
       '-o', 'ServerAliveInterval=60',
       '-o', 'ServerAliveCountMax=3',
       '-o', 'ExitOnForwardFailure=yes',
@@ -342,7 +370,11 @@ class SystemCommandService {
 
     return new Promise((resolve, reject) => {
       const resolvedConfig = configManager.getResolvedConfig();
-      const remoteHost = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
+      const remoteHost = resolvedConfig.tunnel?.remoteHost || '';
+      if (!remoteHost) {
+        resolve({ message: '无需停止，隧道未配置' });
+        return;
+      }
       const escapedHost = remoteHost.replace(/\./g, '\\.');
       logger.broadcastCommand(`pkill -f ssh.*${escapedHost}`, 'service');
       const child = spawn('pkill', ['-f', `ssh.*${escapedHost}`], {
@@ -376,7 +408,11 @@ class SystemCommandService {
   async getTunnelStatus() {
     return new Promise((resolve) => {
       const resolvedConfig = configManager.getResolvedConfig();
-      const remoteHost = resolvedConfig.tunnel?.remoteHost || '8.152.216.176';
+      const remoteHost = resolvedConfig.tunnel?.remoteHost || '';
+      if (!remoteHost) {
+        resolve('STOPPED');
+        return;
+      }
       const escapedHost = remoteHost.replace(/\./g, '\\.');
       const child = spawn('pgrep', ['-f', `ssh.*${escapedHost}`], {
         stdio: ['ignore', 'pipe', 'pipe']
