@@ -65,6 +65,13 @@ function getAllowedScriptDirs() {
   ].filter(Boolean);
 }
 
+function getAllowedNativeLogDirs() {
+  return [
+    '/opt/metersphere/logs',
+    ...parseExtraDirs(process.env.MS_ALLOWED_NATIVE_LOG_DIRS)
+  ].filter(Boolean);
+}
+
 const validator = {
   /**
    * 校验服务 ID
@@ -149,6 +156,10 @@ const validator = {
 
   resolvePackageScriptPath(filePath) {
     return resolveExistingFileInDirs(filePath, getAllowedScriptDirs(), 'PACKAGE_SCRIPT_PATH_NOT_ALLOWED');
+  },
+
+  resolveNativeLogFilePath(filePath) {
+    return resolveExistingFileInDirs(filePath, getAllowedNativeLogDirs(), 'NATIVE_LOG_PATH_NOT_ALLOWED');
   },
 
   /**

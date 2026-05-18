@@ -78,6 +78,14 @@ export const useLogStore = create((set, get) => ({
     build: { logLevel: 'all', searchTerm: '' },
     package: { logLevel: 'all', searchTerm: '' }
   },
+  nativeServiceLogs: {
+    serviceId: '',
+    file: 'info.log',
+    lines: [],
+    meta: null,
+    loading: false,
+    error: ''
+  },
 
   appendServiceLog: (message) => set((state) => appendLogChunk(state, 'service', message)),
   appendBuildLog: (message) => set((state) => appendLogChunk(state, 'build', message)),
@@ -121,6 +129,14 @@ export const useLogStore = create((set, get) => ({
     serviceLogLines: [],
     logTails: { ...state.logTails, service: '' }
   })),
+  clearNativeServiceLogs: () => set((state) => ({
+    nativeServiceLogs: {
+      ...state.nativeServiceLogs,
+      lines: [],
+      meta: null,
+      error: ''
+    }
+  })),
   clearBuildLogs: () => set((state) => ({
     buildLogLines: [],
     logTails: { ...state.logTails, build: '' }
@@ -143,6 +159,55 @@ export const useLogStore = create((set, get) => ({
       [type]: { ...state.filters[type], searchTerm: term }
     }
   })),
+
+  loadNativeServiceLogs: async ({ serviceId, file = 'info.log', lines = 500 }) => {
+    if (!serviceId) return null
+    set((state) => ({
+      nativeServiceLogs: {
+        ...state.nativeServiceLogs,
+        serviceId,
+        file,
+        loading: true,
+        error: ''
+      }
+    }))
+
+    try {
+      const params = new URLSearchParams({ serviceId, file, lines: String(lines) })
+      const res = await fetch(`/api/logs/native/service?${params.toString()}`)
+      const data = await res.json()
+      if (!data.success) {
+        throw new Error(data.error?.message || data.error || '读取 MeterSphere 原生日志失败')
+      }
+
+      const logLines = (data.data || []).map((text) => ({
+        text,
+        level: detectLogLevel(text),
+        isStackTrace: /^\s*(at\s+\w+\.|Caused by:|\w+Exception:|\w+Error:)/i.test(text),
+        isEmpty: !text || !text.trim()
+      }))
+      set({
+        nativeServiceLogs: {
+          serviceId,
+          file,
+          lines: logLines,
+          meta: data.meta || null,
+          loading: false,
+          error: ''
+        }
+      })
+      return data
+    } catch (error) {
+      set((state) => ({
+        nativeServiceLogs: {
+          ...state.nativeServiceLogs,
+          loading: false,
+          error: error.message || '读取 MeterSphere 原生日志失败'
+        }
+      }))
+      throw error
+    }
+  },
 
   getLogLines: (type) => getLogLinesForType(get(), type),
 

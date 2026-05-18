@@ -210,6 +210,21 @@
   color: #fca5a5;
 }
 
+.package-error-snippet {
+  width: 100%;
+  max-height: 120px;
+  overflow: auto;
+  margin: 4px 0 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.28);
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  color: #fecaca;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 /* ── 脚本不可用警告 ── */
 .package-warning {
   padding: 12px 14px;

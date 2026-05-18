@@ -482,7 +482,7 @@ export function useWebSocket() {
         }
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setConnected(false)
         isConnectingRef.current = false
 
@@ -494,6 +494,11 @@ export function useWebSocket() {
         clearScheduledRefreshes()
 
         if (isUnmountedRef.current || intentionalCloseRef.current) return
+
+        if (event.code === 1008 || event.reason === 'UNAUTHORIZED') {
+          toast.error('WebSocket 访问令牌无效，请使用启动日志中的本地访问地址重新打开')
+          return
+        }
 
         if (reconnectCountRef.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectCountRef.current += 1

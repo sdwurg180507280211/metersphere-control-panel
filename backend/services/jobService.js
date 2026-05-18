@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const cacheService = require('./cacheService');
 const websocketService = require('./websocketService');
@@ -115,6 +117,27 @@ class JobService {
    * @param {string} fallbackCode
    * @returns {{code: string, message: string, details: Object}}
    */
+  _readRecentLogSnippet(job) {
+    const serviceId = job.targetType === 'service' && job.targetId ? job.targetId : job.metadata?.serviceId;
+    if (!serviceId || !/^[a-zA-Z0-9._-]{1,80}$/.test(serviceId)) {
+      return null;
+    }
+
+    const date = new Date().toISOString().split('T')[0];
+    const logFile = path.join(__dirname, '../../logs/error', `${serviceId}-${date}.log`);
+    if (!fs.existsSync(logFile)) {
+      return null;
+    }
+
+    try {
+      const content = fs.readFileSync(logFile, 'utf8');
+      const lines = content.split('\n').filter(Boolean).slice(-20);
+      return lines.length > 0 ? lines.join('\n') : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   _toStructuredError(error, fallbackCode = 'INTERNAL_ERROR') {
     if (!error) {
       return { code: fallbackCode, message: '未知错误', details: {} };
@@ -438,6 +461,13 @@ class JobService {
     }
 
     const structuredError = this._toStructuredError(error, patch.code || 'INTERNAL_ERROR');
+    const logSnippet = patch.logSnippet || structuredError.details?.logSnippet || this._readRecentLogSnippet(current);
+    if (logSnippet) {
+      structuredError.details = {
+        ...structuredError.details,
+        logSnippet
+      };
+    }
     const failed = {
       ...current,
       ...patch,

@@ -318,6 +318,9 @@ function PackageStatusStrip({ task, status }) {
       <span className={`package-status-message ${hasError ? 'has-error' : ''}`}>
         {hasError ? `错误：${task.error.message}` : (task.message || '')}
       </span>
+      {task.error?.details?.logSnippet && (
+        <pre className="package-error-snippet">{task.error.details.logSnippet}</pre>
+      )}
     </div>
   )
 }

@@ -17,6 +17,9 @@ router.get('/files/by-level', logController.getFilesByLevel);
 // 读取指定服务的错误/警告/命令日志
 router.get('/service', logController.readServiceLogs);
 
+// 读取 MeterSphere 原生日志 (/opt/metersphere/logs)
+router.get('/native/service', logController.readNativeServiceLogs);
+
 // 获取命令历史
 router.get('/commands', logController.getCommandHistory);
 

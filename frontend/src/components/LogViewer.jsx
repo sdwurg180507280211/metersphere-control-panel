@@ -6,6 +6,15 @@ import './LogViewer.css'
 
 const LOG_LINE_HEIGHT = 20
 const LOG_OVERSCAN = 20
+function createDefaultFilter() {
+  return { logLevel: 'all', searchTerm: '' }
+}
+const NATIVE_LOG_FILE_LABELS = {
+  'info.log': '信息日志',
+  'warn.log': '警告日志',
+  'error.log': '错误日志',
+  'debug.log': '调试日志'
+}
 
 // 日志级别优先级（用于过滤）
 const LOG_LEVEL_PRIORITY = {
@@ -47,10 +56,10 @@ function filterLogLines(lines, level, searchTerm) {
   }
 
   if (searchTerm) {
-    const term = searchTerm.toLowerCase()
+    const term = String(searchTerm).toLowerCase()
     nextLines = nextLines.filter((line) => {
-      const text = typeof line === 'object' ? line.text : String(line)
-      return text.toLowerCase().includes(term)
+      const text = typeof line === 'object' ? line.text : line
+      return String(text ?? '').toLowerCase().includes(term)
     })
   }
 
@@ -70,8 +79,9 @@ const LOG_LEVEL_CONFIG = {
 }
 
 // 直接订阅日志状态
-function useLogLines(type) {
+function useLogLines(type, source) {
   return useLogStore((state) => {
+    if (type === 'service' && source === 'native') return state.nativeServiceLogs.lines
     if (type === 'service') return state.serviceLogLines
     if (type === 'build') return state.buildLogLines
     if (type === 'package') return state.packageLogLines
@@ -79,7 +89,14 @@ function useLogLines(type) {
   })
 }
 
-function LogViewer({ type, searchInputRef }) {
+function getNativeFileForLevel(level) {
+  if (level === 'error') return 'error.log'
+  if (level === 'warn') return 'warn.log'
+  if (level === 'debug') return 'debug.log'
+  return 'info.log'
+}
+
+function LogViewer({ type, searchInputRef, services = [] }) {
   const logRef = useRef(null)
   const searchInputRefLocal = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -90,19 +107,39 @@ function LogViewer({ type, searchInputRef }) {
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
   const [copied, setCopied] = useState(false)
   const [copiedSelection, setCopiedSelection] = useState(false)
+  const [logSource, setLogSource] = useState('control')
+  const [selectedServiceId, setSelectedServiceId] = useState(services[0]?.id || 'api-test')
+  const [sourceFilters, setSourceFilters] = useState(() => ({
+    control: createDefaultFilter(),
+    native: createDefaultFilter()
+  }))
 
   const {
     filters,
+    nativeServiceLogs,
     setLogLevel,
     setSearchTerm,
     clearServiceLogs,
     clearBuildLogs,
-    clearPackageLogs
+    clearPackageLogs,
+    clearNativeServiceLogs,
+    loadNativeServiceLogs
   } = useLogStore()
 
-  const { logLevel, searchTerm } = filters[type]
+  const storeFilters = filters[type] || createDefaultFilter()
+  const currentSource = type === 'service' ? logSource : 'control'
+  const isNativeSource = type === 'service' && currentSource === 'native'
+  const activeFilter = type === 'service' ? sourceFilters[currentSource] || createDefaultFilter() : storeFilters
+  const logLevel = activeFilter.logLevel || 'all'
+  const searchTerm = activeFilter.searchTerm || ''
+  const nativeFile = isNativeSource ? getNativeFileForLevel(logLevel) : null
+  const selectedService = services.find((service) => service.id === selectedServiceId)
+  const nativeFileLabel = NATIVE_LOG_FILE_LABELS[nativeFile] || '信息日志'
+  const nativeLogLabel = isNativeSource
+    ? `${selectedService?.name || selectedServiceId || '未选择服务'} / ${nativeFileLabel}`
+    : ''
   // 直接订阅状态，确保响应式更新
-  const originalLines = useLogLines(type)
+  const originalLines = useLogLines(type, currentSource)
 
   // 本地过滤逻辑，确保响应式
   const lines = useMemo(() => {
@@ -111,6 +148,28 @@ function LogViewer({ type, searchInputRef }) {
   const originalLogs = useMemo(() => {
     return originalLines.map(line => typeof line === 'object' ? line.text : line).join('\n')
   }, [originalLines])
+
+  const updateLogLevel = useCallback((nextLevel) => {
+    if (type === 'service') {
+      setSourceFilters((state) => ({
+        ...state,
+        [currentSource]: { ...state[currentSource], logLevel: nextLevel }
+      }))
+      return
+    }
+    setLogLevel(type, nextLevel)
+  }, [currentSource, setLogLevel, type])
+
+  const updateSearchTerm = useCallback((nextTerm) => {
+    if (type === 'service') {
+      setSourceFilters((state) => ({
+        ...state,
+        [currentSource]: { ...state[currentSource], searchTerm: nextTerm }
+      }))
+      return
+    }
+    setSearchTerm(type, nextTerm)
+  }, [currentSource, setSearchTerm, type])
 
   // 监听全局搜索聚焦事件
   useEffect(() => {
@@ -142,6 +201,41 @@ function LogViewer({ type, searchInputRef }) {
 
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (type === 'service' && services.length > 0 && !services.some((service) => service.id === selectedServiceId)) {
+      setSelectedServiceId(services[0].id)
+    }
+  }, [type, services, selectedServiceId])
+
+  useEffect(() => {
+    if (type !== 'service' || currentSource !== 'native') {
+      return
+    }
+
+    setSourceFilters((state) => {
+      if (state.native.logLevel !== 'cmd') {
+        return state
+      }
+      return {
+        ...state,
+        native: { ...state.native, logLevel: 'all' }
+      }
+    })
+  }, [currentSource, type])
+
+  useEffect(() => {
+    if (type !== 'service' || currentSource !== 'native') {
+      return
+    }
+
+    if (!selectedServiceId) {
+      clearNativeServiceLogs()
+      return
+    }
+
+    loadNativeServiceLogs({ serviceId: selectedServiceId, file: nativeFile, lines: 500 }).catch(() => {})
+  }, [type, currentSource, selectedServiceId, nativeFile, loadNativeServiceLogs, clearNativeServiceLogs])
 
   useEffect(() => {
     if (logRef.current && autoScroll) {
@@ -178,6 +272,8 @@ function LogViewer({ type, searchInputRef }) {
       clearBuildLogs()
     } else if (type === 'package') {
       clearPackageLogs()
+    } else if (isNativeSource) {
+      clearNativeServiceLogs()
     } else {
       clearServiceLogs()
     }
@@ -185,12 +281,20 @@ function LogViewer({ type, searchInputRef }) {
     setRenderTick((t) => t + 1)
   }
 
+  const refreshNativeLogs = useCallback(() => {
+    if (type !== 'service' || currentSource !== 'native' || !selectedServiceId) return
+    loadNativeServiceLogs({ serviceId: selectedServiceId, file: nativeFile, lines: 500 }).catch(() => {})
+  }, [type, currentSource, selectedServiceId, nativeFile, loadNativeServiceLogs])
+
   const handleDownload = () => {
+    if (!originalLogs) return
     const blob = new Blob([originalLogs], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
+    const date = new Date().toISOString().slice(0, 10)
+    const sourcePart = isNativeSource ? `native-${selectedServiceId || 'service'}-${nativeFile?.replace('.log', '') || 'info'}` : `${type}-control`
     anchor.href = url
-    anchor.download = `${type}-logs-${new Date().toISOString().slice(0, 10)}.txt`
+    anchor.download = `${sourcePart}-logs-${date}.txt`
     anchor.click()
     URL.revokeObjectURL(url)
   }
@@ -232,6 +336,42 @@ function LogViewer({ type, searchInputRef }) {
   }
 
   const matchCount = useMemo(() => (searchTerm ? lines.length : 0), [lines, searchTerm])
+  const sourceLabel = currentSource === 'native' ? 'MeterSphere 原生日志' : '控制面板日志'
+  const activeLogLabel = isNativeSource ? `${sourceLabel} / ${nativeLogLabel}` : sourceLabel
+  const emptyState = (() => {
+    if (isNativeSource && nativeServiceLogs.error) {
+      return {
+        type: 'error',
+        title: '原生日志读取失败',
+        description: nativeServiceLogs.error,
+        action: { label: '重新读取', onClick: refreshNativeLogs }
+      }
+    }
+
+    if (searchTerm) {
+      return {
+        type: 'search',
+        title: '当前日志中没有匹配内容',
+        description: `搜索范围：${activeLogLabel}`,
+        action: { label: '清除搜索', onClick: () => updateSearchTerm('') }
+      }
+    }
+
+    if (isNativeSource) {
+      return {
+        type: 'logs',
+        title: '当前服务暂无日志',
+        description: `读取范围：${nativeLogLabel}`,
+        action: { label: '重新读取', onClick: refreshNativeLogs }
+      }
+    }
+
+    return {
+      type: 'logs',
+      title: '暂无控制面板日志',
+      description: '启动、停止、构建或打包后将在此显示控制面板日志'
+    }
+  })()
 
   // 渲染单行日志
   const renderLogLine = (line, index) => {
@@ -333,10 +473,12 @@ function LogViewer({ type, searchInputRef }) {
   // 高亮搜索词
   const highlightSearchTerm = (text, term) => {
     if (!term) return text
-    const parts = text.split(new RegExp(`(${term})`, 'gi'))
-    return parts.map((part, i) => 
-      part.toLowerCase() === term.toLowerCase() ? 
-        <mark key={i} className="highlight">{part}</mark> : part
+    const escapedTerm = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const parts = String(text ?? '').split(new RegExp(`(${escapedTerm})`, 'gi'))
+    return parts.map((part, i) =>
+      part.toLowerCase() === String(term).toLowerCase()
+        ? <mark key={i} className="highlight">{part}</mark>
+        : part
     )
   }
 
@@ -344,16 +486,35 @@ function LogViewer({ type, searchInputRef }) {
     <div className={`log-container ${getThemeClass(type)}`}>
       <div className="log-toolbar">
         <div className="log-filters">
+          {type === 'service' && (
+            <div className="log-source-tabs">
+              <button className={currentSource === 'control' ? 'active' : ''} onClick={() => setLogSource('control')}>控制面板日志</button>
+              <button className={currentSource === 'native' ? 'active' : ''} onClick={() => setLogSource('native')}>MeterSphere 原生日志</button>
+            </div>
+          )}
+          {type === 'service' && currentSource === 'native' && (
+            <>
+              <select className="log-select native-service-select" value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)}>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>{service.name || service.id}</option>
+                ))}
+              </select>
+              <div className="log-source-label">当前：{activeLogLabel}</div>
+            </>
+          )}
+          {type === 'service' && currentSource === 'control' && (
+            <div className="log-source-label">当前：{activeLogLabel}</div>
+          )}
           <select
             value={logLevel}
-            onChange={(e) => setLogLevel(type, e.target.value)}
+            onChange={(e) => updateLogLevel(e.target.value)}
             className="log-select"
           >
             <option value="all">全部级别</option>
             <option value="error">错误 (ERROR)</option>
             <option value="warn">警告 (WARN)</option>
             <option value="info">信息 (INFO)</option>
-            <option value="cmd">命令 (CMD)</option>
+            {currentSource !== 'native' && <option value="cmd">命令 (CMD)</option>}
             <option value="debug">调试 (DEBUG)</option>
           </select>
 
@@ -363,7 +524,7 @@ function LogViewer({ type, searchInputRef }) {
               type="text"
               placeholder="搜索日志... (快捷键: S)"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(type, e.target.value)}
+              onChange={(e) => updateSearchTerm(e.target.value)}
               className="log-search-input"
             />
             {searchTerm && (
@@ -384,7 +545,7 @@ function LogViewer({ type, searchInputRef }) {
             </button>
           </Tooltip>
           <Tooltip content="下载日志" position="bottom">
-            <button className="btn-icon" onClick={handleDownload}>
+            <button className="btn-icon" onClick={handleDownload} disabled={!originalLogs}>
               💾
             </button>
           </Tooltip>
@@ -404,9 +565,11 @@ function LogViewer({ type, searchInputRef }) {
             </div>
           </div>
         ) : (
-          <EmptyState 
-            type={searchTerm ? 'search' : 'logs'}
-            action={searchTerm ? { label: '清除搜索', onClick: () => setSearchTerm(type, '') } : null}
+          <EmptyState
+            type={emptyState.type}
+            title={emptyState.title}
+            description={emptyState.description}
+            action={emptyState.action}
           />
         )}
       </div>

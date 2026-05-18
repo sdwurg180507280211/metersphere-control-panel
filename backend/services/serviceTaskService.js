@@ -409,6 +409,34 @@ class ServiceTaskService {
     };
   }
 
+  _sortServicesByDependencies(services) {
+    const byId = new Map(services.map((service) => [service.id, service]));
+    const visited = new Set();
+    const visiting = new Set();
+    const sorted = [];
+
+    const visit = (service) => {
+      if (visited.has(service.id)) return;
+      if (visiting.has(service.id)) {
+        throw createAppError(400, 'SERVICE_DEPENDENCY_CYCLE', `服务依赖存在循环: ${service.id}`, { serviceId: service.id });
+      }
+
+      visiting.add(service.id);
+      for (const dependencyId of service.dependencies || []) {
+        const dependency = byId.get(dependencyId);
+        if (dependency && dependency.enabled !== false) {
+          visit(dependency);
+        }
+      }
+      visiting.delete(service.id);
+      visited.add(service.id);
+      sorted.push(service);
+    };
+
+    services.forEach(visit);
+    return sorted;
+  }
+
   async _executeBatchAction({
     type,
     targetId,
@@ -656,7 +684,7 @@ class ServiceTaskService {
       // Other errors (e.g., config file missing) don't block
     }
 
-    const services = [...configManager.getResolvedConfig().serviceCatalog];
+    const services = this._sortServicesByDependencies([...configManager.getResolvedConfig().serviceCatalog]);
     return this._executeBatchAction({
       type: 'service.batch.start',
       targetId: 'all-services',
@@ -688,7 +716,7 @@ class ServiceTaskService {
 
   async restartAllServices() {
     logger.broadcast('\n========== 重启所有服务 ==========', 'service');
-    const services = [...configManager.getResolvedConfig().serviceCatalog];
+    const services = this._sortServicesByDependencies([...configManager.getResolvedConfig().serviceCatalog]);
     return this._executeBatchAction({
       type: 'service.batch.restart',
       targetId: 'all-services',

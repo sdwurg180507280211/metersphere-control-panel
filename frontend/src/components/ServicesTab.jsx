@@ -483,7 +483,7 @@ function ServicesTab({ searchInputRef }) {
           <div className="card-header">
             <h2 className="card-title">服务日志</h2>
           </div>
-          <LogViewer type="service" searchInputRef={searchInputRef} />
+          <LogViewer type="service" searchInputRef={searchInputRef} services={catalog} />
         </aside>
       </div>
 

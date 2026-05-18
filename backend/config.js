@@ -30,6 +30,16 @@ const DEFAULT_PROJECT_ROOT = process.env.MS_PROJECT_ROOT || (isElectronPackaged 
 const DEFAULT_MAX_LOG_LINES = parseInt(process.env.MS_MAX_LOG_LINES || '1000', 10);
 const DEFAULT_SERVICE_START_ORDER = 99;
 const DEFAULT_HEALTH_CHECK = '/actuator/health';
+const DEFAULT_SERVICE_DEPENDENCIES = {
+  gateway: ['eureka'],
+  'api-test': ['eureka', 'gateway'],
+  'performance-test': ['eureka', 'gateway'],
+  'project-management': ['eureka', 'gateway'],
+  'report-stat': ['eureka', 'gateway'],
+  'system-setting': ['eureka', 'gateway'],
+  'test-track': ['eureka', 'gateway'],
+  workstation: ['eureka', 'gateway']
+};
 
 function detectNpmPath() {
   try {
@@ -195,6 +205,9 @@ function normalizeServiceDefinition(serviceId, rawService = {}) {
   const port = normalizeNumericField(service.port, null);
   const healthCheckPort = normalizeNumericField(service.healthCheckPort, port);
   const healthCheck = normalizeString(service.healthCheck, DEFAULT_HEALTH_CHECK);
+  const dependencies = Array.isArray(service.dependencies)
+    ? [...new Set(service.dependencies.map((item) => normalizeString(item)).filter(Boolean))]
+    : (DEFAULT_SERVICE_DEPENDENCIES[serviceId] || []);
 
   return {
     name: normalizeString(service.name, serviceId),
@@ -204,6 +217,7 @@ function normalizeServiceDefinition(serviceId, rawService = {}) {
     healthCheck,
     startOrder: normalizeNumericField(service.startOrder, DEFAULT_SERVICE_START_ORDER),
     enabled: normalizeBoolean(service.enabled, true),
+    dependencies,
     jvmOptions: normalizeString(service.jvmOptions, ''),
     imageVersion: normalizeString(service.imageVersion, '')
   };
@@ -285,7 +299,8 @@ function buildServiceCatalog(services = {}) {
       healthCheckPort: service.healthCheckPort || service.port,
       healthCheck: service.healthCheck || DEFAULT_HEALTH_CHECK,
       startOrder: service.startOrder || DEFAULT_SERVICE_START_ORDER,
-      enabled: service.enabled !== false
+      enabled: service.enabled !== false,
+      dependencies: service.dependencies || []
     }))
     .sort((a, b) => {
       // 先按 startOrder 排序
@@ -416,6 +431,7 @@ module.exports = {
   DEFAULT_MAX_LOG_LINES,
   DEFAULT_SERVICE_START_ORDER,
   DEFAULT_HEALTH_CHECK,
+  DEFAULT_SERVICE_DEPENDENCIES,
   DEFAULT_PROPERTIES_METERSPHERE,
   DEFAULT_PROPERTIES_REDISSON,
   FRONTEND_SERVICE_IDS,

@@ -148,6 +148,52 @@ const logController = {
   /**
    * 下载指定服务的错误/警告日志
    */
+  readNativeServiceLogs(req, res) {
+    try {
+      const { serviceId, file = 'info.log', lines = 300 } = req.query;
+
+      if (!serviceId || !validator.isSafeServiceId(serviceId)) {
+        return res.status(400).json({ success: false, error: '无效的 serviceId 参数' });
+      }
+
+      const allowedFiles = ['info.log', 'warn.log', 'error.log', 'debug.log'];
+      if (!allowedFiles.includes(file)) {
+        return res.status(400).json({ success: false, error: 'file 只允许 info.log、warn.log、error.log、debug.log' });
+      }
+
+      const safeLines = validator.clampLines(lines, 300, 5000);
+      const logFile = path.join('/opt/metersphere/logs', serviceId, file);
+
+      if (!fs.existsSync(logFile)) {
+        return res.json({
+          success: true,
+          data: [],
+          message: 'MeterSphere 原生日志文件不存在',
+          file: logFile
+        });
+      }
+
+      const safeLogFile = validator.resolveNativeLogFilePath(logFile);
+      const content = fs.readFileSync(safeLogFile, 'utf8');
+      const allLines = content.split('\n').filter(line => line.trim());
+      const lastLines = allLines.slice(-safeLines);
+
+      res.json({
+        success: true,
+        data: lastLines,
+        meta: {
+          serviceId,
+          file,
+          totalLines: allLines.length,
+          returnedLines: lastLines.length,
+          path: safeLogFile
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  },
+
   downloadServiceLogs(req, res) {
     try {
       const { serviceId, level = 'error', date } = req.query;

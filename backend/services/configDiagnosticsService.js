@@ -9,6 +9,7 @@ const {
   normalizeEditableConfig,
   buildResolvedConfig
 } = require('../config');
+const validator = require('../utils/validator');
 
 class ConfigDiagnosticsService {
   runDiagnostics(editableConfig, options = {}) {
@@ -24,7 +25,9 @@ class ConfigDiagnosticsService {
       ports: [],
       packageScript: null,
       redis: this._buildRedisDiagnostics(),
-      runtime: this._buildRuntimeDiagnostics()
+      runtime: this._buildRuntimeDiagnostics(),
+      sshTunnel: null,
+      nativeLogs: null
     };
 
     this._validateGeneralConfig(normalizedEditable, errors, warnings);
@@ -32,6 +35,8 @@ class ConfigDiagnosticsService {
     diagnostics.services = this._buildServiceDiagnostics(normalizedEditable, resolvedConfig, diagnostics.ports, errors, warnings);
     diagnostics.packageScript = this._buildPackageDiagnostics(resolvedConfig, errors, warnings);
     diagnostics.sdkBuild = this._buildSdkBuildDiagnostics(normalizedEditable, warnings);
+    diagnostics.sshTunnel = this._buildSshTunnelDiagnostics(normalizedEditable, errors, warnings);
+    diagnostics.nativeLogs = this._buildNativeLogDiagnostics(normalizedEditable, resolvedConfig, warnings);
 
     return {
       valid: errors.length === 0,
@@ -237,10 +242,35 @@ class ConfigDiagnosticsService {
         warnings.push(warning);
       }
 
+      const dependencies = Array.isArray(service.dependencies) ? service.dependencies : [];
+      const missingDependencies = dependencies.filter((dependencyId) => !editableConfig.services[dependencyId]);
+      const disabledDependencies = dependencies.filter((dependencyId) => editableConfig.services[dependencyId]?.enabled === false);
+
+      for (const dependencyId of missingDependencies) {
+        const issue = this._createIssue('error', `services.${serviceId}.dependencies`, `服务 ${service.name} 依赖不存在: ${dependencyId}`, {
+          serviceId,
+          dependencyId
+        });
+        serviceIssues.push(issue);
+        errors.push(issue);
+      }
+
+      for (const dependencyId of disabledDependencies) {
+        const warning = this._createIssue('warning', `services.${serviceId}.dependencies`, `服务 ${service.name} 依赖已禁用: ${dependencyId}`, {
+          serviceId,
+          dependencyId
+        });
+        serviceWarnings.push(warning);
+        warnings.push(warning);
+      }
+
       diagnostics.push({
         serviceId,
         name: service.name,
         enabled: service.enabled !== false,
+        dependencies,
+        missingDependencies,
+        disabledDependencies,
         pom: service.pom,
         pomPath,
         pomExists,
@@ -371,6 +401,63 @@ class ConfigDiagnosticsService {
       cacheMode: process.env.MS_CACHE_MODE || 'memory',
       packageScriptEnv: process.env.MS_PACKAGE_SCRIPT_PATH || process.env.PACKAGE_SCRIPT_PATH || null,
       propertiesPath: process.env.MS_PROPERTIES_PATH || redisConfig.propertiesPath
+    };
+  }
+
+  _buildSshTunnelDiagnostics(editableConfig, errors, warnings) {
+    const tunnel = editableConfig.sshTunnel || {};
+    const enabled = tunnel.enabled !== false;
+    const ports = Array.isArray(tunnel.ports) ? tunnel.ports : [];
+    const hostValid = !tunnel.remoteHost || /^[a-zA-Z0-9.-]{1,253}$/.test(tunnel.remoteHost);
+    const userValid = !tunnel.remoteUser || /^[a-zA-Z0-9._-]{1,64}$/.test(tunnel.remoteUser);
+    const invalidPorts = ports.filter((item) => !validator.isValidPort(item.remotePort) || !validator.isValidPort(item.localPort));
+
+    if (!hostValid) {
+      errors.push(this._createIssue('error', 'sshTunnel.remoteHost', 'SSH 隧道远程主机格式不合法'));
+    }
+    if (!userValid) {
+      errors.push(this._createIssue('error', 'sshTunnel.remoteUser', 'SSH 隧道远程用户名格式不合法'));
+    }
+    if (invalidPorts.length > 0) {
+      errors.push(this._createIssue('error', 'sshTunnel.ports', 'SSH 隧道端口映射包含非法端口', { invalidPorts }));
+    }
+    if (tunnel.autoConnect && (!tunnel.remoteHost || !tunnel.remoteUser || ports.length === 0)) {
+      warnings.push(this._createIssue('warning', 'sshTunnel.autoConnect', 'SSH 隧道已启用自动连接，但主机、用户或端口映射不完整'));
+    }
+
+    return {
+      enabled,
+      autoConnect: !!tunnel.autoConnect,
+      remoteHostConfigured: !!tunnel.remoteHost,
+      remoteUserConfigured: !!tunnel.remoteUser,
+      portMappingCount: ports.length,
+      valid: hostValid && userValid && invalidPorts.length === 0
+    };
+  }
+
+  _buildNativeLogDiagnostics(editableConfig, resolvedConfig, warnings) {
+    const baseDir = '/opt/metersphere/logs';
+    const exists = fs.existsSync(baseDir);
+    const serviceDirs = [];
+
+    if (exists) {
+      for (const serviceId of Object.keys(resolvedConfig.services || editableConfig.services || {})) {
+        const serviceDir = path.join(baseDir, serviceId);
+        if (fs.existsSync(serviceDir)) {
+          serviceDirs.push({ serviceId, path: serviceDir });
+        }
+      }
+    } else {
+      warnings.push(this._createIssue('warning', 'logs.native', 'MeterSphere 原生日志目录不存在，原生日志查看功能将显示为空', {
+        path: baseDir
+      }));
+    }
+
+    return {
+      baseDir,
+      exists,
+      matchedServiceCount: serviceDirs.length,
+      serviceDirs
     };
   }
 
