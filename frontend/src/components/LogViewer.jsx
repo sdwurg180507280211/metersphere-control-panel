@@ -16,6 +16,25 @@ const NATIVE_LOG_FILE_LABELS = {
   'debug.log': '调试日志'
 }
 
+const LOG_VIEW_STATE_KEY = 'msLogViewState'
+
+function loadLogViewState() {
+  try {
+    const raw = localStorage.getItem(LOG_VIEW_STATE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveLogViewState(nextState) {
+  try {
+    localStorage.setItem(LOG_VIEW_STATE_KEY, JSON.stringify(nextState))
+  } catch {
+    // ignore persistence failures
+  }
+}
+
 // 日志级别优先级（用于过滤）
 const LOG_LEVEL_PRIORITY = {
   'error': 0,
@@ -107,11 +126,12 @@ function LogViewer({ type, searchInputRef, services = [] }) {
   const [expandedStackTraces, setExpandedStackTraces] = useState(new Set())
   const [copied, setCopied] = useState(false)
   const [copiedSelection, setCopiedSelection] = useState(false)
-  const [logSource, setLogSource] = useState('control')
-  const [selectedServiceId, setSelectedServiceId] = useState(services[0]?.id || 'api-test')
+  const savedViewState = useMemo(() => loadLogViewState(), [])
+  const [logSource, setLogSource] = useState(() => savedViewState.source || 'control')
+  const [selectedServiceId, setSelectedServiceId] = useState(() => savedViewState.serviceId || services[0]?.id || 'api-test')
   const [sourceFilters, setSourceFilters] = useState(() => ({
-    control: createDefaultFilter(),
-    native: createDefaultFilter()
+    control: savedViewState.filters?.control || createDefaultFilter(),
+    native: savedViewState.filters?.native || createDefaultFilter()
   }))
 
   const {
@@ -170,6 +190,14 @@ function LogViewer({ type, searchInputRef, services = [] }) {
     }
     setSearchTerm(type, nextTerm)
   }, [currentSource, setSearchTerm, type])
+
+  useEffect(() => {
+    saveLogViewState({
+      source: logSource,
+      serviceId: selectedServiceId,
+      filters: sourceFilters
+    })
+  }, [logSource, selectedServiceId, sourceFilters])
 
   // 监听全局搜索聚焦事件
   useEffect(() => {
