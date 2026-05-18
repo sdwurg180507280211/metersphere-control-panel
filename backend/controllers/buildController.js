@@ -9,6 +9,44 @@ const websocketService = require('../services/websocketService');
 const jobService = require('../services/jobService');
 const { createAppError, sendError } = require('../utils/errors');
 
+function sortFrontendModulesByDependencies(moduleIds) {
+  const resolvedConfig = configManager.getResolvedConfig();
+  const modules = moduleIds.map((id) => ({
+    id,
+    config: validator.getValidModule(id)
+  }));
+  const moduleById = new Map(modules.map((item) => [item.id, item]));
+  const visited = new Set();
+  const visiting = new Set();
+  const sorted = [];
+
+  const visit = (moduleItem) => {
+    if (visited.has(moduleItem.id)) return;
+    if (visiting.has(moduleItem.id)) {
+      throw createAppError(400, 'FRONTEND_DEPENDENCY_CYCLE', `前端批量构建存在依赖循环: ${moduleItem.id}`, {
+        moduleId: moduleItem.id
+      });
+    }
+
+    visiting.add(moduleItem.id);
+
+    const service = resolvedConfig.services[moduleItem.config.serviceId];
+    for (const dependencyId of service?.dependencies || []) {
+      const dependency = moduleById.get(dependencyId);
+      if (dependency) {
+        visit(dependency);
+      }
+    }
+
+    visiting.delete(moduleItem.id);
+    visited.add(moduleItem.id);
+    sorted.push(moduleItem.id);
+  };
+
+  modules.forEach(visit);
+  return sorted;
+}
+
 const buildController = {
   async build(req, res) {
     try {
@@ -145,7 +183,8 @@ const buildController = {
         }));
       }
 
-      const linkedServices = modules
+      const orderedModules = sortFrontendModulesByDependencies(modules);
+      const linkedServices = orderedModules
         .map((id) => {
           const moduleConfig = validator.getValidModule(id);
           const service = configManager.getResolvedConfig().services[moduleConfig.serviceId];
@@ -160,7 +199,7 @@ const buildController = {
         stage: 'prepare',
         message: '准备批量构建任务',
         metadata: {
-          modules,
+          modules: orderedModules,
           autoRestart
         },
         summary: {
@@ -180,7 +219,7 @@ const buildController = {
         success: true,
         message: '批量构建任务已开始',
         jobId: parentJob.jobId,
-        modules,
+        modules: orderedModules,
         linkedServices,
         autoRestart
       });
@@ -189,8 +228,8 @@ const buildController = {
       const servicesToRestart = new Set();
       const subJobs = [];
 
-      for (let index = 0; index < modules.length; index += 1) {
-        const moduleId = modules[index];
+      for (let index = 0; index < orderedModules.length; index += 1) {
+        const moduleId = orderedModules[index];
         const moduleConfig = validator.getValidModule(moduleId);
         const resourceKey = `module:${moduleConfig.id}`;
         const childJob = await jobService.createJob({
@@ -241,7 +280,7 @@ const buildController = {
           });
           await jobService.updateJob(parentJob.jobId, {
             subJobs,
-            progress: Math.round((index / modules.length) * 100),
+            progress: Math.round((index / orderedModules.length) * 100),
             message: `正在构建 ${moduleConfig.name}`
           });
 
@@ -279,10 +318,10 @@ const buildController = {
 
         await jobService.updateJob(parentJob.jobId, {
           summary: {
-            total: modules.length,
+            total: orderedModules.length,
             succeeded: buildResults.filter((item) => item.success && !item.cancelled).length,
             failed: buildResults.filter((item) => !item.success && !item.cancelled).length,
-            running: Math.max(modules.length - index - 1, 0)
+            running: Math.max(orderedModules.length - index - 1, 0)
           },
           subJobs
         });
