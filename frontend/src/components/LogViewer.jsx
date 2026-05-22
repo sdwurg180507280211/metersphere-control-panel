@@ -515,9 +515,21 @@ function LogViewer({ type, searchInputRef, services = [] }) {
       <div className="log-toolbar">
         <div className="log-filters">
           {type === 'service' && (
-            <div className="log-source-tabs">
-              <button className={currentSource === 'control' ? 'active' : ''} onClick={() => setLogSource('control')}>控制面板日志</button>
-              <button className={currentSource === 'native' ? 'active' : ''} onClick={() => setLogSource('native')}>MeterSphere 原生日志</button>
+            <div className="log-source-switch" aria-label="日志来源">
+              <button
+                type="button"
+                className={currentSource === 'control' ? 'active' : ''}
+                onClick={() => setLogSource('control')}
+              >
+                控制面板
+              </button>
+              <button
+                type="button"
+                className={currentSource === 'native' ? 'active' : ''}
+                onClick={() => setLogSource('native')}
+              >
+                MeterSphere
+              </button>
             </div>
           )}
           {type === 'service' && currentSource === 'native' && (
@@ -527,11 +539,8 @@ function LogViewer({ type, searchInputRef, services = [] }) {
                   <option key={service.id} value={service.id}>{service.name || service.id}</option>
                 ))}
               </select>
-              <div className="log-source-label">当前：{activeLogLabel}</div>
+              <div className="log-source-label">{nativeLogLabel}</div>
             </>
-          )}
-          {type === 'service' && currentSource === 'control' && (
-            <div className="log-source-label">当前：{activeLogLabel}</div>
           )}
           <select
             value={logLevel}

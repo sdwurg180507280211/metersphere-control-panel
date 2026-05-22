@@ -58,30 +58,32 @@
   min-width: 0;
 }
 
-.log-source-tabs {
-  display: flex;
-  gap: 6px;
+.log-source-switch {
+  display: inline-flex;
   flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid #444;
+  border-radius: 8px;
+  background: #2f2f2f;
 }
 
-.log-source-tabs button {
-  padding: 6px 10px;
-  border: 1px solid #444;
+.log-source-switch button {
+  padding: 5px 10px;
+  border: none;
   border-radius: 6px;
-  background: #333;
-  color: #ccc;
+  background: transparent;
+  color: #aaa;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.log-source-tabs button:hover {
-  border-color: #555;
+.log-source-switch button:hover {
+  color: #fff;
 }
 
-.log-source-tabs button.active {
+.log-source-switch button.active {
   background: #007acc;
-  border-color: #007acc;
   color: white;
 }
 
@@ -355,14 +357,13 @@
     align-items: stretch;
   }
 
-  .native-log-controls {
+  .log-source-switch,
+  .native-service-select {
     width: 100%;
   }
 
-  .native-log-input,
-  .native-log-controls .log-select {
-    flex: 1 1 auto;
-    width: auto;
+  .log-source-switch button {
+    flex: 1;
   }
 
   .log-search {
