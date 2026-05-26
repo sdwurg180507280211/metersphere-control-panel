@@ -57,7 +57,8 @@ function getDetailedPackageScriptCandidates({ resolvedConfig = {}, explicitPath 
     process.env.MS_PACKAGE_SCRIPT_PATH ? { source: 'env:MS_PACKAGE_SCRIPT_PATH', path: process.env.MS_PACKAGE_SCRIPT_PATH } : null,
     process.env.PACKAGE_SCRIPT_PATH ? { source: 'env:PACKAGE_SCRIPT_PATH', path: process.env.PACKAGE_SCRIPT_PATH } : null,
     configuredPath ? { source: 'config:package.scriptPath', path: configuredPath } : null,
-    { source: 'projectRoot:default', path: path.resolve(projectRoot, '打包/metersphere-build.sh') }
+    { source: 'controlPanel:default', path: path.resolve(CONTROL_PANEL_ROOT, 'scripts/metersphere-build.sh') },
+    { source: 'projectRoot:legacy', path: path.resolve(projectRoot, '打包/metersphere-build.sh') }
   ].filter(Boolean);
 }
 

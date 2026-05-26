@@ -292,6 +292,20 @@ init_dependencies() {
     log_success "依赖初始化完成"
 }
 
+docker_build_image() {
+    local module_name="$1"
+    shift
+
+    if docker build "$@"; then
+        return 0
+    fi
+
+    log_warn "[$module_name] Docker 构建失败，等待文件系统同步后重试一次..."
+    sync || true
+    sleep 2
+    docker build "$@"
+}
+
 # 构建单个模块
 build_module() {
     local module_name="$1"
@@ -343,13 +357,13 @@ build_module() {
     # 构建 Docker 镜像
     log_info "[$module_name] 构建 Docker 镜像..."
     if [ -n "${SIMPLE_MODULES[$module_name]:-}" ]; then
-        if ! docker build "${docker_build_opts[@]}" -t "${image_name}" .; then
+        if ! docker_build_image "$module_name" "${docker_build_opts[@]}" -t "${image_name}" .; then
             log_error "[$module_name] Docker 镜像构建失败"
             return 1
         fi
     else
         cd "$PROJECT_PATH"
-        if ! docker build "${docker_build_opts[@]}" -t "${image_name}" -f "${module_path}/Dockerfile" .; then
+        if ! docker_build_image "$module_name" "${docker_build_opts[@]}" -t "${image_name}" -f "${module_path}/Dockerfile" .; then
             log_error "[$module_name] Docker 镜像构建失败"
             return 1
         fi
@@ -438,6 +452,14 @@ build_modules_parallel() {
 
     if [ ${#failed[@]} -gt 0 ]; then
         FAILED_MODULES+=("${failed[@]}")
+        for module in "${failed[@]}"; do
+            local log_file="${TMP_DIR}/${module}.log"
+            if [ -f "$log_file" ]; then
+                log_error "========== $module 构建日志开始 =========="
+                cat "$log_file"
+                log_error "========== $module 构建日志结束 =========="
+            fi
+        done
         log_error "以下模块构建失败: ${failed[*]}"
         return 1
     fi
