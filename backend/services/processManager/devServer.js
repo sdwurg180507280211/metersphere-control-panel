@@ -11,6 +11,10 @@ const { devServerProcesses } = require('./shared');
 
 module.exports = function applyDevServer(proto) {
   proto._resolveDevServerPort = async function(moduleConfig) {
+    if (moduleConfig.devPort) {
+      return moduleConfig.devPort;
+    }
+
     let devPort = 4200;
 
     try {
@@ -20,7 +24,18 @@ module.exports = function applyDevServer(proto) {
         const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
         const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
         if (portMatch) {
-          devPort = parseInt(portMatch[1]);
+          return parseInt(portMatch[1]);
+        }
+      }
+
+      const viteConfigPath = ['vite.config.ts', 'vite.config.js']
+        .map((file) => path.join(modulePath, file))
+        .find((file) => fs.existsSync(file));
+      if (viteConfigPath) {
+        const viteConfigContent = await fsp.readFile(viteConfigPath, 'utf8');
+        const portMatch = viteConfigContent.match(/port:\s*(\d+)/);
+        if (portMatch) {
+          return parseInt(portMatch[1]);
         }
       }
     } catch (error) {
@@ -173,15 +188,15 @@ module.exports = function applyDevServer(proto) {
       return { success: false, error: '模块缺少 package.json' };
     }
 
-    let devScript = null;
-    let devPort = 4200;
+    let devScript = moduleConfig.devScript || null;
+    let devPort = await this._resolveDevServerPort(moduleConfig);
 
     try {
       const pkg = JSON.parse(await fsp.readFile(pkgPath, 'utf8'));
 
       if (pkg.scripts) {
         const moduleName = pkg.name;
-        if (moduleName && pkg.scripts[moduleName]) {
+        if (!devScript && moduleName && pkg.scripts[moduleName]) {
           devScript = moduleName;
           logger.broadcast(`使用模块名称脚本: npm run ${moduleName}`, 'devserver');
         }
@@ -200,17 +215,13 @@ module.exports = function applyDevServer(proto) {
           );
         }
 
+        if (devScript && !pkg.scripts[devScript]) {
+          return { success: false, error: `模块缺少开发脚本: ${devScript}` };
+        }
+
         devScript = devScript || 'serve';
       }
 
-      const vueConfigPath = path.join(modulePath, 'vue.config.js');
-      if (fs.existsSync(vueConfigPath)) {
-        const vueConfigContent = await fsp.readFile(vueConfigPath, 'utf8');
-        const portMatch = vueConfigContent.match(/port:\s*(\d+)/);
-        if (portMatch) {
-          devPort = parseInt(portMatch[1]);
-        }
-      }
     } catch (e) {
       logger.broadcast(`解析模块配置失败: ${e.message}`, 'devserver');
     }

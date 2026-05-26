@@ -326,7 +326,13 @@ function buildFrontendModules(services = {}) {
       name: services[id].name || id,
       serviceId: id,
       frontendPath: `${id}/frontend`,
-      targetPath: `${id}/backend/src/main/resources/static`
+      targetPath: `${id}/backend/src/main/resources/static`,
+      installCommand: id === 'analytics-stat' ? 'install' : undefined,
+      installArgs: id === 'analytics-stat' ? ['--legacy-peer-deps'] : undefined,
+      buildScript: id === 'analytics-stat' ? 'build' : undefined,
+      devScript: id === 'analytics-stat' ? 'analytics' : undefined,
+      devPort: id === 'analytics-stat' ? 4009 : undefined,
+      outputDir: id === 'analytics-stat' ? 'dist' : undefined
     }));
 
   return [...modules, ...EXTRA_FRONTEND_MODULES];

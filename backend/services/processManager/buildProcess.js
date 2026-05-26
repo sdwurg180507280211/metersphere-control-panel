@@ -36,15 +36,15 @@ module.exports = function applyBuildProcess(proto) {
     return path.join(frontendDir, 'node_modules', '.metersphere-control-panel-deps.json');
   };
 
-  proto._getDependencyLockfile = function(frontendDir) {
-    const candidates = ['package-lock.json', 'npm-shrinkwrap.json', 'package.json'];
+  proto._getDependencyLockfile = function(frontendDir, moduleConfig = {}) {
+    const candidates = moduleConfig.lockfiles || ['package-lock.json', 'npm-shrinkwrap.json', 'package.json'];
     return candidates
       .map((file) => path.join(frontendDir, file))
       .find((file) => fs.existsSync(file)) || null;
   };
 
-  proto._computeDependencyFingerprint = function(frontendDir) {
-    const fingerprintSource = this._getDependencyLockfile(frontendDir);
+  proto._computeDependencyFingerprint = function(frontendDir, moduleConfig = {}) {
+    const fingerprintSource = this._getDependencyLockfile(frontendDir, moduleConfig);
     if (!fingerprintSource) {
       return null;
     }
@@ -89,7 +89,7 @@ module.exports = function applyBuildProcess(proto) {
     }, null, 2));
   };
 
-  proto._getDependencyInstallDecision = function(frontendDir, forceInstall = false) {
+  proto._getDependencyInstallDecision = function(frontendDir, forceInstall = false, moduleConfig = {}) {
     if (forceInstall) {
       return { shouldInstall: true, reason: '用户手动启用了强制安装依赖' };
     }
@@ -104,7 +104,7 @@ module.exports = function applyBuildProcess(proto) {
       return { shouldInstall: true, reason: 'node_modules/.bin 缺失或为空，依赖安装不完整' };
     }
 
-    const fingerprint = this._computeDependencyFingerprint(frontendDir);
+    const fingerprint = this._computeDependencyFingerprint(frontendDir, moduleConfig);
     if (!fingerprint) {
       return { shouldInstall: false, reason: '未检测到 lockfile，沿用现有 node_modules' };
     }
@@ -255,12 +255,12 @@ module.exports = function applyBuildProcess(proto) {
 
       await buildProgressService.updateStep(buildId, 1, 'running', 0, '检查依赖...');
 
-      const dependencyDecision = this._getDependencyInstallDecision(frontendDir, options.forceInstall);
+      const dependencyDecision = this._getDependencyInstallDecision(frontendDir, options.forceInstall, moduleConfig);
       if (dependencyDecision.shouldInstall) {
-        const installCommand = fs.existsSync(path.join(frontendDir, 'package-lock.json')) ? 'ci' : 'install';
+        const installCommand = moduleConfig.installCommand || (fs.existsSync(path.join(frontendDir, 'package-lock.json')) ? 'ci' : 'install');
         logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
 
-        const fullArgs = [...npmArgsPrefix, installCommand];
+        const fullArgs = [...npmArgsPrefix, installCommand, ...(moduleConfig.installArgs || [])];
         logger.broadcastCommand(`cd ${moduleConfig.frontendPath} && ${npmCommand} ${fullArgs.join(' ')}`, 'build');
 
         await this._runCommandWithProgress({
@@ -272,7 +272,7 @@ module.exports = function applyBuildProcess(proto) {
           stepName: '安装依赖',
           logType: 'build'
         });
-        this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || this._computeDependencyFingerprint(frontendDir));
+        this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || this._computeDependencyFingerprint(frontendDir, moduleConfig));
       } else {
         await buildProgressService.updateStep(buildId, 1, 'completed', 100, dependencyDecision.reason);
       }
@@ -285,7 +285,8 @@ module.exports = function applyBuildProcess(proto) {
       this._throwIfCancelled(buildId);
       await buildProgressService.updateStep(buildId, 2, 'running', 0, '开始编译...');
 
-      const buildArgs = [...npmArgsPrefix, 'run', 'build'];
+      const buildScript = moduleConfig.buildScript || 'build';
+      const buildArgs = [...npmArgsPrefix, 'run', buildScript];
       logger.broadcastCommand(`cd ${moduleConfig.frontendPath} && ${npmCommand} ${buildArgs.join(' ')}`, 'build');
 
       await this._runCommandWithProgress({
@@ -301,7 +302,7 @@ module.exports = function applyBuildProcess(proto) {
 
       this._throwIfCancelled(buildId);
       await buildProgressService.updateStep(buildId, 3, 'running', 50, '复制构建文件...');
-      await this._copyBuildFiles(frontendDir, targetDir);
+      await this._copyBuildFiles(frontendDir, targetDir, moduleConfig.outputDir);
       await buildProgressService.updateStep(buildId, 3, 'completed', 100, '文件复制完成');
 
       this._throwIfCancelled(buildId);
@@ -343,9 +344,9 @@ module.exports = function applyBuildProcess(proto) {
     return { success: true, message: '构建进程已终止' };
   };
 
-  proto._copyBuildFiles = async function(frontendDir, targetDir) {
+  proto._copyBuildFiles = async function(frontendDir, targetDir, outputDir = 'dist') {
     await fsp.rm(targetDir, { recursive: true, force: true });
     await fsp.mkdir(targetDir, { recursive: true });
-    await fsp.cp(path.join(frontendDir, 'dist'), targetDir, { recursive: true });
+    await fsp.cp(path.join(frontendDir, outputDir), targetDir, { recursive: true });
   };
 };
