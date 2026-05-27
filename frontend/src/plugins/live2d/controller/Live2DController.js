@@ -83,11 +83,11 @@ class Live2DController {
     this.renderer.attach(model)
 
     // 计算画布缩放因子：模型坐标和缩放值基于 800x800 设计画布调校，
-    // 实际画布可能不同（如用户保存了更小的尺寸），需要等比缩放
+    // 实际画布可能不同，需要用容器 CSS 尺寸等比缩放。不要使用 renderer.width，
+    // 它在 HiDPI 屏幕上是物理像素，会导致重启后比例被 devicePixelRatio 放大。
     const designSize = 800
-    const renderer = this.stage.getApp()?.renderer
-    const actualWidth = renderer?.width || designSize
-    this.canvasScaleFactor = actualWidth / designSize
+    const logicalWidth = this.stage.container?.clientWidth || designSize
+    this.canvasScaleFactor = logicalWidth / designSize
 
     this.renderer.setLayout({
       x: modelConfig.position.x * this.canvasScaleFactor,

@@ -25,9 +25,11 @@ const WaifuRoot = () => {
   const currentScaleRef = useRef(1)
 
   const STORAGE_KEY = 'waifu-container-state'
+  const STORAGE_VERSION = 2
 
   const saveContainerState = (width, height, left, top, scale) => {
     const state = {
+      version: STORAGE_VERSION,
       width,
       height,
       left,
@@ -46,7 +48,12 @@ const WaifuRoot = () => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
-        return JSON.parse(saved)
+        const state = JSON.parse(saved)
+        if (state.version !== STORAGE_VERSION) {
+          localStorage.removeItem(STORAGE_KEY)
+          return null
+        }
+        return state
       }
     } catch (e) {
       console.warn('[Waifu] Failed to load state:', e)
@@ -67,13 +74,14 @@ const WaifuRoot = () => {
     div.style.cursor = 'move'
 
     // 尝试加载保存的状态
+    const defaultSize = Math.min(800, window.innerHeight - 40, window.innerWidth - 40)
     const savedState = loadContainerState()
     if (savedState) {
       // 边界检查：确保容器至少部分在可视区域内
       const sw = window.innerWidth
       const sh = window.innerHeight
-      const w = savedState.width || 800
-      const h = savedState.height || 800
+      const w = Math.min(savedState.width || defaultSize, sw - 40)
+      const h = Math.min(savedState.height || defaultSize, sh - 40)
       const left = Math.min(savedState.left, sw - 100) // 至少 100px 可见
       const top = Math.min(savedState.top, sh - 100)
 
@@ -85,11 +93,11 @@ const WaifuRoot = () => {
       div.style.bottom = 'auto'
       currentScaleRef.current = savedState.scale || 1
     } else {
-      // 默认状态：右下角，800x800 匹配画布尺寸确保模型完全可见
+      // 默认状态：右下角，尺寸不超过视口，避免重启后顶部被裁切
       div.style.right = '20px'
       div.style.bottom = '20px'
-      div.style.width = '800px'
-      div.style.height = '800px'
+      div.style.width = defaultSize + 'px'
+      div.style.height = defaultSize + 'px'
       currentScaleRef.current = 1
     }
 
@@ -345,9 +353,7 @@ const WaifuRoot = () => {
 
         // 更新 controller 中的 canvasScaleFactor（画布尺寸已变）
         const designSize = 800
-        const renderer = controllerRef.current.stage.getApp()?.renderer
-        const actualWidth = renderer?.width || designSize
-        controllerRef.current.canvasScaleFactor = actualWidth / designSize
+        controllerRef.current.canvasScaleFactor = newContainerWidth / designSize
 
         // 保存当前 scale - 相对于模型配置 × canvasScaleFactor 的总比例
         const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
