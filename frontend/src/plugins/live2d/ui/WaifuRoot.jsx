@@ -72,8 +72,8 @@ const WaifuRoot = () => {
       // 边界检查：确保容器至少部分在可视区域内
       const sw = window.innerWidth
       const sh = window.innerHeight
-      const w = savedState.width || 400
-      const h = savedState.height || 500
+      const w = savedState.width || 800
+      const h = savedState.height || 800
       const left = Math.min(savedState.left, sw - 100) // 至少 100px 可见
       const top = Math.min(savedState.top, sh - 100)
 
@@ -85,11 +85,11 @@ const WaifuRoot = () => {
       div.style.bottom = 'auto'
       currentScaleRef.current = savedState.scale || 1
     } else {
-      // 默认状态：右下角，合理尺寸
+      // 默认状态：右下角，800x800 匹配画布尺寸确保模型完全可见
       div.style.right = '20px'
       div.style.bottom = '20px'
-      div.style.width = '400px'
-      div.style.height = '500px'
+      div.style.width = '800px'
+      div.style.height = '800px'
       currentScaleRef.current = 1
     }
 
@@ -343,9 +343,16 @@ const WaifuRoot = () => {
           y: newModelY
         })
 
-        // 保存当前 scale - 相对于模型配置的总比例
+        // 更新 controller 中的 canvasScaleFactor（画布尺寸已变）
+        const designSize = 800
+        const renderer = controllerRef.current.stage.getApp()?.renderer
+        const actualWidth = renderer?.width || designSize
+        controllerRef.current.canvasScaleFactor = actualWidth / designSize
+
+        // 保存当前 scale - 相对于模型配置 × canvasScaleFactor 的总比例
         const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
-        currentScaleRef.current = newModelScale / modelConfig.scale
+        const csf = controllerRef.current.canvasScaleFactor || 1
+        currentScaleRef.current = newModelScale / (modelConfig.scale * csf)
       }
     }
 
@@ -417,19 +424,16 @@ const WaifuRoot = () => {
         }
       }
 
-      // 更新模型 scale 和位置
+      // 更新模型 scale 和位置（基于实际当前值，与拖拽缩放逻辑一致）
       if (controllerRef.current && controllerRef.current.currentModel && controllerRef.current.renderer) {
-        const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
-        const baseScale = modelConfig.scale
-        const baseX = modelConfig.position.x
-        const baseY = modelConfig.position.y
+        const model = controllerRef.current.currentModel
+        const startModelScale = model.scale.x
+        const startModelX = model.x
+        const startModelY = model.y
 
-        // 计算新的总 scale
-        const newTotalScale = currentScaleRef.current * scaleChange
-
-        const newModelScale = baseScale * newTotalScale
-        const newModelX = baseX * newTotalScale
-        const newModelY = baseY * newTotalScale
+        const newModelScale = startModelScale * scaleChange
+        const newModelX = startModelX * scaleChange
+        const newModelY = startModelY * scaleChange
 
         controllerRef.current.renderer.setLayout({
           scale: newModelScale,
@@ -437,8 +441,14 @@ const WaifuRoot = () => {
           y: newModelY
         })
 
-        // 保存当前 scale
-        currentScaleRef.current = newTotalScale
+        // 更新 canvasScaleFactor（画布尺寸已变）
+        const designSize = 800
+        controllerRef.current.canvasScaleFactor = newWidth / designSize
+
+        // 更新 currentScaleRef = 当前总scale / (基础scale × canvasScaleFactor)
+        const modelConfig = currentModelConfigRef.current || WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
+        const csf = controllerRef.current.canvasScaleFactor || 1
+        currentScaleRef.current = newModelScale / (modelConfig.scale * csf)
       }
 
       // 保存状态
@@ -474,17 +484,15 @@ const WaifuRoot = () => {
         // 保存当前模型配置
         currentModelConfigRef.current = WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]
 
-        // 应用保存的 scale
+        // 应用保存的 scale（叠加在 canvasScaleFactor 之上）
         if (currentScaleRef.current !== 1 && controller.renderer) {
           const modelConfig = currentModelConfigRef.current
-          const baseScale = modelConfig.scale
-          const baseX = modelConfig.position.x
-          const baseY = modelConfig.position.y
+          const csf = controller.canvasScaleFactor || 1
 
           controller.renderer.setLayout({
-            scale: baseScale * currentScaleRef.current,
-            x: baseX * currentScaleRef.current,
-            y: baseY * currentScaleRef.current
+            scale: modelConfig.scale * csf * currentScaleRef.current,
+            x: modelConfig.position.x * csf * currentScaleRef.current,
+            y: modelConfig.position.y * csf * currentScaleRef.current
           })
         }
 

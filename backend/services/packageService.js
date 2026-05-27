@@ -193,7 +193,7 @@ function buildPackageEnvironment(options) {
 }
 
 function spawnPackageProcess(options, hooks = {}) {
-  const args = ['-x', options.scriptPath, ...options.services];
+  const args = [options.scriptPath, ...options.services];
   const child = spawn('bash', args, {
     cwd: path.dirname(options.scriptPath),
     env: buildPackageEnvironment(options),

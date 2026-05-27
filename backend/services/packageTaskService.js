@@ -159,14 +159,21 @@ class PackageTaskService {
     const packageCmd = `${options.scriptPath} ${options.services.join(' ')}`;
     logger.broadcastCommand(packageCmd, 'package');
 
+    const cleanLogText = (message = '') => message.replace(/\x1b\[[0-9;]*m/g, '');
+
     // 有实质意义的外部命令，才作为 CMD 级别显示
     // 也匹配 if !、time、nice 等前缀包装的命令
     const REAL_COMMAND = /^(?:if ! |time |nice |ionice |sudo |nohup |setsid |eval |exec )*(mvn|maven|docker|npm|npx|yarn|pnpm|git|curl|wget|tar|zip|unzip|cp|mv|rm|mkdir|chmod|chown|ssh|scp|rsync|java|javac|javap|gradle|make|cmake|gcc|g\+\+|podman|buildah|skopeo|crane|helm|kubectl|aws|az|gcloud|s2i)\b/;
 
     const child = packageService.spawnPackageProcess(options, {
-      onStdout: (message) => logger.broadcast(message, 'package'),
+      onStdout: (message) => {
+        const cleaned = cleanLogText(message);
+        if (cleaned.trim()) {
+          logger.broadcast(cleaned, 'package');
+        }
+      },
       onStderr: (message) => {
-        const lines = message.split('\n');
+        const lines = cleanLogText(message).split('\n');
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed.startsWith('+ ') || trimmed.startsWith('++ ')) {

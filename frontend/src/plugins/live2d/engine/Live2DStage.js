@@ -17,19 +17,22 @@ class Live2DStage {
       existingCanvas.remove()
     }
 
-    // 固定 800x800 画布尺寸
+    // 画布尺寸跟随容器大小，避免内容溢出被裁剪
+    const width = container.clientWidth || 800
+    const height = container.clientHeight || 800
+
     this.app = new PIXI.Application({
       backgroundAlpha: 0,
-      width: 800,
-      height: 800,
+      width,
+      height,
       antialias: true,
       resolution: window.devicePixelRatio || 1
     })
 
     // PixiJS v7: use app.view
     const canvas = this.app.view
-    canvas.style.width = '800px'
-    canvas.style.height = '800px'
+    canvas.style.width = width + 'px'
+    canvas.style.height = height + 'px'
     canvas.style.display = 'block'
     // 确保 canvas 可以接收鼠标事件（虽然父容器设置了 pointerEvents: none）
     canvas.style.pointerEvents = 'auto'

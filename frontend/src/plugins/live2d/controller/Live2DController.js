@@ -81,10 +81,18 @@ class Live2DController {
 
     console.log('[Live2D] Model loaded, attaching to stage...')
     this.renderer.attach(model)
+
+    // 计算画布缩放因子：模型坐标和缩放值基于 800x800 设计画布调校，
+    // 实际画布可能不同（如用户保存了更小的尺寸），需要等比缩放
+    const designSize = 800
+    const renderer = this.stage.getApp()?.renderer
+    const actualWidth = renderer?.width || designSize
+    this.canvasScaleFactor = actualWidth / designSize
+
     this.renderer.setLayout({
-      x: modelConfig.position.x,
-      y: modelConfig.position.y,
-      scale: modelConfig.scale,
+      x: modelConfig.position.x * this.canvasScaleFactor,
+      y: modelConfig.position.y * this.canvasScaleFactor,
+      scale: modelConfig.scale * this.canvasScaleFactor,
       visible: true
     })
     console.log('[Live2D] Model attached and layout set:', {
@@ -92,7 +100,8 @@ class Live2DController {
       y: model.y,
       scale: model.scale.x,
       visible: model.visible,
-      anchor: { x: model.anchor.x, y: model.anchor.y }
+      anchor: { x: model.anchor.x, y: model.anchor.y },
+      canvasScaleFactor: this.canvasScaleFactor
     })
 
     // 分析模型可用的动作和表情
