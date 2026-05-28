@@ -109,6 +109,14 @@ function validatePackagePath(rawPackagePath) {
   return packagePath;
 }
 
+function normalizeChangelog(rawChangelog) {
+  if (typeof rawChangelog !== 'string') {
+    return '';
+  }
+
+  return rawChangelog.trim().slice(0, 5000);
+}
+
 function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConfig()) {
   const defaults = packageConfig.getPackageDefaults(resolvedConfig.package || {});
   const services = validateServices(payload.services ?? defaults.services, resolvedConfig);
@@ -117,6 +125,7 @@ function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConf
   const buildOnly = normalizeBoolean(payload.buildOnly, defaults.buildOnly);
   const packagePath = validatePackagePath(payload.packagePath ?? defaults.packagePath);
   const scriptPath = resolvePackageScriptPath(payload.scriptPath || null, resolvedConfig);
+  const changelog = normalizeChangelog(payload.changelog);
 
   // 构建每服务版本映射：优先取前端覆盖 > 服务配置 > 种子版本
   const seedVersion = packageConfig.DEFAULT_SEED_VERSION;
@@ -135,7 +144,8 @@ function preparePackageRunOptions(payload = {}, resolvedConfig = getResolvedConf
     maxJobs,
     buildOnly,
     packagePath,
-    scriptPath
+    scriptPath,
+    changelog
   };
 }
 

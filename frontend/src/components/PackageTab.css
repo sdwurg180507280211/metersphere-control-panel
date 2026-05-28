@@ -14,6 +14,14 @@
   gap: 8px;
 }
 
+/* ── 底部日志面板 ── */
+.package-bottom-panels {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+
 /* ── 卡片通用 ── */
 .package-control-panel,
 .package-log-panel {
@@ -131,7 +139,7 @@
   border-color: rgba(148, 163, 184, 0.3);
 }
 
-/* ── 状态条 (类似 infra-status-strip) ── */
+/* ── 状态条 ── */
 .package-status-strip {
   display: flex;
   align-items: center;
@@ -238,7 +246,51 @@
   font-size: 13px;
 }
 
-/* ── 服务选择网格 (类似 btn-grid) ── */
+/* ── 本次上线内容 ── */
+.package-release-content-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.package-release-content-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.package-release-content-textarea {
+  width: 100%;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(8, 16, 33, 0.6);
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 68px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.package-release-content-textarea:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.package-release-content-textarea::placeholder {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.package-release-content-textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── 服务选择网格 ── */
 .package-service-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -477,7 +529,7 @@
   color: var(--text-primary);
 }
 
-/* ── 版本标签列表（状态区） ── */
+/* ── 版本标签列表 ── */
 .package-version-list {
   display: flex;
   flex-wrap: wrap;
@@ -507,6 +559,933 @@
   border-color: rgba(124, 58, 237, 0.2);
 }
 
+/* ── 历史按钮 ── */
+.btn-package-history {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+}
+
+.btn-package-history:hover {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.btn-package-history.active {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(96, 165, 250, 0.35);
+  color: #bfdbfe;
+}
+
+/* ── 发布记录弹窗 ── */
+.package-history-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.package-history-panel {
+  background: linear-gradient(180deg, rgba(15, 27, 64, 0.98) 0%, rgba(10, 19, 45, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.5);
+  border-radius: 18px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.package-history-modal {
+  width: min(1120px, calc(100vw - 64px));
+  height: min(780px, calc(100vh - 64px));
+  max-height: calc(100vh - 64px);
+}
+
+.package-history-panel .card-header {
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: transparent;
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.package-history-panel .card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.package-history-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.package-history-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.package-history-close-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.package-history-close-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
+}
+
+.package-history-list {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  display: block;
+}
+
+.package-history-list > * + * {
+  margin-top: 6px;
+}
+
+.package-history-empty {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.package-history-error-state {
+  text-align: center;
+  padding: 24px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.package-history-error-msg {
+  font-size: 12px;
+  color: #fca5a5;
+}
+
+.package-history-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.15);
+  font-size: 11px;
+  color: #fca5a5;
+}
+
+.package-history-retry-btn {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  background: rgba(37, 99, 235, 0.18);
+  color: #bfdbfe;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.package-history-retry-btn:hover {
+  background: rgba(37, 99, 235, 0.28);
+}
+
+/* ── 发布记录项 ── */
+.package-history-item {
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.package-history-item:hover {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.package-history-item.succeeded {
+  border-left: 3px solid rgba(34, 197, 94, 0.5);
+}
+
+.package-history-item.failed {
+  border-left: 3px solid rgba(239, 68, 68, 0.5);
+}
+
+.package-history-item.running {
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
+}
+
+.package-history-item.unknown {
+  border-left: 3px solid rgba(148, 163, 184, 0.45);
+}
+
+.package-history-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  background: rgba(15, 23, 42, 0.4);
+  transition: background 0.2s;
+  flex-wrap: wrap;
+}
+
+.package-history-item-header:hover {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.package-history-id {
+  font-size: 11px;
+  font-weight: 800;
+  color: #bfdbfe;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.package-history-status {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.package-history-status.succeeded {
+  background: rgba(34, 197, 94, 0.16);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #bbf7d0;
+}
+
+.package-history-status.failed {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+}
+
+.package-history-status.running {
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #bfdbfe;
+}
+
+.package-history-status.unknown {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #cbd5e1;
+}
+
+.package-history-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  flex-shrink: 0;
+}
+
+.package-history-duration {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  flex-shrink: 0;
+}
+
+.package-history-services {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.package-history-version-summary {
+  font-size: 10px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.package-history-changelog-summary {
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 160px;
+}
+
+.package-history-changelog-summary.empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Git 摘要（概要行） ── */
+.package-history-git-branch {
+  font-size: 10px;
+  font-weight: 600;
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.package-history-git-commit {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  white-space: nowrap;
+}
+
+.package-history-git-subject {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.package-history-change-stats {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.change-stat-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.change-stat-chip.stat-frontend { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+.change-stat-chip.stat-backend  { background: rgba(34, 197, 94, 0.12); color: #86efac; }
+.change-stat-chip.stat-database { background: rgba(234, 179, 8, 0.12); color: #fde68a; }
+.change-stat-chip.stat-config   { background: rgba(168, 85, 247, 0.12); color: #c4b5fd; }
+.change-stat-chip.stat-docs     { background: rgba(148, 163, 184, 0.1); color: #cbd5e1; }
+.change-stat-chip.stat-test     { background: rgba(236, 72, 153, 0.12); color: #f9a8d4; }
+.change-stat-chip.stat-other    { background: rgba(148, 163, 184, 0.08); color: #94a3b8; }
+
+.change-stat-more {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.package-history-expand {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.package-history-expand.expanded {
+  transform: rotate(90deg);
+}
+
+/* ── 发布记录详情 ── */
+.package-history-item-detail {
+  padding: 10px;
+  background: rgba(8, 16, 33, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.package-history-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.package-history-primary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.package-history-primary-meta span {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.08);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.package-history-trace-section {
+  padding-top: 2px;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.package-history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.package-history-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.package-history-version-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.package-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.package-history-meta span {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* ── 发布条目 ── */
+.release-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.release-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+
+.release-item-frontend {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.18);
+}
+
+.release-item-backend {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.14);
+}
+
+.release-item-database {
+  background: rgba(234, 179, 8, 0.06);
+  border-color: rgba(234, 179, 8, 0.14);
+}
+
+.release-item-config {
+  background: rgba(168, 85, 247, 0.06);
+  border-color: rgba(168, 85, 247, 0.14);
+}
+
+.release-item-frontend-other {
+  background: rgba(59, 130, 246, 0.04);
+  border-color: rgba(59, 130, 246, 0.1);
+}
+
+.release-item-other {
+  background: rgba(148, 163, 184, 0.04);
+  border-color: rgba(148, 163, 184, 0.1);
+}
+
+.release-item-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.release-item-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.release-module {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.release-module-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.release-item-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.release-file-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.release-file-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.release-file-tag.tag-page {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.release-file-tag.tag-component {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+}
+
+.release-file-tag.tag-next {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c4b5fd;
+}
+
+.release-file-path {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #94a3b8;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.06);
+  word-break: break-all;
+}
+
+.release-file-path.version-next {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.file-more {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ── Git 信息 ── */
+.package-history-git-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.git-info-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.git-info-item code {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.git-subject-text {
+  color: var(--text-primary);
+}
+
+/* ── Commit 列表 ── */
+.package-history-commit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.commit-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.04);
+  font-size: 11px;
+}
+
+.commit-hash {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #60a5fa;
+  background: rgba(37, 99, 235, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.commit-subject {
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.commit-more {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 4px;
+}
+
+/* ── 变更统计 ── */
+.package-history-change-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.change-summary-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid;
+}
+
+.change-summary-chip.chip-frontend { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+.change-summary-chip.chip-backend  { background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.14); color: #86efac; }
+.change-summary-chip.chip-database { background: rgba(234, 179, 8, 0.08); border-color: rgba(234, 179, 8, 0.14); color: #fde68a; }
+.change-summary-chip.chip-config   { background: rgba(168, 85, 247, 0.08); border-color: rgba(168, 85, 247, 0.14); color: #c4b5fd; }
+.change-summary-chip.chip-docs     { background: rgba(148, 163, 184, 0.08); border-color: rgba(148, 163, 184, 0.12); color: #cbd5e1; }
+.change-summary-chip.chip-test     { background: rgba(236, 72, 153, 0.08); border-color: rgba(236, 72, 153, 0.14); color: #f9a8d4; }
+.change-summary-chip.chip-other    { background: rgba(148, 163, 184, 0.06); border-color: rgba(148, 163, 184, 0.1); color: #94a3b8; }
+
+/* ── 变更文件视图 ── */
+.changed-files-view {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.changed-files-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.changed-files-cat {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.changed-files-cat.cat-frontend { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+.changed-files-cat.cat-backend  { background: rgba(34, 197, 94, 0.12); color: #86efac; }
+.changed-files-cat.cat-database { background: rgba(234, 179, 8, 0.12); color: #fde68a; }
+.changed-files-cat.cat-config   { background: rgba(168, 85, 247, 0.12); color: #c4b5fd; }
+.changed-files-cat.cat-docs     { background: rgba(148, 163, 184, 0.08); color: #cbd5e1; }
+.changed-files-cat.cat-test     { background: rgba(236, 72, 153, 0.12); color: #f9a8d4; }
+.changed-files-cat.cat-other    { background: rgba(148, 163, 184, 0.06); color: #94a3b8; }
+
+.changed-file-path {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #94a3b8;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.04);
+  word-break: break-all;
+}
+
+.changed-files-toggle {
+  font-size: 10px;
+  font-weight: 600;
+  color: #60a5fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.changed-files-toggle:hover {
+  color: #93c5fd;
+}
+
+/* ── 失败详情 ── */
+.package-history-error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.error-code-chip {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fecaca;
+}
+
+.package-history-error-text {
+  font-size: 11px;
+  color: #fca5a5;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(127, 29, 29, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.15);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.package-history-error-details {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #fca5a5;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: 6px;
+  max-height: 120px;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+/* ── 元数据警告 ── */
+.package-history-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.warning-item {
+  font-size: 10px;
+  color: #fde68a;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(146, 64, 14, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.12);
+}
+
+/* ── 上线内容编辑 ── */
+.package-history-changelog {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.package-history-changelog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.package-history-changelog-edit-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #60a5fa;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.package-history-changelog-edit-btn:hover {
+  color: #93c5fd;
+}
+
+.package-history-changelog-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.package-history-changelog-textarea {
+  width: 100%;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  background: rgba(8, 16, 33, 0.6);
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.package-history-changelog-textarea:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.package-history-changelog-textarea::placeholder {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.package-history-changelog-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.package-history-changelog-save,
+.package-history-changelog-cancel {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  transition: all 0.2s;
+}
+
+.package-history-changelog-save {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #bbf7d0;
+}
+
+.package-history-changelog-save:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.28);
+}
+
+.package-history-changelog-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.package-history-changelog-cancel {
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+}
+
+.package-history-changelog-cancel:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.package-history-changelog-content {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(8, 16, 33, 0.3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.package-history-changelog-empty {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.package-history-load-more {
+  padding: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.package-history-load-more:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.package-history-load-more:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── 响应式 ── */
 @media (max-width: 1200px) {
   .package-service-grid {
@@ -517,6 +1496,15 @@
 @media (max-width: 768px) {
   .package-service-grid {
     grid-template-columns: 1fr;
+  }
+
+  .package-history-modal-backdrop {
+    padding: 12px;
+  }
+
+  .package-history-modal {
+    width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
   }
 
   .batch-actions {

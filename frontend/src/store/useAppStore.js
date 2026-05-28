@@ -2,6 +2,7 @@ import { create } from 'zustand'
 
 const MAX_LOG_LINES = 1000
 const inFlightRequests = new Map()
+let packageHistoryRequestSeq = 0
 
 function runInFlightRequest(key, runner) {
   if (inFlightRequests.has(key)) {
@@ -309,6 +310,10 @@ export const usePackageStore = create((set, get) => ({
   optionsLoading: false,
   currentTask: null,
   activeLoading: false,
+  history: [],
+  historyTotal: 0,
+  historyLoading: false,
+  historyError: null,
 
   setOptions: (options) => set({ options }),
   updateCurrentTask: (task) => set((state) => ({
@@ -367,6 +372,55 @@ export const usePackageStore = create((set, get) => ({
     const nextTask = normalizePackageTask(data.data)
     set({ currentTask: nextTask })
     return nextTask
+  },
+
+  fetchHistory: async ({ page = 1, pageSize = 20 } = {}) => {
+    const requestSeq = ++packageHistoryRequestSeq
+    set({ historyLoading: true, historyError: null })
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+      const res = await fetch(`/api/package/history?${params.toString()}`)
+      const data = await res.json()
+      if (requestSeq !== packageHistoryRequestSeq) return
+
+      if (data.success) {
+        const nextRecords = page === 1
+          ? data.data.records
+          : mergeRecordsById(get().history, data.data.records)
+        set({
+          history: nextRecords,
+          historyTotal: data.data.total,
+          historyError: null
+        })
+      } else {
+        const errMsg = data.error?.message || '获取打包历史失败'
+        set({ historyError: errMsg })
+      }
+    } catch (error) {
+      if (requestSeq === packageHistoryRequestSeq) {
+        console.error('获取打包历史失败:', error)
+        set({ historyError: error.message || '获取打包历史失败' })
+      }
+    } finally {
+      if (requestSeq === packageHistoryRequestSeq) {
+        set({ historyLoading: false })
+      }
+    }
+  },
+
+  updateChangelog: async (id, changelog) => {
+    const res = await fetch(`/api/package/history/${id}/changelog`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ changelog })
+    })
+    const data = await res.json()
+    if (data.success) {
+      set((state) => ({
+        history: state.history.map(r => r.id === id ? { ...r, changelog } : r)
+      }))
+    }
+    return data
   },
 
   isRunning: () => ['pending', 'running'].includes(get().currentTask?.status)
@@ -729,6 +783,17 @@ export const useConfigStore = create((set, get) => ({
   })
 }))
 
+function mergeRecordsById(existingRecords = [], incomingRecords = []) {
+  const recordsById = new Map()
+  for (const record of existingRecords) {
+    recordsById.set(record.id, record)
+  }
+  for (const record of incomingRecords) {
+    recordsById.set(record.id, record)
+  }
+  return Array.from(recordsById.values())
+}
+
 function appendLogChunk(state, type, logData) {
   const linesKey = getLinesKey(type)
   const existingLines = state[linesKey]
@@ -961,7 +1026,8 @@ function normalizePackageTask(task) {
     maxJobs: task.metadata?.maxJobs ?? task.maxJobs ?? null,
     buildOnly: task.metadata?.buildOnly ?? task.buildOnly ?? false,
     packagePath: task.metadata?.packagePath || task.packagePath || null,
-    scriptPath: task.metadata?.scriptPath || task.scriptPath || null
+    scriptPath: task.metadata?.scriptPath || task.scriptPath || null,
+    changelog: task.metadata?.changelog || task.changelog || null
   }
 
   return {

@@ -234,6 +234,15 @@ async function initServices() {
   // 初始化 WebSocket
   websocketService.init(server);
 
+  // 初始化打包历史表
+  try {
+    const packageHistoryService = require('./services/packageHistoryService');
+    await packageHistoryService.ensureTable();
+    console.log('打包历史表已就绪');
+  } catch (error) {
+    console.warn(`打包历史表初始化失败（不影响控制面板启动）: ${error.message}`);
+  }
+
   const recoveryResult = await jobService.recoverActiveJobs();
   const recoveredJobs = recoveryResult.recoveredJobs || [];
   const cleanedLocks = recoveryResult.cleanup?.cleanedLocks || [];
@@ -328,6 +337,14 @@ async function gracefulShutdown(signal) {
     
     // 关闭 Redis 连接
     await cacheService.disconnect();
+
+    // 关闭打包历史写入连接池
+    try {
+      const packageHistoryService = require('./services/packageHistoryService');
+      await packageHistoryService.closePool();
+    } catch {
+      // 忽略关闭错误
+    }
 
     // 刷新并关闭日志写入流
     await logger.closeStreams();

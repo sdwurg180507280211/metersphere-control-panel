@@ -37,6 +37,7 @@ export function useWebSocket() {
   const updatePackageTaskRef = useRef(usePackageStore.getState().updateCurrentTask)
   const fetchPackageActiveTaskRef = useRef(usePackageStore.getState().fetchActiveTask)
   const fetchPackageOptionsRef = useRef(usePackageStore.getState().fetchOptions)
+  const fetchPackageHistoryRef = useRef(usePackageStore.getState().fetchHistory)
   const setInfraStatusRef = useRef(useInfraStore.getState().setStatus)
   const fetchInfraStatusRef = useRef(useInfraStore.getState().fetchInfraStatus)
 
@@ -312,6 +313,13 @@ export function useWebSocket() {
     // 打包完成后刷新 options 以获取最新版本号
     if (channel === 'package:completed') {
       scheduleRefresh('packageOptions', () => fetchPackageOptionsRef.current(), 500)
+      // 刷新打包历史列表
+      scheduleRefresh('packageHistory', () => fetchPackageHistoryRef.current({ page: 1, pageSize: 20 }), 500)
+    }
+
+    // 打包失败也刷新历史列表
+    if (channel === 'package:failed') {
+      scheduleRefresh('packageHistory', () => fetchPackageHistoryRef.current({ page: 1, pageSize: 20 }), 500)
     }
   }, [scheduleRefresh])
 

@@ -3,6 +3,8 @@ const configManager = require('./configManager');
 const packageService = require('./packageService');
 const jobService = require('./jobService');
 const websocketService = require('./websocketService');
+const packageHistoryService = require('./packageHistoryService');
+const packageReleaseMetadataService = require('./packageReleaseMetadataService');
 const logger = require('../utils/logger');
 const { createAppError } = require('../utils/errors');
 
@@ -79,7 +81,8 @@ class PackageTaskService {
         maxJobs: options.maxJobs,
         buildOnly: options.buildOnly,
         packagePath: options.packagePath || null,
-        scriptPath: options.scriptPath
+        scriptPath: options.scriptPath,
+        changelog: options.changelog || null
       }
     });
 
@@ -119,7 +122,8 @@ class PackageTaskService {
       maxJobs: options.maxJobs,
       buildOnly: options.buildOnly,
       packagePath: options.packagePath || null,
-      scriptPath: options.scriptPath
+      scriptPath: options.scriptPath,
+      changelog: options.changelog || null
     };
   }
 
@@ -127,6 +131,22 @@ class PackageTaskService {
     const startedAt = Date.now();
     let heartbeatTimer = null;
     let settled = false;
+    let gitSnapshot = null;
+    const gitSnapshotPromise = packageReleaseMetadataService.collectSnapshot()
+      .then((snapshot) => {
+        gitSnapshot = snapshot;
+        return snapshot;
+      })
+      .catch((metaErr) => {
+        logger.broadcast(`Git 快照采集失败: ${metaErr.message}`, 'package');
+        gitSnapshot = {
+          gitBranch: null,
+          gitCommit: null,
+          gitSubject: null,
+          metadataWarnings: [`Git 快照采集失败: ${metaErr.message}`]
+        };
+        return gitSnapshot;
+      });
 
     const stopHeartbeat = () => {
       if (heartbeatTimer) {
@@ -208,6 +228,52 @@ class PackageTaskService {
     }, packageConfig.PACKAGE_HEARTBEAT_INTERVAL_MS);
     heartbeatTimer.unref?.();
 
+    const writeHistoryRecord = async ({ status, result = null, error = null, nextImageVersions = null }) => {
+      try {
+        logger.broadcast(`开始写入打包历史: job=${job.jobId}, status=${status}`, 'package');
+        const releaseMeta = await packageReleaseMetadataService.collect({
+          gitSnapshot: gitSnapshot || await gitSnapshotPromise,
+          resolvePreviousSuccessCommit: (branch) => packageHistoryService.getLatestSuccessfulCommit({ branch })
+        }).catch((metaErr) => {
+          logger.broadcast(`发布元数据采集失败: ${metaErr.message}`, 'package');
+          return {};
+        });
+
+        const historyId = await packageHistoryService.createRecord({
+          jobId: job.jobId,
+          status,
+          services: options.services,
+          serviceImageVersions: options.serviceImageVersions,
+          nextImageVersions,
+          exitCode: result?.exitCode ?? null,
+          durationMs: result?.durationMs ?? (Date.now() - startedAt),
+          scriptPath: options.scriptPath,
+          parallelBuild: options.parallelBuild,
+          maxJobs: options.maxJobs,
+          buildOnly: options.buildOnly || false,
+          packagePath: options.packagePath || null,
+          changelog: options.changelog || null,
+          startedAt: new Date(startedAt).toISOString(),
+          finishedAt: new Date().toISOString(),
+          errorCode: error?.code || null,
+          errorMessage: error?.message || null,
+          errorDetails: error?.details || null,
+          gitBranch: releaseMeta.gitBranch || null,
+          gitCommit: releaseMeta.gitCommit || null,
+          gitSubject: releaseMeta.gitSubject || null,
+          previousSuccessCommit: releaseMeta.previousSuccessCommit || null,
+          commits: releaseMeta.commits || null,
+          changedFiles: releaseMeta.changedFiles || null,
+          changeSummary: releaseMeta.changeSummary || null,
+          releaseItems: releaseMeta.releaseItems || null,
+          metadataWarnings: releaseMeta.metadataWarnings || null
+        });
+        logger.broadcast(historyId ? `打包历史写入完成: id=${historyId}` : '打包历史未写入：历史服务未就绪或写入失败', 'package');
+      } catch (historyErr) {
+        logger.broadcast(`打包历史写入失败: ${historyErr.message}`, 'package');
+      }
+    };
+
     await new Promise((resolve) => {
       const settleFailure = async (error, result = null) => {
         if (settled) {
@@ -221,6 +287,16 @@ class PackageTaskService {
           message: error.message,
           result
         }).catch(() => null);
+
+        await writeHistoryRecord({
+          status: 'failed',
+          result,
+          error: {
+            code: error.code || 'PACKAGE_TASK_FAILED',
+            message: error.message,
+            details: error.details || {}
+          }
+        });
 
         websocketService.broadcastPackageEvent('failed', {
           jobId: job.jobId,
@@ -288,12 +364,19 @@ class PackageTaskService {
             message: '打包任务已完成'
           }).catch(() => null);
 
+          await writeHistoryRecord({
+            status: 'succeeded',
+            result: resultWithVersions,
+            nextImageVersions: nextVersions
+          });
+
           websocketService.broadcastPackageEvent('completed', {
             jobId: job.jobId,
             status: 'success',
             result: resultWithVersions,
             nextImageVersions: nextVersions
           });
+
           return resolve();
         }
 
