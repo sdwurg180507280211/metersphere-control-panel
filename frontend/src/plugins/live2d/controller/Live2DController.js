@@ -17,9 +17,7 @@ class Live2DController {
     this.isInitialized = false
     this.availableMotions = []
     this.availableExpressions = []
-    this.autoPlayTimer = null
-    this.autoPlayInterval = [5000, 12000] // 随机间隔范围：5~12秒
-    this.nonIdleActionTimer = null // 每5秒播放非待机动作的定时器
+    this.nonIdleActionTimer = null // 每10秒播放非待机动作的定时器
 
     // 眼部动画（自动眨眼 + 空闲视线扫视）
     this.eyeAnim = null
@@ -210,7 +208,8 @@ class Live2DController {
   }
 
   /**
-   * 播放随机参数（用于没有动作文件的模型）
+   * 播放随机参数变化（仅用于没有动作文件的模型的降级方案）
+   * 只操作头部角度参数，不触碰眼部（由 EyeAnimationSystem 管理）和嘴部（由 LipSyncSystem 管理）
    */
   playRandomParam() {
     if (!this.currentModel?.internalModel?.coreModel) {
@@ -218,37 +217,32 @@ class Live2DController {
       return
     }
 
-    const internalModel = this.currentModel.internalModel
-    const coreModel = internalModel.coreModel
+    const coreModel = this.currentModel.internalModel.coreModel
 
-    // 随机设置一些参数
-    const paramIds = [
-      'ParamAngleX', 'ParamAngleY', 'ParamAngleZ',
-      'ParamEyeLOpen', 'ParamEyeROpen',
-      'ParamMouthOpenY', 'ParamMouthForm'
-    ]
+    // 只操作头部角度，避免与 EyeAnimationSystem 和 LipSyncSystem 冲突
+    const angleParams = ['ParamAngleX', 'ParamAngleY', 'ParamAngleZ']
+    const savedValues = {}
 
-    paramIds.forEach(paramId => {
-      const paramValue = Math.random() * 2 - 1 // -1 to 1
+    angleParams.forEach(paramId => {
       try {
-        coreModel.setParameterValueById(paramId, paramValue)
-      } catch (e) {
-        // 参数不存在，忽略
-      }
+        savedValues[paramId] = coreModel.getParameterValueById(paramId)
+        coreModel.setParameterValueById(paramId, (Math.random() - 0.5) * 0.6)
+      } catch (e) { /* 参数不存在，忽略 */ }
     })
 
     // 2 秒后恢复
     setTimeout(() => {
       if (this.currentModel?.internalModel?.coreModel) {
-        paramIds.forEach(paramId => {
+        const cm = this.currentModel.internalModel.coreModel
+        angleParams.forEach(paramId => {
           try {
-            this.currentModel.internalModel.coreModel.setParameterValueById(paramId, 0)
+            cm.setParameterValueById(paramId, savedValues[paramId] ?? 0)
           } catch (e) {}
         })
       }
     }, 2000)
 
-    console.log('[Live2D] Played random params')
+    console.log('[Live2D] Played random params (angle only)')
   }
 
   /**
