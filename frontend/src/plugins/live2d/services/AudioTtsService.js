@@ -155,6 +155,16 @@ class AudioTtsService {
     return !!(window.AudioContext || window.webkitAudioContext)
   }
 
+  /**
+   * 更新回调。因为本服务是单例，而调用方（initVoice）可能被多次调用
+   * 并创建新的 AudioLipSyncSystem / Pipeline，需要更新回调引用。
+   */
+  setCallbacks({ onStart, onEnd, onError } = {}) {
+    if (onStart !== undefined) this.onStart = onStart
+    if (onEnd !== undefined) this.onEnd = onEnd
+    if (onError !== undefined) this.onError = onError
+  }
+
   setVoice(voice) {
     this.voice = voice
   }

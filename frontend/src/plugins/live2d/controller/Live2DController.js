@@ -548,11 +548,10 @@ class Live2DController {
     // ---- 音频驱动唇形同步（优先） ----
     this.audioLipSync = new AudioLipSyncSystem()
 
-    // ---- 音频 TTS（基于服务端音频，可被 AnalyserNode 分析） ----
-    this.audioTts = getAudioTtsInstance({
-      voice: 'longxiaochun_v2',
+    // ---- 音频 TTS（单例，用 setCallbacks 更新回调避免泄漏旧引用） ----
+    this.audioTts = getAudioTtsInstance({ voice: 'longxiaochun_v2' })
+    this.audioTts.setCallbacks({
       onStart: () => {
-        // 连接 AnalyserNode 到唇形系统
         const analyser = this.audioTts.getAnalyserNode()
         if (analyser) this.audioLipSync.attach(analyser)
         this.audioLipSync.start()
@@ -734,13 +733,17 @@ class Live2DController {
 
   /**
    * 仅驱动嘴型（不使用 TTS），用于外部语音播放场景
-   * 与上面的 speak() 区别：speak() 会调用浏览器 TTS 朗读，本方法只驱动嘴型
+   * 与上面的 speak() 区别：speak() 会调用 TTS 朗读，本方法只驱动嘴型
    */
   startLipSyncOnly(text = '') {
     if (!this.lipSync) {
       this.initVoice()
     }
     this.currentSpeechText = text
+    // 显式激活文字驱动嘴型 -> 统一循环的 tickLipSync 通过 lipSync.isActive() 检测
+    if (this.lipSync) {
+      this.lipSync.start(text, 'text')
+    }
     this.startSpeakingInternal()
   }
 
