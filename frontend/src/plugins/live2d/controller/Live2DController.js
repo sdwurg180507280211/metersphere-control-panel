@@ -9,8 +9,8 @@ import { getAudioTtsInstance } from '../services/AudioTtsService.js'
 import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
 
-const AUTO_ACTION_INTERVAL_MIN = 10000 // 最小间隔 10s
-const AUTO_ACTION_INTERVAL_MAX = 18000 // 最大间隔 18s
+const AUTO_ACTION_INTERVAL_MIN = 10000
+const AUTO_ACTION_INTERVAL_MAX = 18000
 
 class Live2DController {
   constructor() {
@@ -22,7 +22,6 @@ class Live2DController {
     this.isInitialized = false
     this.availableMotions = []
     this.availableExpressions = []
-    this.nonIdleActionTimerId = null // setTimeout id，非 setInterval
 
     // 眼部动画（自动眨眼 + 空闲视线扫视）
     this.eyeAnim = null
@@ -33,11 +32,17 @@ class Live2DController {
     this.asr = null
     this.isSpeaking = false
     this.isListening = false
-    this.animationFrameId = null
-    this.currentSpeechText = '' // 当前正在朗读的文字
+    this.currentSpeechText = ''
 
     // ASR 结果回调
     this.onASRResult = null
+
+    // ---- 统一更新循环 ----
+    this._mainLoopId = null
+    this._mainLoopLastTime = 0
+    // 自动动作用 dt 累加器替换 setTimeout 链
+    this._autoActionAccumulator = 0
+    this._autoActionNextInterval = AUTO_ACTION_INTERVAL_MIN + Math.random() * (AUTO_ACTION_INTERVAL_MAX - AUTO_ACTION_INTERVAL_MIN)
   }
 
   async init(container) {
@@ -61,8 +66,8 @@ class Live2DController {
       // 启动眼部动画系统（自动眨眼 + 空闲视线扫视）
       this.initEyeAnimation()
 
-      // 启动每10秒播放非待机动作的定时器
-      this.startNonIdleActionTimer()
+      // 启动统一更新循环（驱动眼部动画 + 自动动作 + 唇形）
+      this.startMainLoop()
 
       this.isInitialized = true
     } catch (error) {
@@ -360,13 +365,14 @@ class Live2DController {
   }
 
   destroy() {
-    // 清理眼部动画
+    // 停止统一更新循环
+    this._stopMainLoop()
+
     if (this.eyeAnim) {
       this.eyeAnim.detach()
       this.eyeAnim = null
     }
 
-    // 清理语音
     this.stopSpeaking()
     this.stopListening()
     if (this.audioLipSync) {
@@ -389,10 +395,6 @@ class Live2DController {
       this.asr.destroy()
       this.asr = null
     }
-    this.stopLipSyncTick()
-
-    // 清理定时器
-    this.stopNonIdleActionTimer()
 
     if (this.currentModel) {
       this.renderer?.detach(this.currentModel)
@@ -404,31 +406,51 @@ class Live2DController {
     this.isInitialized = false
   }
 
-  /**
-   * 启动随机间隔的非待机动作播放
-   * 每次播完后随机等待 10~18s 再播下一个，比固定间隔更自然
-   */
-  startNonIdleActionTimer() {
-    if (this.nonIdleActionTimerId) return
+  // ========== 统一更新循环 ==========
 
-    console.log(`[Live2D] Starting auto-action timer (${AUTO_ACTION_INTERVAL_MIN / 1000}-${AUTO_ACTION_INTERVAL_MAX / 1000}s random intervals)`)
-    this.nonIdleActionTimerId = setTimeout(() => {
-      this.playRandomActionOrExpression()
-      // 播完后安排下一次，不在此处直接调用而是让 startNonIdleActionTimer 的递归版本处理
-      this.scheduleNextAutoAction()
-    }, 15000) // 首次动作在 15s 后，不立即触发
+  /**
+   * 启动统一更新循环
+   * 驱动：眼部动画(blink+saccade) + 自动动作 + 嘴型同步
+   * 优先级: 眼部 > 自动动作 > 嘴型（嘴型最后写参，可覆盖前两者）
+   */
+  startMainLoop() {
+    if (this._mainLoopId) return
+    this._mainLoopLastTime = performance.now()
+    this._autoActionAccumulator = 15000 // 首次动作在 15s 后
+    this._mainLoopId = requestAnimationFrame(this._mainLoop.bind(this))
+    console.log(`[Live2D] Main loop started (eyeAnim + auto-action ${AUTO_ACTION_INTERVAL_MIN / 1000}-${AUTO_ACTION_INTERVAL_MAX / 1000}s + lipSync)`)
   }
 
-  /**
-   * 安排下一次自动动作
-   */
-  scheduleNextAutoAction() {
-    if (!this.isInitialized) return
-    const delay = AUTO_ACTION_INTERVAL_MIN + Math.random() * (AUTO_ACTION_INTERVAL_MAX - AUTO_ACTION_INTERVAL_MIN)
-    this.nonIdleActionTimerId = setTimeout(() => {
+  _stopMainLoop() {
+    if (this._mainLoopId) {
+      cancelAnimationFrame(this._mainLoopId)
+      this._mainLoopId = null
+    }
+  }
+
+  _mainLoop(now) {
+    const dt = Math.min(now - this._mainLoopLastTime, 100)
+    this._mainLoopLastTime = now
+
+    // [插件1] 眼部动画：眨眼 + 视线扫视
+    if (this.eyeAnim) {
+      this.eyeAnim.update(dt, now)
+    }
+
+    // [插件2] 自动动作：随机间隔播放动作/表情
+    this._autoActionAccumulator += dt
+    if (this._autoActionAccumulator >= this._autoActionNextInterval) {
+      this._autoActionAccumulator = 0
+      this._autoActionNextInterval = AUTO_ACTION_INTERVAL_MIN + Math.random() * (AUTO_ACTION_INTERVAL_MAX - AUTO_ACTION_INTERVAL_MIN)
       this.playRandomActionOrExpression()
-      this.scheduleNextAutoAction()
-    }, delay)
+    }
+
+    // [插件3] 嘴型同步：仅说话时更新
+    if (this.isSpeaking) {
+      this.tickLipSync(dt)
+    }
+
+    this._mainLoopId = requestAnimationFrame(this._mainLoop.bind(this))
   }
 
   /**
@@ -480,17 +502,6 @@ class Live2DController {
     this.setExpression(expression.name)
   }
 
-  /**
-   * 停止自动动作定时器
-   */
-  stopNonIdleActionTimer() {
-    if (this.nonIdleActionTimerId) {
-      clearTimeout(this.nonIdleActionTimerId)
-      this.nonIdleActionTimerId = null
-      console.log('[Live2D] Stopped auto-action timer')
-    }
-  }
-
   // ========== 眼部动画系统（自动眨眼 + 空闲视线扫视）==========
 
   /**
@@ -500,7 +511,6 @@ class Live2DController {
   initEyeAnimation() {
     if (!this.currentModel) return
 
-    // 清理旧实例
     if (this.eyeAnim) {
       this.eyeAnim.detach()
       this.eyeAnim = null
@@ -509,7 +519,6 @@ class Live2DController {
     this.eyeAnim = new EyeAnimationSystem()
     this.eyeAnim.attach(this.currentModel)
 
-    // 如果模型有内置 Cubism 眨眼，自定义其参数使其更生动
     if (this.eyeAnim.hasBuiltInBlink) {
       this.eyeAnim.customizeBuiltInBlink({
         interval: 3.5,
@@ -656,9 +665,7 @@ class Live2DController {
     if (!this.currentModel) return
 
     this.isSpeaking = true
-
-    // 启动统一的动画循环，在 tick 中根据激活的唇形系统选择数据源
-    this.startLipSyncTick()
+    // 统一循环已在运行，tickLipSync 会在 isSpeaking 时自动开始
     console.log('[Live2D] Speaking started')
   }
 
@@ -676,47 +683,11 @@ class Live2DController {
     }
 
     this.currentSpeechText = ''
-    this.stopLipSyncTick()
     console.log('[Live2D] Speaking stopped')
   }
 
   /**
-   * 启动嘴型同步动画循环
-   */
-  startLipSyncTick() {
-    if (this.animationFrameId) {
-      return
-    }
-
-    let lastTime = performance.now()
-    const tick = (currentTime) => {
-      const delta = currentTime - lastTime
-      lastTime = currentTime
-
-      if (this.lipSync && this.isSpeaking) {
-        this.tickLipSync(delta)
-      }
-
-      if (this.isSpeaking) {
-        this.animationFrameId = requestAnimationFrame(tick)
-      }
-    }
-
-    this.animationFrameId = requestAnimationFrame(tick)
-  }
-
-  /**
-   * 停止嘴型同步动画循环
-   */
-  stopLipSyncTick() {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId)
-      this.animationFrameId = null
-    }
-  }
-
-  /**
-   * 嘴型同步 tick - 更新嘴型参数
+   * 嘴型同步 - 由统一循环调用，更新嘴型参数
    * 优先从音频唇形系统（AnalyserNode RMS）读取，降级到文字驱动
    */
   tickLipSync(delta) {
