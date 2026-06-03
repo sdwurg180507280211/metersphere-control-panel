@@ -6,7 +6,7 @@ import '../waifu.css'
 const WaifuRoot = () => {
   const containerRef = useRef(null)
   const controllerRef = useRef(null)
-  const instanceIdRef = useRef(Math.random().toString(36).substr(2, 9))
+  const instanceIdRef = useRef(Math.random().toString(36).slice(2, 11))
   const dragStateRef = useRef({
     isDragging: false,
     isResizing: false,
@@ -484,8 +484,8 @@ const WaifuRoot = () => {
         controllerRef.current = controller
         await controller.init(div)
 
-        // 初始化语音系统
-        controller.initVoice()
+        // 语音系统延迟初始化 - 首次 speak()/startListening() 调用时自动初始化
+        // controller.initVoice() 由 speak() 和 startListening() 内部懒加载
 
         // 保存当前模型配置
         currentModelConfigRef.current = WAIFU_MODELS[DEFAULT_WAIFU_MODEL_ID]

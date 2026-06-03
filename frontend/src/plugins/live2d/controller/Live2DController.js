@@ -7,6 +7,9 @@ import { getTextToSpeechInstance } from '../services/TextToSpeechService.js'
 import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
 
+const AUTO_ACTION_INTERVAL_MIN = 10000 // 最小间隔 10s
+const AUTO_ACTION_INTERVAL_MAX = 18000 // 最大间隔 18s
+
 class Live2DController {
   constructor() {
     this.stage = new Live2DStage()
@@ -17,7 +20,7 @@ class Live2DController {
     this.isInitialized = false
     this.availableMotions = []
     this.availableExpressions = []
-    this.nonIdleActionTimer = null // 每10秒播放非待机动作的定时器
+    this.nonIdleActionTimerId = null // setTimeout id，非 setInterval
 
     // 眼部动画（自动眨眼 + 空闲视线扫视）
     this.eyeAnim = null
@@ -392,16 +395,30 @@ class Live2DController {
   }
 
   /**
-   * 启动每10秒播放非待机动作的定时器
-   * 随机播放动作或表情
+   * 启动随机间隔的非待机动作播放
+   * 每次播完后随机等待 10~18s 再播下一个，比固定间隔更自然
    */
   startNonIdleActionTimer() {
-    if (this.nonIdleActionTimer) return
+    if (this.nonIdleActionTimerId) return
 
-    console.log('[Live2D] Starting non-idle action timer (every 10s)')
-    this.nonIdleActionTimer = setInterval(() => {
+    console.log(`[Live2D] Starting auto-action timer (${AUTO_ACTION_INTERVAL_MIN / 1000}-${AUTO_ACTION_INTERVAL_MAX / 1000}s random intervals)`)
+    this.nonIdleActionTimerId = setTimeout(() => {
       this.playRandomActionOrExpression()
-    }, 10000)
+      // 播完后安排下一次，不在此处直接调用而是让 startNonIdleActionTimer 的递归版本处理
+      this.scheduleNextAutoAction()
+    }, 15000) // 首次动作在 15s 后，不立即触发
+  }
+
+  /**
+   * 安排下一次自动动作
+   */
+  scheduleNextAutoAction() {
+    if (!this.isInitialized) return
+    const delay = AUTO_ACTION_INTERVAL_MIN + Math.random() * (AUTO_ACTION_INTERVAL_MAX - AUTO_ACTION_INTERVAL_MIN)
+    this.nonIdleActionTimerId = setTimeout(() => {
+      this.playRandomActionOrExpression()
+      this.scheduleNextAutoAction()
+    }, delay)
   }
 
   /**
@@ -454,13 +471,13 @@ class Live2DController {
   }
 
   /**
-   * 停止非待机动作定时器
+   * 停止自动动作定时器
    */
   stopNonIdleActionTimer() {
-    if (this.nonIdleActionTimer) {
-      clearInterval(this.nonIdleActionTimer)
-      this.nonIdleActionTimer = null
-      console.log('[Live2D] Stopped non-idle action timer')
+    if (this.nonIdleActionTimerId) {
+      clearTimeout(this.nonIdleActionTimerId)
+      this.nonIdleActionTimerId = null
+      console.log('[Live2D] Stopped auto-action timer')
     }
   }
 
