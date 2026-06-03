@@ -542,9 +542,14 @@ const WaifuRoot = () => {
           modelVisible: controller.currentModel?.visible
         })
 
+        // 暴露 Pipeline（推荐 API）到全局
+        window.__waifuPipeline = controller.pipeline
+
         console.log('[Waifu] 使用方式:')
-        console.log('  - switchWaifuModel("rice") - 切换到指定模型')
-        console.log('  - getWaifuModels() - 获取可用模型列表')
+        console.log('  - __waifuPipeline.speak("你好") - 说话（自动匹配表情）')
+        console.log('  - __waifuPipeline.startListening(cb) - 语音识别')
+        console.log('  - __waifuPipeline.interact() - 触发交互动作')
+        console.log('  - switchWaifuModel("rice") - 切换模型')
         console.log('  - 可用模型 ID:', Object.keys(WAIFU_MODELS).join(', '))
       } catch (error) {
         console.error('Failed to initialize Live2D:', error)

@@ -4,6 +4,7 @@ import Live2DRenderer from '../engine/Live2DRenderer.js'
 import LipSyncSystem from '../features/lipSync/LipSyncSystem.js'
 import AudioLipSyncSystem from '../features/lipSync/AudioLipSyncSystem.js'
 import EyeAnimationSystem from '../features/eyeAnimation/EyeAnimationSystem.js'
+import CharacterPipeline from '../pipeline/CharacterPipeline.js'
 import { getTextToSpeechInstance } from '../services/TextToSpeechService.js'
 import { getAudioTtsInstance } from '../services/AudioTtsService.js'
 import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
@@ -36,6 +37,9 @@ class Live2DController {
 
     // ASR 结果回调
     this.onASRResult = null
+
+    // ---- 角色行为管线（状态管理 + 情绪-表情联动） ----
+    this.pipeline = new CharacterPipeline(this)
 
     // ---- 统一更新循环 ----
     this._mainLoopId = null
@@ -368,6 +372,11 @@ class Live2DController {
     // 停止统一更新循环
     this._stopMainLoop()
 
+    if (this.pipeline) {
+      this.pipeline.destroy()
+      this.pipeline = null
+    }
+
     if (this.eyeAnim) {
       this.eyeAnim.detach()
       this.eyeAnim = null
@@ -552,10 +561,12 @@ class Live2DController {
       onEnd: () => {
         this.audioLipSync.stop()
         this.stopSpeakingInternal()
+        if (this.pipeline) this.pipeline.onSpeechEnd()
       },
       onError: () => {
         this.audioLipSync.stop()
         this.stopSpeakingInternal()
+        if (this.pipeline) this.pipeline.onSpeechEnd()
       }
     })
 
@@ -573,9 +584,11 @@ class Live2DController {
       },
       onEnd: () => {
         this.stopSpeakingInternal()
+        if (this.pipeline) this.pipeline.onSpeechEnd()
       },
       onError: () => {
         this.stopSpeakingInternal()
+        if (this.pipeline) this.pipeline.onSpeechEnd()
       }
     })
 
