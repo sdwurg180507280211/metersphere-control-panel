@@ -156,6 +156,80 @@ const chatController = {
     const { sessionId } = req.params;
     sessions.delete(sessionId || 'default');
     res.json({ success: true, message: '会话已清除' });
+  },
+
+  /**
+   * POST /api/chat/tts
+   * 文字转语音，返回音频数据。使用 DashScope TTS API 或兼容接口。
+   * body: { text: string, voice?: string }
+   */
+  async textToSpeech(req, res) {
+    try {
+      const { text, voice = 'longxiaochun_v2' } = req.body;
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        throw createAppError('文字内容不能为空', { statusCode: 400, code: 'INVALID_TEXT' });
+      }
+
+      const resolved = configManager.getResolvedConfig();
+      const waifuConfig = resolved.waifu || {};
+      const apiKey = waifuConfig.apiKey;
+
+      if (!apiKey) {
+        throw createAppError('未配置 API Key', { statusCode: 400, code: 'MISSING_API_KEY' });
+      }
+
+      const ttsModel = waifuConfig.ttsModel || 'qwen-tts';
+      const baseUrl = waifuConfig.baseUrl || '';
+      const DEFAULT_TTS_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-speech/stream';
+
+      let ttsUrl;
+      if (baseUrl) {
+        // 自定义 baseUrl 也尝试兼容 TTS 端点
+        ttsUrl = baseUrl.replace(/\/chat\/completions\/?$/, '') + '/text-to-speech/stream';
+      } else {
+        ttsUrl = DEFAULT_TTS_URL;
+      }
+
+      const response = await fetch(ttsUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: ttsModel,
+          input: { text: text.trim() },
+          parameters: { voice }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw createAppError(`TTS API 错误: ${response.status} - ${errorText}`, {
+          statusCode: 502,
+          code: 'TTS_API_ERROR'
+        });
+      }
+
+      // 流式转发音频数据
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'audio/mpeg');
+      res.setHeader('X-TTS-Voice', voice);
+
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    } catch (error) {
+      // 如果已经开始写响应头，只能强制关闭
+      if (res.headersSent) {
+        return res.end();
+      }
+      sendError(res, error);
+    }
   }
 };
 

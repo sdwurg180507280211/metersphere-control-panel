@@ -11,4 +11,7 @@ router.post('/message', chatController.sendMessage);
 // 清除会话
 router.delete('/session/:sessionId', chatController.clearSession);
 
+// 文字转语音
+router.post('/tts', chatController.textToSpeech);
+
 module.exports = router;

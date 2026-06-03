@@ -2,8 +2,10 @@ import Live2DStage from '../engine/Live2DStage.js'
 import Live2DModelLoader from '../engine/Live2DModelLoader.js'
 import Live2DRenderer from '../engine/Live2DRenderer.js'
 import LipSyncSystem from '../features/lipSync/LipSyncSystem.js'
+import AudioLipSyncSystem from '../features/lipSync/AudioLipSyncSystem.js'
 import EyeAnimationSystem from '../features/eyeAnimation/EyeAnimationSystem.js'
 import { getTextToSpeechInstance } from '../services/TextToSpeechService.js'
+import { getAudioTtsInstance } from '../services/AudioTtsService.js'
 import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
 
@@ -367,9 +369,17 @@ class Live2DController {
     // 清理语音
     this.stopSpeaking()
     this.stopListening()
+    if (this.audioLipSync) {
+      this.audioLipSync.destroy()
+      this.audioLipSync = null
+    }
     if (this.lipSync) {
       this.lipSync.destroy()
       this.lipSync = null
+    }
+    if (this.audioTts) {
+      this.audioTts.destroy()
+      this.audioTts = null
     }
     if (this.tts) {
       this.tts.destroy()
@@ -517,15 +527,39 @@ class Live2DController {
    * 可以在 init 后调用，也可以按需延迟初始化
    */
   initVoice() {
-    // 初始化嘴型同步系统（paramController 暂时直接操作模型参数）
+    // ---- 音频驱动唇形同步（优先） ----
+    this.audioLipSync = new AudioLipSyncSystem()
+
+    // ---- 音频 TTS（基于服务端音频，可被 AnalyserNode 分析） ----
+    this.audioTts = getAudioTtsInstance({
+      voice: 'longxiaochun_v2',
+      onStart: () => {
+        // 连接 AnalyserNode 到唇形系统
+        const analyser = this.audioTts.getAnalyserNode()
+        if (analyser) this.audioLipSync.attach(analyser)
+        this.audioLipSync.start()
+        this.startSpeakingInternal()
+      },
+      onEnd: () => {
+        this.audioLipSync.stop()
+        this.stopSpeakingInternal()
+      },
+      onError: () => {
+        this.audioLipSync.stop()
+        this.stopSpeakingInternal()
+      }
+    })
+
+    // ---- 文字驱动唇形同步（降级，用于 SpeechSynthesis 回退） ----
     this.lipSync = new LipSyncSystem(null)
 
-    // 初始化 TTS
+    // ---- 浏览器 TTS（降级） ----
     this.tts = getTextToSpeechInstance({
       lang: 'zh-CN',
       rate: 0.9,
       pitch: 1.1,
       onStart: () => {
+        this.lipSync.start(this.currentSpeechText, 'text')
         this.startSpeakingInternal()
       },
       onEnd: () => {
@@ -563,17 +597,14 @@ class Live2DController {
 
   /**
    * 朗读文字并驱动嘴型
+   * 优先使用音频 TTS（服务端音频 → AnalyserNode → RMS 音量驱动口型）
+   * 降级使用浏览器 SpeechSynthesis + 文字驱动口型
    * @param {string} text - 要朗读的文字
-   * @returns {boolean} 是否成功开始
+   * @returns {Promise<boolean>} 是否成功开始
    */
-  speak(text) {
-    if (!this.tts) {
+  async speak(text) {
+    if (!this.audioTts) {
       this.initVoice()
-    }
-
-    if (!this.tts.isSupported()) {
-      console.warn('[Live2D] TTS not supported by browser')
-      return false
     }
 
     if (!text || text.trim().length === 0) {
@@ -583,14 +614,25 @@ class Live2DController {
     // 停止之前的朗读
     this.stopSpeaking()
 
-    // 保存当前文字，供 LipSync 使用
     this.currentSpeechText = text.trim()
 
-    const success = this.tts.speak(this.currentSpeechText)
-    if (success) {
-      // TTS 会通过回调触发 startSpeakingInternal
-      return true
+    // 优先使用音频 TTS（真实音频波形驱动嘴型）
+    if (this.audioTts && this.audioTts.isSupported()) {
+      try {
+        const success = await this.audioTts.speak(this.currentSpeechText)
+        if (success) return true
+      } catch (e) {
+        console.warn('[Live2D] Audio TTS failed, falling back to SpeechSynthesis:', e.message)
+      }
     }
+
+    // 降级：浏览器 SpeechSynthesis + 文字驱动嘴型
+    if (this.tts && this.tts.isSupported()) {
+      const success = this.tts.speak(this.currentSpeechText)
+      if (success) return true
+    }
+
+    console.warn('[Live2D] No TTS engine available')
     return false
   }
 
@@ -598,6 +640,9 @@ class Live2DController {
    * 停止当前朗读
    */
   stopSpeaking() {
+    if (this.audioTts) {
+      this.audioTts.stop()
+    }
     if (this.tts) {
       this.tts.stop()
     }
@@ -608,16 +653,11 @@ class Live2DController {
    * 内部：开始说话，启动嘴型同步
    */
   startSpeakingInternal() {
-    if (!this.currentModel || !this.lipSync) {
-      return
-    }
+    if (!this.currentModel) return
 
     this.isSpeaking = true
 
-    // 使用保存的当前文字
-    this.lipSync.start(this.currentSpeechText, 'text')
-
-    // 启动动画循环
+    // 启动统一的动画循环，在 tick 中根据激活的唇形系统选择数据源
     this.startLipSyncTick()
     console.log('[Live2D] Speaking started')
   }
@@ -628,6 +668,9 @@ class Live2DController {
   stopSpeakingInternal() {
     this.isSpeaking = false
 
+    if (this.audioLipSync) {
+      this.audioLipSync.stop()
+    }
     if (this.lipSync) {
       this.lipSync.stop()
     }
@@ -674,31 +717,34 @@ class Live2DController {
 
   /**
    * 嘴型同步 tick - 更新嘴型参数
+   * 优先从音频唇形系统（AnalyserNode RMS）读取，降级到文字驱动
    */
   tickLipSync(delta) {
-    if (!this.lipSync || !this.currentModel?.internalModel?.coreModel) {
+    const coreModel = this.currentModel?.internalModel?.coreModel
+    if (!coreModel) return
+
+    let mouthOpen = 0
+
+    // 优先使用音频驱动的唇形数据（与实际声波同步）
+    if (this.audioLipSync?.isActive()) {
+      this.audioLipSync.tick(delta)
+      mouthOpen = this.audioLipSync.currentMouthOpen
+    } else if (this.lipSync?.isActive()) {
+      // 降级：文字驱动
+      this.lipSync.tick(delta)
+      mouthOpen = this.lipSync.currentMouthOpen
+    }
+
+    if (typeof mouthOpen !== 'number' || mouthOpen === 0) {
+      // 如果两个系统都没有活跃输出，逐渐闭嘴
       return
     }
 
-    // tick lip sync 计算目标嘴型
-    this.lipSync.tick(delta)
-
-    // 直接应用参数到模型（未来接入 ParamController 后改为提交）
-    const coreModel = this.currentModel.internalModel.coreModel
-
-    // 当前实现：直接读取 currentMouthOpen 并应用
-    // 完整 LipSyncSystem 应该通过 ParamController
     try {
-      // 从 lipSync 获取当前值（临时直接访问私有成员，未来重构）
-      const mouthOpen = this.lipSync.currentMouthOpen
-      if (typeof mouthOpen === 'number') {
-        coreModel.setParameterValueById('ParamMouthOpenY', mouthOpen)
-        const mouthForm = Math.round(mouthOpen * 2) - 1
-        coreModel.setParameterValueById('ParamMouthForm', mouthForm)
-      }
+      coreModel.setParameterValueById('ParamMouthOpenY', mouthOpen)
+      coreModel.setParameterValueById('ParamMouthForm', Math.round(mouthOpen * 2) - 1)
     } catch (e) {
       // 参数不存在，忽略
-      console.debug('[Live2D] LipSync: parameter not found in model', e)
     }
   }
 
