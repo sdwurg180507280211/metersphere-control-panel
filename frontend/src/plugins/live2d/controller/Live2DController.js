@@ -692,24 +692,15 @@ class Live2DController {
   }
 
   /**
-   * 开始说话（不使用 TTS，只驱动嘴型，用于外部语音播放）
-   * @param {string} text - 要说的文字
+   * 仅驱动嘴型（不使用 TTS），用于外部语音播放场景
+   * 与上面的 speak() 区别：speak() 会调用浏览器 TTS 朗读，本方法只驱动嘴型
    */
-  startSpeaking(text = '') {
+  startLipSyncOnly(text = '') {
     if (!this.lipSync) {
       this.initVoice()
     }
+    this.currentSpeechText = text
     this.startSpeakingInternal()
-    if (this.lipSync) {
-      this.lipSync.start(text, 'text')
-    }
-  }
-
-  /**
-   * 停止说话
-   */
-  stopSpeaking() {
-    this.stopSpeakingInternal()
   }
 
   /**

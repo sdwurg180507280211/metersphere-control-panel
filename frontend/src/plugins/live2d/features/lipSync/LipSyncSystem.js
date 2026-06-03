@@ -42,8 +42,8 @@ class LipSyncSystem {
    */
   start(text = '', source = 'text') {
     if (!this.paramController) {
-      console.warn('[LipSync] ParamController not provided')
-      return
+      // 无 ParamController 时仍可工作，嘴型值通过 currentMouthOpen 属性对外暴露
+      console.debug('[LipSync] Working without ParamController, exposing currentMouthOpen')
     }
 
     this.active = true
@@ -80,7 +80,7 @@ class LipSyncSystem {
    * @param {number} delta - 帧间隔时间 (ms)
    */
   tick(delta) {
-    if (!this.active || !this.paramController) return
+    if (!this.active) return
 
     this.elapsed = Date.now() - this.startTime
 
@@ -94,8 +94,10 @@ class LipSyncSystem {
     const lerpFactor = 1 - Math.exp(-this.smoothSpeed * (delta / 1000))
     this.currentMouthOpen = this.currentMouthOpen + (this.targetMouthOpen - this.currentMouthOpen) * lerpFactor
 
-    // 提交参数
-    this.submitParams()
+    // 提交参数（仅在 ParamController 可用时）
+    if (this.paramController) {
+      this.submitParams()
+    }
   }
 
   /**
