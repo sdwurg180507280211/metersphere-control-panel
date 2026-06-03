@@ -22,7 +22,7 @@ const Live2DPlugin = {
     if (!window.Live2DCubismCore) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js';
+        script.src = '/live2d/live2dcubismcore.min.js';
         script.onload = resolve;
         script.onerror = () => reject(new Error('Failed to load Live2D Cubism Core'));
         document.head.appendChild(script);

@@ -2,6 +2,7 @@ import Live2DStage from '../engine/Live2DStage.js'
 import Live2DModelLoader from '../engine/Live2DModelLoader.js'
 import Live2DRenderer from '../engine/Live2DRenderer.js'
 import LipSyncSystem from '../features/lipSync/LipSyncSystem.js'
+import EyeAnimationSystem from '../features/eyeAnimation/EyeAnimationSystem.js'
 import { getTextToSpeechInstance } from '../services/TextToSpeechService.js'
 import { getSpeechRecognitionInstance } from '../services/SpeechRecognitionService.js'
 import { WAIFU_MODELS, DEFAULT_WAIFU_MODEL_ID } from '../config/waifuModels.js'
@@ -19,6 +20,9 @@ class Live2DController {
     this.autoPlayTimer = null
     this.autoPlayInterval = [5000, 12000] // 随机间隔范围：5~12秒
     this.nonIdleActionTimer = null // 每5秒播放非待机动作的定时器
+
+    // 眼部动画（自动眨眼 + 空闲视线扫视）
+    this.eyeAnim = null
 
     // 语音和嘴型同步
     this.lipSync = null
@@ -51,7 +55,10 @@ class Live2DController {
       this.setupInteraction()
       console.log('[Live2D] Interaction setup complete')
 
-      // 启动每5秒播放非待机动作的定时器
+      // 启动眼部动画系统（自动眨眼 + 空闲视线扫视）
+      this.initEyeAnimation()
+
+      // 启动每10秒播放非待机动作的定时器
       this.startNonIdleActionTimer()
 
       this.isInitialized = true
@@ -106,6 +113,9 @@ class Live2DController {
 
     // 分析模型可用的动作和表情
     this.analyzeModel()
+
+    // 重新挂载眼部动画到新模型
+    this.initEyeAnimation()
 
     // 设置交互
     this.setupInteraction()
@@ -351,6 +361,12 @@ class Live2DController {
   }
 
   destroy() {
+    // 清理眼部动画
+    if (this.eyeAnim) {
+      this.eyeAnim.detach()
+      this.eyeAnim = null
+    }
+
     // 清理语音
     this.stopSpeaking()
     this.stopListening()
@@ -451,6 +467,35 @@ class Live2DController {
       clearInterval(this.nonIdleActionTimer)
       this.nonIdleActionTimer = null
       console.log('[Live2D] Stopped non-idle action timer')
+    }
+  }
+
+  // ========== 眼部动画系统（自动眨眼 + 空闲视线扫视）==========
+
+  /**
+   * 初始化眼部动画系统
+   * 在模型加载后调用，也可在切换模型后重新调用
+   */
+  initEyeAnimation() {
+    if (!this.currentModel) return
+
+    // 清理旧实例
+    if (this.eyeAnim) {
+      this.eyeAnim.detach()
+      this.eyeAnim = null
+    }
+
+    this.eyeAnim = new EyeAnimationSystem()
+    this.eyeAnim.attach(this.currentModel)
+
+    // 如果模型有内置 Cubism 眨眼，自定义其参数使其更生动
+    if (this.eyeAnim.hasBuiltInBlink) {
+      this.eyeAnim.customizeBuiltInBlink({
+        interval: 3.5,
+        closing: 0.15,
+        closed: 0.06,
+        opening: 0.15
+      })
     }
   }
 
