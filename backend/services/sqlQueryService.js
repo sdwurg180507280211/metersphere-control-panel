@@ -12,33 +12,11 @@ let verifiedAccount = null;
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;
-const WRITE_PRIVILEGES = new Set([
-  'ALL PRIVILEGES',
-  'ALTER',
-  'ALTER ROUTINE',
-  'CREATE',
-  'CREATE ROUTINE',
-  'CREATE TABLESPACE',
-  'CREATE TEMPORARY TABLES',
-  'CREATE USER',
-  'DELETE',
-  'DROP',
-  'EVENT',
-  'EXECUTE',
-  'FILE',
-  'GRANT OPTION',
-  'INDEX',
-  'INSERT',
-  'LOCK TABLES',
-  'PROCESS',
-  'REFERENCES',
-  'RELOAD',
-  'REPLICATION CLIENT',
-  'REPLICATION SLAVE',
-  'SHUTDOWN',
-  'SUPER',
-  'TRIGGER',
-  'UPDATE'
+const ALLOWED_READONLY_PRIVILEGES = new Set([
+  'USAGE',
+  'SELECT',
+  'SHOW VIEW',
+  'SHOW DATABASES'
 ]);
 
 function normalizeLimit(limit) {
@@ -158,12 +136,21 @@ async function verifyReadonlyAccount(connection) {
 
   const grants = grantRows.flatMap((row) => Object.values(row).map(String));
   const privileges = grants.flatMap(extractPrivileges);
-  const forbidden = [...new Set(privileges.filter((privilege) => WRITE_PRIVILEGES.has(privilege)))];
+  const unsupportedGrants = grants.filter((statement) => {
+    const normalized = statement.trim();
+    return /^GRANT\s+/i.test(normalized) && !/^GRANT\s+.+?\s+ON\s+/i.test(normalized);
+  });
+  const forbidden = [...new Set(privileges.filter(
+    (privilege) => !ALLOWED_READONLY_PRIVILEGES.has(privilege)
+  ))];
+  const hasGrantOption = grants.some((statement) => /\bWITH\s+GRANT\s+OPTION\b/i.test(statement));
 
-  if (forbidden.length > 0) {
-    throw new Error(
-      `SQL 工作区账号 ${currentUser} 不是只读账号，检测到高风险权限: ${forbidden.join(', ')}`
-    );
+  if (forbidden.length > 0 || unsupportedGrants.length > 0 || hasGrantOption) {
+    const reasons = [];
+    if (forbidden.length > 0) reasons.push(`非只读权限: ${forbidden.join(', ')}`);
+    if (unsupportedGrants.length > 0) reasons.push('存在无法安全展开的角色或动态授权');
+    if (hasGrantOption) reasons.push('存在 GRANT OPTION');
+    throw new Error(`SQL 工作区账号 ${currentUser} 未通过只读校验，${reasons.join('；')}`);
   }
 
   return {
