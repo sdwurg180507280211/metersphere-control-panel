@@ -194,6 +194,8 @@ async function createPool() {
     pool = candidatePool;
     return pool;
   } catch (error) {
+    connection?.release();
+    connection = null;
     await candidatePool.end().catch(() => {});
     throw error;
   } finally {
