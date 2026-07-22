@@ -1,0 +1,6 @@
+# Copy this file to ~/.metersphere-control-panel/sql-readonly.properties
+# or set MS_SQL_READONLY_PROPERTIES_PATH to the copied file.
+
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/metersphere
+spring.datasource.username=ms_panel_ro
+spring.datasource.password=change-this-password
