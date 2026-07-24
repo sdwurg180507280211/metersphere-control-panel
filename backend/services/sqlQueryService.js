@@ -1,16 +1,23 @@
 const mysql = require('mysql2/promise');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const METERSPHERE_CONF = process.env.MS_PROPERTIES_PATH || '/opt/metersphere/conf/metersphere.properties';
+const READONLY_CONF = process.env.MS_SQL_READONLY_PROPERTIES_PATH
+  || path.join(os.homedir(), '.metersphere-control-panel', 'sql-readonly.properties');
 
 let pool = null;
+let verifiedAccount = null;
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;
-const READ_ONLY_PREFIXES = /^(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i;
-const WRITE_KEYWORDS = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|REPLACE|GRANT|REVOKE|SET|USE|CALL|LOAD|LOCK|UNLOCK|MERGE|RENAME|ANALYZE|OPTIMIZE|REPAIR|HANDLER|INSTALL|UNINSTALL)\b/i;
-const FORBIDDEN_READ_PATTERNS = /\bINTO\s+(OUTFILE|DUMPFILE)\b|\bFOR\s+UPDATE\b/i;
+const ALLOWED_READONLY_PRIVILEGES = new Set([
+  'USAGE',
+  'SELECT',
+  'SHOW VIEW',
+  'SHOW DATABASES'
+]);
 
 function normalizeLimit(limit) {
   const parsed = Number.parseInt(limit, 10);
@@ -20,110 +27,207 @@ function normalizeLimit(limit) {
   return Math.min(parsed, MAX_LIMIT);
 }
 
-function stripTrailingSemicolon(sql) {
-  return sql.trim().replace(/;\s*$/, '').trim();
+function parseProperties(content) {
+  return String(content || '').split(/\r?\n/).reduce((result, line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) {
+      return result;
+    }
+
+    const separatorIndex = trimmed.search(/[:=]/);
+    if (separatorIndex < 0) {
+      return result;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim();
+    const value = trimmed.slice(separatorIndex + 1).trim();
+    result[key] = value;
+    return result;
+  }, {});
 }
 
-function hasMultipleStatements(sql) {
-  const withoutStrings = sql
-    .replace(/'([^'\\]|\\.)*'/g, "''")
-    .replace(/"([^"\\]|\\.)*"/g, '""')
-    .replace(/`([^`\\]|\\.)*`/g, '``');
-  return /;\s*\S/.test(withoutStrings);
-}
-
-function validateReadOnlySql(sql) {
-  if (typeof sql !== 'string' || !sql.trim()) {
-    return { valid: false, error: '无效的 SQL 查询' };
-  }
-
-  const normalized = stripTrailingSemicolon(sql);
-  if (hasMultipleStatements(normalized)) {
-    return { valid: false, error: '只允许执行单条只读 SQL' };
-  }
-
-  if (!READ_ONLY_PREFIXES.test(normalized)) {
-    return { valid: false, error: '只允许执行 SELECT、SHOW、DESCRIBE、DESC、EXPLAIN 查询' };
-  }
-
-  if (WRITE_KEYWORDS.test(normalized) || FORBIDDEN_READ_PATTERNS.test(normalized)) {
-    return { valid: false, error: 'SQL 包含非只读或高风险语句' };
-  }
-
-  return { valid: true, sql: normalized };
-}
-
-function readDatabaseConfig() {
-  if (!fs.existsSync(METERSPHERE_CONF)) {
-    throw new Error(`配置文件不存在: ${METERSPHERE_CONF}`);
-  }
-
-  const content = fs.readFileSync(METERSPHERE_CONF, 'utf8');
-  const urlMatch = content.match(/spring\.datasource\.url\s*=\s*jdbc:mysql:\/\/([^:]+):(\d+)\/(\w+)/);
-  const userMatch = content.match(/spring\.datasource\.username\s*=\s*(.+)/);
-  const passMatch = content.match(/spring\.datasource\.password\s*=\s*(.+)/);
-
-  if (!urlMatch || !userMatch) {
-    throw new Error('无法解析数据库配置');
+function parseJdbcUrl(value) {
+  const match = String(value || '').match(/^jdbc:mysql:\/\/([^:/?#]+)(?::(\d+))?\/([^?]+)/i);
+  if (!match) {
+    return null;
   }
 
   return {
-    host: urlMatch[1].trim(),
-    port: parseInt(urlMatch[2], 10),
-    database: urlMatch[3].trim(),
-    user: userMatch[1].trim(),
-    password: passMatch ? passMatch[1].trim() : ''
+    host: match[1],
+    port: Number.parseInt(match[2] || '3306', 10),
+    database: decodeURIComponent(match[3])
   };
 }
 
-function createPool() {
-  if (!pool) {
-    const config = readDatabaseConfig();
-    pool = mysql.createPool({
-      ...config,
-      connectionLimit: 2,
-      queueLimit: 5,
-      waitForConnections: true
-    });
+function readPropertiesFile(filePath, required = false) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    if (required) {
+      throw new Error(`配置文件不存在: ${filePath}`);
+    }
+    return {};
   }
-  return pool;
+  return parseProperties(fs.readFileSync(filePath, 'utf8'));
+}
+
+function readDatabaseLocation() {
+  const properties = readPropertiesFile(METERSPHERE_CONF, false);
+  const jdbc = parseJdbcUrl(properties['spring.datasource.url']);
+  return jdbc || {};
+}
+
+function readReadonlyProperties() {
+  const properties = readPropertiesFile(READONLY_CONF, false);
+  const jdbc = parseJdbcUrl(
+    properties['spring.datasource.url']
+      || properties['datasource.url']
+      || properties.url
+  );
+
+  return {
+    ...(jdbc || {}),
+    host: properties['spring.datasource.host'] || properties.host || jdbc?.host,
+    port: properties['spring.datasource.port'] || properties.port || jdbc?.port,
+    database: properties['spring.datasource.database'] || properties.database || jdbc?.database,
+    user: properties['spring.datasource.username'] || properties.username || properties.user,
+    password: properties['spring.datasource.password'] || properties.password || ''
+  };
+}
+
+function readDatabaseConfig() {
+  const sourceDatabase = readDatabaseLocation();
+  const readonly = readReadonlyProperties();
+
+  const config = {
+    host: process.env.MS_SQL_READONLY_HOST || readonly.host || sourceDatabase.host,
+    port: Number.parseInt(process.env.MS_SQL_READONLY_PORT || readonly.port || sourceDatabase.port || '3306', 10),
+    database: process.env.MS_SQL_READONLY_DATABASE || readonly.database || sourceDatabase.database,
+    user: process.env.MS_SQL_READONLY_USER || readonly.user,
+    password: process.env.MS_SQL_READONLY_PASSWORD ?? readonly.password ?? ''
+  };
+
+  const missing = ['host', 'database', 'user'].filter((key) => !config[key]);
+  if (missing.length > 0) {
+    throw new Error(
+      `SQL 只读账号配置不完整，缺少: ${missing.join(', ')}。`
+      + ' 请设置 MS_SQL_READONLY_USER 等环境变量，或创建独立的 sql-readonly.properties。'
+    );
+  }
+
+  return config;
+}
+
+function extractPrivileges(grantStatement) {
+  const statement = String(grantStatement || '').trim();
+  const grantMatch = statement.match(/^GRANT\s+(.+?)\s+ON\s+/i);
+  if (!grantMatch) {
+    return [];
+  }
+
+  return grantMatch[1]
+    .split(',')
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+async function verifyReadonlyAccount(connection) {
+  const [identityRows] = await connection.query('SELECT CURRENT_USER() AS currentUser');
+  const currentUser = identityRows?.[0]?.currentUser || 'unknown';
+  const [grantRows] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+
+  const grants = grantRows.flatMap((row) => Object.values(row).map(String));
+  const privileges = grants.flatMap(extractPrivileges);
+  const unsupportedGrants = grants.filter((statement) => {
+    const normalized = statement.trim();
+    return /^GRANT\s+/i.test(normalized) && !/^GRANT\s+.+?\s+ON\s+/i.test(normalized);
+  });
+  const forbidden = [...new Set(privileges.filter(
+    (privilege) => !ALLOWED_READONLY_PRIVILEGES.has(privilege)
+  ))];
+  const hasGrantOption = grants.some((statement) => /\bWITH\s+GRANT\s+OPTION\b/i.test(statement));
+
+  if (forbidden.length > 0 || unsupportedGrants.length > 0 || hasGrantOption) {
+    const reasons = [];
+    if (forbidden.length > 0) reasons.push(`非只读权限: ${forbidden.join(', ')}`);
+    if (unsupportedGrants.length > 0) reasons.push('存在无法安全展开的角色或动态授权');
+    if (hasGrantOption) reasons.push('存在 GRANT OPTION');
+    throw new Error(`SQL 工作区账号 ${currentUser} 未通过只读校验，${reasons.join('；')}`);
+  }
+
+  return {
+    currentUser,
+    grants,
+    verifiedAt: new Date().toISOString()
+  };
+}
+
+async function createPool() {
+  if (pool) {
+    return pool;
+  }
+
+  const config = readDatabaseConfig();
+  const candidatePool = mysql.createPool({
+    ...config,
+    connectionLimit: 2,
+    queueLimit: 5,
+    waitForConnections: true,
+    multipleStatements: false
+  });
+
+  let connection;
+  try {
+    connection = await candidatePool.getConnection();
+    verifiedAccount = await verifyReadonlyAccount(connection);
+    pool = candidatePool;
+    return pool;
+  } catch (error) {
+    connection?.release();
+    connection = null;
+    await candidatePool.end().catch(() => {});
+    throw error;
+  } finally {
+    connection?.release();
+  }
 }
 
 async function executeQuery(sql, timeout = 30000, limit = DEFAULT_LIMIT) {
-  const validation = validateReadOnlySql(sql);
-  if (!validation.valid) {
-    return {
-      success: false,
-      readonlyViolation: true,
-      error: validation.error
-    };
+  if (typeof sql !== 'string' || !sql.trim()) {
+    return { success: false, error: '无效的 SQL 语句' };
   }
 
   const safeLimit = normalizeLimit(limit);
-  let safeSql = validation.sql;
-  const pool = createPool();
+  const activePool = await createPool();
   const startTime = Date.now();
 
-  // 仅对 SELECT 查询自动注入 LIMIT
-  const isSelect = /^\s*SELECT\s/i.test(safeSql);
-  if (isSelect && !/\bLIMIT\s+\d+\b/i.test(safeSql)) {
-    safeSql = `${safeSql} LIMIT ${safeLimit}`;
-  }
-
   try {
-    const [rows] = await pool.query({ sql: safeSql, timeout });
+    // 不在应用层判断 SQL 类型，也不改写 SQL；权限由数据库只读账号负责。
+    const [rows, fields] = await activePool.query({ sql: sql.trim(), timeout });
     const executionTime = Date.now() - startTime;
 
-    const limitedRows = Array.isArray(rows) ? rows.slice(0, safeLimit) : [];
-    const columns = limitedRows.length > 0 ? Object.keys(limitedRows[0]) : [];
+    if (!Array.isArray(rows)) {
+      return {
+        success: true,
+        columns: [],
+        rows: [],
+        rowCount: rows?.affectedRows || 0,
+        executionTime,
+        truncated: false,
+        metadata: rows || null
+      };
+    }
+
+    const limitedRows = rows.slice(0, safeLimit);
+    const columns = Array.isArray(fields) && fields.length > 0
+      ? fields.map((field) => field.name)
+      : (limitedRows.length > 0 ? Object.keys(limitedRows[0]) : []);
 
     return {
       success: true,
       columns,
       rows: limitedRows,
-      rowCount: Array.isArray(rows) ? rows.length : 0,
+      rowCount: rows.length,
       executionTime,
-      truncated: Array.isArray(rows) && rows.length > safeLimit
+      truncated: rows.length > safeLimit
     };
   } catch (error) {
     return {
@@ -136,20 +240,39 @@ async function executeQuery(sql, timeout = 30000, limit = DEFAULT_LIMIT) {
 
 async function testConnection() {
   try {
-    const pool = createPool();
-    await pool.query('SELECT 1');
+    const activePool = await createPool();
+    await activePool.query('SELECT 1');
     const config = readDatabaseConfig();
     return {
       connected: true,
+      readonlyVerified: true,
+      currentUser: verifiedAccount?.currentUser || config.user,
       database: config.database,
-      host: config.host
+      host: config.host,
+      configSource: fs.existsSync(READONLY_CONF) ? READONLY_CONF : 'environment'
     };
   } catch (error) {
     return {
       connected: false,
+      readonlyVerified: false,
       error: error.message
     };
   }
 }
 
-module.exports = { executeQuery, testConnection, validateReadOnlySql, normalizeLimit };
+async function closePool() {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    verifiedAccount = null;
+  }
+}
+
+module.exports = {
+  executeQuery,
+  testConnection,
+  normalizeLimit,
+  readDatabaseConfig,
+  verifyReadonlyAccount,
+  closePool
+};

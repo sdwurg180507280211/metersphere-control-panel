@@ -1,70 +1,82 @@
 # MeterSphere Control Panel
 
-`metersphere-control-panel` 是一个独立长期维护的 MeterSphere 本地开发控制台，用于管理同级 `metersphere` 项目的服务启动、前端构建、实时日志与构建进度。
+`metersphere-control-panel` 是一个独立维护的 MeterSphere 本地开发控制台，用于管理同级或指定目录中的 MeterSphere 源码项目。
 
-## 当前能力
+它面向本地开发、联调、构建和验证场景，不是可直接暴露到公网的运维后台。
 
-- 服务控制：单服务启动、停止、重启，批量启动 / 停止 / 重启
-- 系统命令：服务页支持手动触发 `msctl reload`，并在弹窗中输入管理员密码
-- 批量编排：批量启动按健康检查顺序推进，失败时自动回滚本次已启动的服务
-- 前端构建：支持单模块 / 批量模块构建，构建完成后自动重启对应服务
-- 整体验证打包：新增第 3 个“整体验证打包”页签，可触发 `metersphere-build.sh`、查看任务状态与实时日志
-- 配置管理：新增第 4 个“配置管理”页签，支持 `config.json` 结构化编辑、校验、保存与运行时应用
-- 构建取消：支持真实取消 `npm install` / `npm run build` 子进程
-- 实时同步：以 WebSocket 为主通道推送服务状态、构建进度、构建日志、服务日志与打包日志/状态
-- 日志链路：前端日志使用行缓冲与虚拟滚动；服务端日志使用流式写盘
-- 缓存策略：默认使用内存缓存，启用 Redis 后控制任务支持严格持久化、限流和恢复补写
-- 统一任务中心：服务控制与前端构建统一收敛到 `jobId`、`job:*` 事件和结构化错误响应
+## 主要能力
+
+- 服务管理：单服务及批量启动、停止、重启、Reload
+- 服务编排：依赖检查、按健康状态推进、失败补偿和进程恢复
+- 前端构建：单模块/批量构建、取消真实构建进程、复制产物、关联服务重启
+- SDK 构建：构建 `framework/sdk-parent` 相关模块
+- 整体验证打包：运行 MeterSphere 打包脚本并实时查看状态和日志
+- 配置管理：结构化编辑、校验、保存、诊断和运行时热应用
+- 实时通信：WebSocket 推送服务状态、任务进度和各类日志
+- SSH 隧道：保存端口映射、手动连接、自动连接和断线重连
+- SQL 工作区：使用专用数据库只读账号执行 SQL
+- AI 看板娘：可选 Live2D、AI 对话、TTS 和音频驱动嘴型同步
+- 桌面应用：支持构建 macOS Electron DMG
+
+## 技术栈
+
+### 后端
+
+- Node.js 18+
+- Express
+- 原生 WebSocket (`ws`)
+- MySQL (`mysql2`)
+- Redis（可选）
+- RxJS
+
+### 前端
+
+- React 18
+- Vite 5
+- Zustand
+- PixiJS / Live2D（按配置懒加载）
 
 ## 项目结构
 
 ```text
 .
 ├── backend/
-│   ├── config/              # Redis 等运行时配置
-│   ├── controllers/         # HTTP 控制器
-│   ├── routes/              # API 路由
-│   ├── services/            # 进程、健康检查、构建进度、缓存、WebSocket 等服务
-│   ├── utils/               # 日志、校验等工具
-│   └── server.js            # 后端入口
+│   ├── config/                 # Redis 等运行时配置
+│   ├── controllers/            # HTTP 控制器
+│   ├── middleware/             # 本地令牌鉴权
+│   ├── routes/                 # API 路由
+│   ├── services/               # 任务、进程、构建、配置、SQL、WebSocket 等服务
+│   ├── utils/                  # 日志、错误、校验工具
+│   └── server.js               # 后端入口
 ├── docs/
-│   └── control-panel-optimization-roadmap.md
 ├── frontend/
-│   ├── src/components/
-│   ├── src/hooks/
-│   ├── src/store/
-│   └── vite.config.js
-├── config.json              # 控制面板配置源
+│   ├── public/
+│   └── src/
+│       ├── components/
+│       ├── hooks/
+│       ├── plugins/
+│       ├── store/
+│       └── styles/
+├── scripts/
+├── electron.js
 └── package.json
 ```
 
-## 运行方式
-
-### 前置条件
+## 运行要求
 
 - Node.js 18+
 - npm
+- Java 和 Maven Wrapper 环境
 - 可访问的 MeterSphere 源码目录
-- Java / Maven Wrapper 运行环境（用于启动 MeterSphere 后端服务）
+- macOS 或 Linux
+
+当前服务进程控制主要面向 Unix 环境。Electron 构建配置当前只提供 macOS DMG；Windows 不是正式支持目标。
+
+## 安装与启动
 
 ### 安装依赖
 
 ```bash
-npm run install:all
-```
-
-#### 故障排除
-
-如果遇到 Electron 下载失败（`socket hang up` 错误），使用国内镜像源：
-
-```bash
-# 配置镜像源
-npm config set registry https://registry.npmmirror.com
-export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
-
-# 清理缓存后重新安装
-npm cache clean --force
-rm -rf node_modules package-lock.json frontend/node_modules frontend/package-lock.json
 npm run install:all
 ```
 
@@ -74,13 +86,10 @@ npm run install:all
 npm run dev
 ```
 
-启动前会自动执行 `node scripts/clean-port.js 3000 5000`，用于清理默认端口占用。
+默认地址：
 
-开发模式职责：
-
-- `backend/server.js` 提供 API 与 WebSocket 服务，默认监听 `http://localhost:3000`
-- `frontend` 使用 Vite 开发服务器，默认监听 `http://localhost:3001`
-- 前端通过代理访问后端 API / WebSocket
+- 后端 API / WebSocket：`http://127.0.0.1:3000`
+- Vite 前端：`http://127.0.0.1:3001`
 
 ### 生产模式
 
@@ -89,210 +98,210 @@ npm run build
 npm start
 ```
 
-生产模式职责：
+生产模式由后端直接托管 `frontend/dist`，统一访问：
 
-- `npm run build` 生成 `frontend/dist`
-- `npm start` 启动 Node 服务，由后端直接托管 `frontend/dist`
-- 浏览器统一访问 `http://localhost:3000`
-
-## 配置说明
-
-控制面板主配置位于 `config.json`。
-
-```json
-{
-  "port": 3000,
-  "projectRoot": "..",
-  "maxLogLines": 1000,
-  "services": {
-    "eureka": {
-      "name": "Eureka",
-      "pom": "framework/eureka/pom.xml",
-      "port": 8761,
-      "healthCheck": "/actuator/health",
-      "startOrder": 1
-    }
-  }
-}
+```text
+http://127.0.0.1:3000
 ```
 
-### `projectRoot` 说明
+### macOS 桌面包
 
-- 当前仓库会优先解析有效的 MeterSphere 项目根目录
-- 默认会自动识别同级 `../metersphere`
-- 启动服务时会优先使用 MeterSphere 根目录下的 `mvnw` / `mvnw.cmd`
+```bash
+npm run electron:build
+```
 
-### 打包脚本路径
+## 配置文件
 
-- 打包页默认执行同级 MeterSphere 仓库中的 `打包/metersphere-build.sh`
-- 可通过 `MS_PACKAGE_SCRIPT_PATH` 或 `PACKAGE_SCRIPT_PATH` 显式覆盖脚本路径
-- 若配置了 `config.json.package.scriptPath`，后端也会将其作为候选路径之一
+控制面板配置默认存储在：
 
-### 配置管理页
+```text
+~/.metersphere-control-panel/config.json
+```
 
-配置页会同时展示三类信息：
+可通过环境变量覆盖：
 
-- `editable`：可写回 `config.json` 的持久化字段，例如 `projectRoot`、`services`、`package`
-- `runtime`：环境变量和运行时派生出的只读字段，例如 Redis、缓存模式、任务超时
-- `resolved`：后端解析后的最终快照，例如绝对 `projectRoot`、服务目录、前端模块、打包脚本候选路径
+```bash
+MS_CONFIG_PATH=/custom/path/config.json
+```
 
-页面支持以下操作：
+`config.json` 主要包含：
 
-- `GET /api/config`：加载当前配置页快照
-- `POST /api/config/validate`：校验草稿但不写盘
-- `PUT /api/config`：保存到 `config.json`
-- `POST /api/config/apply`：将最新保存配置应用到支持热更新的运行时消费者
-- `GET /api/config/diagnostics`：重新执行配置诊断
-
-当前明确需要重启控制面板才能生效的字段：
-
+- `projectRoot`
 - `port`
+- `maxLogLines`
+- `services`
+- `package`
+- `properties`
+- `redis`
+- `sshTunnel`
+- `waifu`
+- `claudeCode`
+- `jvmOptions`
 
-## 缓存模式
+配置保存时会先备份旧文件，再通过临时文件原子替换。
+
+### 项目根目录
+
+源码运行时，默认会尝试识别控制面板同级的 MeterSphere 项目。
+
+桌面打包环境不会假定 MeterSphere 源码位置，需要在配置页中选择项目根目录。
+
+## SQL 工作区与只读账号
+
+SQL 工作区不再在应用层判断 SQL 类型，也不会给 SQL 自动追加 `LIMIT`。数据库权限是唯一的写操作安全边界。
+
+控制面板不会复用 `metersphere.properties` 中的业务数据库用户名和密码。必须单独配置数据库只读账号；未配置或检测到写权限时，SQL 工作区会拒绝连接。
+
+### 创建 MySQL 只读账号
+
+以下示例需要根据实际数据库名、来源地址和密码调整：
+
+```sql
+CREATE USER 'ms_panel_ro'@'127.0.0.1' IDENTIFIED BY 'change-this-password';
+GRANT SELECT, SHOW VIEW ON metersphere.* TO 'ms_panel_ro'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+
+不要授予以下权限：
+
+- `INSERT`、`UPDATE`、`DELETE`
+- `CREATE`、`DROP`、`ALTER`、`INDEX`
+- `EXECUTE`、`TRIGGER`、`EVENT`
+- `FILE`、`SUPER`、`GRANT OPTION`
+- `ALL PRIVILEGES`
+
+控制面板连接时会执行 `SHOW GRANTS FOR CURRENT_USER()`。检测到高风险权限后会立即关闭连接池。
+
+### 方式一：环境变量
+
+```bash
+export MS_SQL_READONLY_HOST=127.0.0.1
+export MS_SQL_READONLY_PORT=3306
+export MS_SQL_READONLY_DATABASE=metersphere
+export MS_SQL_READONLY_USER=ms_panel_ro
+export MS_SQL_READONLY_PASSWORD='change-this-password'
+```
+
+`HOST`、`PORT` 和 `DATABASE` 未设置时，可以从 `MS_PROPERTIES_PATH` 指向的 MeterSphere properties 中推导；只读用户名不会从业务配置中回退。
+
+### 方式二：独立 properties 文件
+
+默认路径：
+
+```text
+~/.metersphere-control-panel/sql-readonly.properties
+```
+
+内容示例：
+
+```properties
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/metersphere
+spring.datasource.username=ms_panel_ro
+spring.datasource.password=change-this-password
+```
+
+也可以覆盖文件路径：
+
+```bash
+MS_SQL_READONLY_PROPERTIES_PATH=/custom/path/sql-readonly.properties
+```
+
+SQL 返回结果默认最多传给前端 1000 行，接口允许的最大展示上限为 5000 行。该上限只控制返回数据量，不参与 SQL 权限判断，也不会改写用户 SQL。
+
+## Redis
 
 默认使用内存缓存，不依赖 Redis。
 
-如果需要显式启用 Redis，可设置以下环境变量：
+显式启用 Redis：
 
 ```bash
-MS_CACHE_MODE=redis
-MS_REDIS_HOST=127.0.0.1
-MS_REDIS_PORT=6379
-MS_REDIS_PASSWORD=
-MS_REDIS_DB=0
-MS_CACHE_KEY_PREFIX=ms-panel:
-MS_JOB_REDIS_REQUIRED=true
-MS_JOB_RATE_LIMIT_WINDOW_SECONDS=30
+export MS_CACHE_MODE=redis
+export MS_REDIS_HOST=127.0.0.1
+export MS_REDIS_PORT=6379
+export MS_REDIS_PASSWORD=
+export MS_REDIS_DB=0
+export MS_CACHE_KEY_PREFIX=ms-panel:
 ```
 
-说明：
+当 Redis 被配置为任务强依赖且不可用时，新的控制任务会返回 `503 REDIS_UNAVAILABLE`。任务执行中的短暂写入失败会进入内存恢复缓冲，并在 Redis 恢复后补写。
 
-- `MS_CACHE_MODE` 默认值为 `memory`
-- `MS_JOB_REDIS_REQUIRED` 未显式设置时，会在 `MS_CACHE_MODE=redis` 时默认开启
-- `MS_JOB_RATE_LIMIT_WINDOW_SECONDS` 默认值为 `30`，用于服务/模块级写操作限流窗口
-- Redis 启用且不可用时，新控制任务会直接返回 `503 REDIS_UNAVAILABLE`
-- Redis 在任务执行中短暂抖动时，活动任务状态会先落到内存恢复缓冲，并在 Redis 恢复后自动补写
-- 也支持从 `MS_PROPERTIES_PATH` 指定的 MeterSphere properties 文件读取 Redis 主机 / 端口 / 密码
+## 本地访问安全
 
-## 兼容迁移约定
+后端默认只监听：
 
-当前控制面板处于统一任务模型与旧前端协议并存阶段：
+```text
+127.0.0.1
+```
 
-- 写操作的主模型是 `jobId`、`/api/jobs/*` 与 `job:*` 事件
-- 构建页仍继续使用 `/api/progress/*`、`build:*` 事件与 `buildId` 兼容字段
-- 服务页仍继续使用 `service:status` 事件；同时前端已开始订阅 `job:*` 作为双栈兼容
-- `GET /api/jobs/:jobId`、`GET /api/jobs/active`、`GET /api/jobs/history/recent` 对构建任务会额外返回顶层 `buildId` 与 `compatibility` 信息，明确旧接口、旧事件和迁移模式
+访问令牌可以通过以下方式传递：
 
-推荐迁移顺序：
+- `X-MS-Local-Token`
+- `Authorization: Bearer <token>`
+- 首次打开页面时的 `?token=<token>`
 
-1. 新能力优先接入 `jobs` 查询接口与 `job:*` 事件
-2. 构建领域在兼容期继续保留 `buildId` 与 `progress` 路由
-3. 旧调用方完成迁移后，再评估是否下线 `build:*` / `service:status` 的强依赖
+前端会把 URL 中的 Token 保存到 `localStorage`，随后从地址栏移除，并自动添加到 API 和 WebSocket 请求。
 
-## 实时通信机制
+如设置：
 
-### 主通道：WebSocket
+```bash
+MS_BIND_HOST=0.0.0.0
+```
 
-WebSocket 路径：`/ws`
+请确保网络环境可信。这个控制台具备进程、数据库、SSH、构建和系统命令能力，不应直接暴露到公网。
 
-当前前端主要依赖以下事件：
+## 实时事件
 
-- `logs:service`：服务日志
-- `logs:build`：构建日志
-- `logs:package`：打包日志
-- `build:progress`：构建进度
-- `service:status`：服务状态增量更新
-- `package:started` / `package:heartbeat` / `package:completed` / `package:failed`：打包状态事件
+WebSocket 地址：
 
-### 兼容通道：SSE
+```text
+/ws
+```
 
-兼容保留 `GET /api/logs/stream` 用于日志流接入，但当前前端主通道已经是 WebSocket。
+主要事件：
 
-## API 概览
+- `logs:service`
+- `logs:build`
+- `logs:package`
+- `service:status`
+- `build:progress`
+- `job:progress`
+- `job:completed`
+- `job:failed`
+- `package:started`
+- `package:heartbeat`
+- `package:completed`
+- `package:failed`
+- `infra:status`
+- `tunnel:status`
 
-### 服务管理
+旧的 `build:*`、`service:status` 和 `/api/progress/*` 仍处于兼容期。新增功能应优先使用 `/api/jobs/*` 和 `job:*` 事件。
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/services/catalog` | 获取服务目录 |
-| GET | `/api/services/status` | 获取全部服务状态 |
-| POST | `/api/services/start-all` | 创建批量启动父任务，返回 `202 + jobId` |
-| POST | `/api/services/stop-all` | 创建批量停止父任务，返回 `202 + jobId` |
-| POST | `/api/services/restart-all` | 创建批量重启父任务，返回 `202 + jobId` |
-| POST | `/api/services/system/reload` | 执行 `sudo msctl reload`，请求体需携带管理员密码 |
-| GET | `/api/services/:id/status` | 获取单个服务状态 |
-| GET | `/api/services/:id/health` | 获取单个服务健康状态 |
-| POST | `/api/services/:id/start` | 启动单个服务 |
-| POST | `/api/services/:id/stop` | 停止单个服务 |
-| POST | `/api/services/:id/restart` | 重启单个服务 |
-| POST | `/api/services/:id/reload` | 触发服务 reload 任务 |
+## API 模块
 
-### 配置管理
+```text
+/api/services   服务、基础设施、SDK 和 SSH 隧道
+/api/build      前端构建
+/api/progress   构建兼容进度接口
+/api/jobs       统一任务查询
+/api/package    整体验证打包
+/api/config     配置管理
+/api/logs       日志查询与兼容流
+/api/sql        SQL 工作区
+/api/chat       AI 对话与 TTS
+```
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/config` | 获取配置管理页完整快照（editable/runtime/resolved/diagnostics/meta） |
-| POST | `/api/config/validate` | 校验草稿并返回结构化错误、警告和应用影响 |
-| PUT | `/api/config` | 保存配置到 `config.json`，不自动应用到运行时 |
-| POST | `/api/config/apply` | 应用最新已保存配置到支持热更新的消费者 |
-| GET | `/api/config/diagnostics` | 重新执行配置诊断，不改动磁盘配置 |
+## Electron 下载问题
 
-### 打包任务
+遇到 Electron 下载失败时，可以使用镜像：
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/package/options` | 获取后端维护的打包服务白名单、默认值、脚本可用性 |
-| GET | `/api/package/active` | 获取当前活动中的打包任务，供页面刷新恢复 |
-| POST | `/api/package/run` | 创建新的打包任务，返回 `202 + jobId` |
+```bash
+npm config set registry https://registry.npmmirror.com
+export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+npm cache clean --force
+rm -rf node_modules package-lock.json frontend/node_modules frontend/package-lock.json
+npm run install:all
+```
 
-批量服务操作现在会创建父任务和子任务：父任务汇总整体结果，子任务保留每个服务的真实执行结果；第一阶段不对已成功的子任务做隐式回滚。
+## License
 
-### 构建管理
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/build/modules` | 获取可构建模块目录 |
-| POST | `/api/build/frontend` | 构建单个前端模块 |
-| POST | `/api/build/frontend/batch` | 批量构建多个模块 |
-
-### 任务查询
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/jobs/:jobId` | 获取统一任务详情 |
-| GET | `/api/jobs/active` | 获取活动任务列表 |
-| GET | `/api/jobs/history/recent` | 获取最近任务历史 |
-| POST | `/api/jobs/:jobId/cancel` | 取消支持取消的任务 |
-
-### 构建进度
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/progress/active` | 获取进行中的构建 |
-| GET | `/api/progress/history/recent` | 获取最近构建历史 |
-| GET | `/api/progress/:buildId` | 获取单个构建详情 |
-| POST | `/api/progress/:buildId/cancel` | 取消构建 |
-
-### 日志
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/api/logs/stream` | SSE 兼容日志流 |
-| GET | `/api/logs/files` | 获取日志文件列表 |
-| POST | `/api/logs/clean` | 清理历史日志 |
-
-## 构建策略说明
-
-当前前端构建流程遵循以下规则：
-
-- 默认跳过重复依赖安装
-- 如果 `node_modules` 不存在，则自动安装依赖
-- 如果 lockfile 指纹变化，则自动重新安装依赖
-- 如果请求中显式开启 `forceInstall`，则强制安装依赖
-- 有 `package-lock.json` 时优先使用 `npm ci`
-
-## 路线图
-
-优化路线图见 `docs/control-panel-optimization-roadmap.md`。
-
-当前这份路线图中的既定优化项已全部完成，后续新增优化建议可继续增量维护。
+MIT

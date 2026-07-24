@@ -19,10 +19,8 @@ const DEFAULT_SYSTEM_PROMPT = `你是一个可爱的看板娘助手，说话带�
 回复尽量简短有趣，不超过 100 字。`;
 
 const DEFAULT_API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+const DEFAULT_TTS_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-speech/stream';
 
-/**
- * 清理过期会话
- */
 function cleanExpiredSessions() {
   const now = Date.now();
   for (const [id, session] of sessions) {
@@ -32,12 +30,9 @@ function cleanExpiredSessions() {
   }
 }
 
-// 每 10 分钟清理一次过期会话
-setInterval(cleanExpiredSessions, 10 * 60 * 1000);
+const sessionCleanupTimer = setInterval(cleanExpiredSessions, 10 * 60 * 1000);
+sessionCleanupTimer.unref?.();
 
-/**
- * 获取或创建会话
- */
 function getOrCreateSession(sessionId, systemPrompt) {
   if (sessions.has(sessionId)) {
     const session = sessions.get(sessionId);
@@ -53,17 +48,29 @@ function getOrCreateSession(sessionId, systemPrompt) {
   return session;
 }
 
+function resolveChatUrl(baseUrl) {
+  if (!baseUrl) {
+    return DEFAULT_API_URL;
+  }
+  return baseUrl.endsWith('/chat/completions')
+    ? baseUrl
+    : `${baseUrl.replace(/\/+$/, '')}/chat/completions`;
+}
+
+function resolveTtsUrl(baseUrl) {
+  if (!baseUrl) {
+    return DEFAULT_TTS_URL;
+  }
+  return `${baseUrl.replace(/\/chat\/completions\/?$/, '').replace(/\/+$/, '')}/text-to-speech/stream`;
+}
+
 const chatController = {
-  /**
-   * POST /api/chat/message
-   * body: { message: string, sessionId?: string }
-   */
   async sendMessage(req, res) {
     try {
-      const { message, sessionId = 'default' } = req.body;
+      const { message, sessionId = 'default' } = req.body || {};
 
       if (!message || typeof message !== 'string' || !message.trim()) {
-        throw createAppError('消息内容不能为空', { statusCode: 400, code: 'INVALID_MESSAGE' });
+        throw createAppError(400, 'INVALID_MESSAGE', '消息内容不能为空');
       }
 
       const resolved = configManager.getResolvedConfig();
@@ -71,47 +78,24 @@ const chatController = {
       const apiKey = waifuConfig.apiKey;
 
       if (!apiKey) {
-        throw createAppError('未配置通义千问 API Key，请在设置中填入 waifu.apiKey', {
-          statusCode: 400,
-          code: 'MISSING_API_KEY'
-        });
+        throw createAppError(400, 'MISSING_API_KEY', '未配置通义千问 API Key，请在设置中填入 waifu.apiKey');
       }
 
       const model = waifuConfig.model || 'qwen3.5-plus';
       const systemPrompt = waifuConfig.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-      const baseUrl = waifuConfig.baseUrl || '';
-
-      // 构建 API URL：支持自定义 baseUrl
-      let apiUrl;
-      if (baseUrl) {
-        // 用户配置的 baseUrl，追加 /chat/completions（如果未包含）
-        apiUrl = baseUrl.endsWith('/chat/completions')
-          ? baseUrl
-          : baseUrl.replace(/\/+$/, '') + '/chat/completions';
-      } else {
-        apiUrl = DEFAULT_API_URL;
-      }
-
-      // 获取或创建会话
+      const apiUrl = resolveChatUrl(waifuConfig.baseUrl || '');
       const session = getOrCreateSession(sessionId, systemPrompt);
 
-      // 添加用户消息
       session.messages.push({ role: 'user', content: message.trim() });
-
-      // 裁剪历史，保留 system + 最近 MAX_HISTORY 条
       if (session.messages.length > MAX_HISTORY + 1) {
-        session.messages = [
-          session.messages[0],
-          ...session.messages.slice(-(MAX_HISTORY))
-        ];
+        session.messages = [session.messages[0], ...session.messages.slice(-MAX_HISTORY)];
       }
 
-      // 调用通义千问 API
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model,
@@ -123,19 +107,19 @@ const chatController = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw createAppError(`通义千问 API 错误: ${response.status} - ${errorText}`, {
-          statusCode: 502,
-          code: 'QWEN_API_ERROR'
-        });
+        throw createAppError(
+          502,
+          'QWEN_API_ERROR',
+          `通义千问 API 错误: ${response.status}`,
+          { upstreamStatus: response.status, upstreamBody: errorText.slice(0, 2000) }
+        );
       }
 
       const data = await response.json();
       const reply = data.choices?.[0]?.message?.content || '(没有收到回复呢...)';
-
-      // 将助手回复加入历史
       session.messages.push({ role: 'assistant', content: reply });
 
-      res.json({
+      return res.json({
         success: true,
         data: {
           reply,
@@ -144,31 +128,22 @@ const chatController = {
         }
       });
     } catch (error) {
-      sendError(res, error);
+      return sendError(res, error);
     }
   },
 
-  /**
-   * DELETE /api/chat/session/:sessionId
-   * 清除指定会话
-   */
   clearSession(req, res) {
     const { sessionId } = req.params;
     sessions.delete(sessionId || 'default');
     res.json({ success: true, message: '会话已清除' });
   },
 
-  /**
-   * POST /api/chat/tts
-   * 文字转语音，返回音频数据。使用 DashScope TTS API 或兼容接口。
-   * body: { text: string, voice?: string }
-   */
   async textToSpeech(req, res) {
     try {
-      const { text, voice = 'longxiaochun_v2' } = req.body;
+      const { text, voice = 'longxiaochun_v2' } = req.body || {};
 
       if (!text || typeof text !== 'string' || !text.trim()) {
-        throw createAppError('文字内容不能为空', { statusCode: 400, code: 'INVALID_TEXT' });
+        throw createAppError(400, 'INVALID_TEXT', '文字内容不能为空');
       }
 
       const resolved = configManager.getResolvedConfig();
@@ -176,26 +151,16 @@ const chatController = {
       const apiKey = waifuConfig.apiKey;
 
       if (!apiKey) {
-        throw createAppError('未配置 API Key', { statusCode: 400, code: 'MISSING_API_KEY' });
+        throw createAppError(400, 'MISSING_API_KEY', '未配置 API Key');
       }
 
       const ttsModel = waifuConfig.ttsModel || 'qwen-tts';
-      const baseUrl = waifuConfig.baseUrl || '';
-      const DEFAULT_TTS_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-to-speech/stream';
-
-      let ttsUrl;
-      if (baseUrl) {
-        // 自定义 baseUrl 也尝试兼容 TTS 端点
-        ttsUrl = baseUrl.replace(/\/chat\/completions\/?$/, '') + '/text-to-speech/stream';
-      } else {
-        ttsUrl = DEFAULT_TTS_URL;
-      }
-
+      const ttsUrl = resolveTtsUrl(waifuConfig.baseUrl || '');
       const response = await fetch(ttsUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: ttsModel,
@@ -206,13 +171,14 @@ const chatController = {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw createAppError(`TTS API 错误: ${response.status} - ${errorText}`, {
-          statusCode: 502,
-          code: 'TTS_API_ERROR'
-        });
+        throw createAppError(
+          502,
+          'TTS_API_ERROR',
+          `TTS API 错误: ${response.status}`,
+          { upstreamStatus: response.status, upstreamBody: errorText.slice(0, 2000) }
+        );
       }
 
-      // 流式转发音频数据
       res.setHeader('Content-Type', response.headers.get('content-type') || 'audio/mpeg');
       res.setHeader('X-TTS-Voice', voice);
 
@@ -222,13 +188,12 @@ const chatController = {
         if (done) break;
         res.write(value);
       }
-      res.end();
+      return res.end();
     } catch (error) {
-      // 如果已经开始写响应头，只能强制关闭
       if (res.headersSent) {
         return res.end();
       }
-      sendError(res, error);
+      return sendError(res, error);
     }
   }
 };
