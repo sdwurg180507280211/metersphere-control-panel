@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import toast from 'react-hot-toast'
 import App from './App.jsx'
+import PackageTaskGuard from './components/PackageTaskGuard.jsx'
 import './styles/index.css'
 
 const LOCAL_TOKEN_KEY = 'msLocalToken'
@@ -41,5 +42,6 @@ window.fetch = async (input, init = {}) => {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
+    <PackageTaskGuard />
   </React.StrictMode>,
 )

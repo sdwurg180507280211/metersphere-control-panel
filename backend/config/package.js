@@ -11,7 +11,8 @@ const PACKAGE_CAPABILITIES = {
   buildOnly: true,
   packagePath: true,
   recentImageVersions: true,
-  explicitAllServicesOnly: true
+  explicitAllServicesOnly: true,
+  cancel: true
 };
 
 const DEFAULT_SEED_VERSION = 'v2.10.26.01-lts';

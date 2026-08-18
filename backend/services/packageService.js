@@ -207,7 +207,10 @@ function spawnPackageProcess(options, hooks = {}) {
   const child = spawn('bash', args, {
     cwd: path.dirname(options.scriptPath),
     env: buildPackageEnvironment(options),
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // POSIX 下独立进程组，取消打包时可以同时终止 Maven/Docker 等子进程。
+    detached: process.platform !== 'win32',
+    windowsHide: true
   });
 
   if (typeof hooks.onStdout === 'function') {
@@ -229,8 +232,93 @@ function spawnPackageProcess(options, hooks = {}) {
   return child;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isProcessGroupAlive(pid) {
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === 'EPERM';
+  }
+}
+
+function terminateWindowsProcessTree(pid) {
+  return new Promise((resolve, reject) => {
+    const killer = spawn('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true
+    });
+
+    killer.once('error', reject);
+    killer.once('close', (code) => {
+      if (code === 0 || code === 128) {
+        resolve(true);
+        return;
+      }
+      reject(createAppError(500, 'PACKAGE_CANCEL_FAILED', `终止打包进程失败，taskkill 退出码 ${code}`, { pid, exitCode: code }));
+    });
+  });
+}
+
+async function terminatePackageProcess(childOrPid, options = {}) {
+  const pid = Number(typeof childOrPid === 'number' ? childOrPid : childOrPid?.pid);
+  const graceMs = Math.max(500, Number(options.graceMs) || 3000);
+
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw createAppError(409, 'PACKAGE_PROCESS_NOT_ACTIVE', '当前打包进程不存在或已结束');
+  }
+
+  if (process.platform === 'win32') {
+    return terminateWindowsProcessTree(pid);
+  }
+
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code === 'ESRCH') {
+      return true;
+    }
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch (fallbackError) {
+      if (fallbackError.code === 'ESRCH') {
+        return true;
+      }
+      throw createAppError(500, 'PACKAGE_CANCEL_FAILED', '发送打包终止信号失败', {
+        pid,
+        cause: fallbackError.message
+      });
+    }
+  }
+
+  const deadline = Date.now() + graceMs;
+  while (Date.now() < deadline) {
+    if (!isProcessGroupAlive(pid)) {
+      return true;
+    }
+    await sleep(100);
+  }
+
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch (error) {
+    if (error.code !== 'ESRCH') {
+      throw createAppError(500, 'PACKAGE_CANCEL_FAILED', '强制终止打包进程失败', {
+        pid,
+        cause: error.message
+      });
+    }
+  }
+
+  return true;
+}
+
 module.exports = {
   preparePackageRunOptions,
   resolvePackageScriptPath,
-  spawnPackageProcess
+  spawnPackageProcess,
+  terminatePackageProcess
 };
