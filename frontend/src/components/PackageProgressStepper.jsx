@@ -87,17 +87,32 @@ export default function PackageProgressStepper({ task, compact = false }) {
   const buildOnly = Boolean(task.metadata?.buildOnly ?? task.result?.buildOnly)
   const steps = buildOnly ? PIPELINE_STEPS.filter((step) => step.id !== 'export_images') : PIPELINE_STEPS
   const displayStage = resolveDisplayStage(task, buildProgress)
-  const activeStepId = mapStageToStep(displayStage, buildOnly)
-  const activeIndex = Math.max(0, steps.findIndex((step) => step.id === activeStepId))
-  const progress = Math.max(0, Math.min(100, Math.round(Number(task.progress) || (status === 'success' ? 100 : 0))))
+  const stageStepId = mapStageToStep(displayStage, buildOnly)
   const moduleDetail = getModuleDetail(buildProgress)
   const failureText = getFailureText(buildProgress)
+  const failureStepId = status === 'failed' && moduleDetail?.failed.length > 0 ? 'service_build' : stageStepId
+  const activeStepId = status === 'failed' ? failureStepId : stageStepId
+  const activeIndex = Math.max(0, steps.findIndex((step) => step.id === activeStepId))
+  const progress = Math.max(0, Math.min(100, Math.round(Number(task.progress) || (status === 'success' ? 100 : 0))))
 
   const getStepState = (index) => {
+    const step = steps[index]
     if (status === 'success') return 'done'
+
+    if (status === 'failed') {
+      if (step.id === failureStepId) return 'failed'
+      if (index < activeIndex) return 'done'
+
+      // 模块失败后脚本仍会导出成功镜像并生成汇总，按真实执行结果展示后续节点。
+      if (failureStepId === 'service_build') {
+        if (step.id === 'export_images' && progress >= 96) return 'done'
+        if (step.id === 'summary' && progress >= 98) return 'done'
+      }
+      return 'pending'
+    }
+
     if (index < activeIndex) return 'done'
     if (index > activeIndex) return 'pending'
-    if (status === 'failed') return 'failed'
     if (status === 'cancelled') return 'cancelled'
     return 'active'
   }
@@ -118,11 +133,18 @@ export default function PackageProgressStepper({ task, compact = false }) {
       <div className="package-pipeline-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}>
         {steps.map((step, index) => {
           const stepState = getStepState(index)
+          const previousState = index > 0 ? getStepState(index - 1) : null
+          const connectorState = stepState === 'active'
+            ? 'active'
+            : previousState === 'done' && stepState === 'done'
+              ? 'done'
+              : 'pending'
           const isBuildStep = step.id === 'service_build'
+
           return (
             <div key={step.id} className={`package-pipeline-step step-${stepState}`}>
               {index > 0 && (
-                <div className={`package-pipeline-connector connector-${getStepState(index - 1) === 'done' ? 'done' : stepState === 'active' ? 'active' : 'pending'}`}>
+                <div className={`package-pipeline-connector connector-${connectorState}`}>
                   <span className="package-pipeline-flow" />
                 </div>
               )}
