@@ -187,10 +187,16 @@ export function useWebSocketEvents(scheduleRefresh) {
     if (isPackageJob) {
       usePackageStore.getState().updateCurrentTask(job)
       if (channel === 'job:completed') {
-        toast.success('打包任务已完成')
-        scheduleRefresh('packageOptions', () => usePackageStore.getState().fetchOptions(), 500)
+        if (job.status === 'cancelled') {
+          toast('打包任务已取消')
+        } else {
+          toast.success('打包任务已完成')
+          scheduleRefresh('packageOptions', () => usePackageStore.getState().fetchOptions(), 500)
+        }
+        scheduleRefresh('packageHistory', () => usePackageStore.getState().fetchHistory({ page: 1, pageSize: 20 }), 500)
       } else if (channel === 'job:failed') {
         toast.error(job.error?.message || '打包任务失败')
+        scheduleRefresh('packageHistory', () => usePackageStore.getState().fetchHistory({ page: 1, pageSize: 20 }), 500)
       }
     }
   }, [scheduleRefresh])
@@ -198,9 +204,14 @@ export function useWebSocketEvents(scheduleRefresh) {
   const handlePackageEvent = useCallback((channel, payload) => {
     if (!payload) return
 
+    const nextStatus = channel === 'package:cancelled'
+      ? 'idle'
+      : payload.status || (channel === 'package:failed' ? 'failed' : channel === 'package:completed' ? 'success' : 'running')
+
     usePackageStore.getState().updateCurrentTask({
       jobId: payload.jobId,
-      status: payload.status || (channel === 'package:failed' ? 'failed' : channel === 'package:completed' ? 'success' : 'running'),
+      status: nextStatus,
+      stage: payload.stage,
       message: payload.message,
       result: payload.result || null,
       error: payload.error || null,
@@ -216,7 +227,7 @@ export function useWebSocketEvents(scheduleRefresh) {
     if (channel === 'package:completed') {
       scheduleRefresh('packageOptions', () => usePackageStore.getState().fetchOptions(), 500)
     }
-    if (channel === 'package:completed' || channel === 'package:failed') {
+    if (['package:completed', 'package:failed', 'package:cancelled'].includes(channel)) {
       scheduleRefresh('packageHistory', () => usePackageStore.getState().fetchHistory({ page: 1, pageSize: 20 }), 500)
     }
   }, [scheduleRefresh])
@@ -282,8 +293,10 @@ export function useWebSocketEvents(scheduleRefresh) {
         break
       case 'package:started':
       case 'package:heartbeat':
+      case 'package:cancelling':
       case 'package:completed':
       case 'package:failed':
+      case 'package:cancelled':
         handlePackageEvent(channel, payload)
         break
       default:
