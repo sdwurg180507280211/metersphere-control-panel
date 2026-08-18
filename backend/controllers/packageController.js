@@ -27,6 +27,19 @@ const packageController = {
     }
   },
 
+  async cancel(req, res) {
+    try {
+      const result = await packageTaskService.cancelTask(req.body?.jobId || null);
+      res.status(202).json({
+        success: true,
+        message: result.message || '取消请求已发送',
+        data: result
+      });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
   async getActive(req, res) {
     try {
       const activeTask = await packageTaskService.getActiveTask();
