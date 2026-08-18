@@ -29,6 +29,12 @@ function incrementVersion(version) {
 }
 
 class PackageTaskService {
+  constructor() {
+    // 只跟踪当前控制面板进程实际启动的打包子进程。
+    // 控制面板重启后的遗留 Job 继续由 jobService.recoverActiveJobs() 收敛。
+    this.activeProcesses = new Map();
+  }
+
   async getOptions() {
     let script = null;
 
@@ -109,8 +115,8 @@ class PackageTaskService {
       maxJobs: options.maxJobs
     });
 
-    this._executeTask(job, options).catch(() => {
-      // 已在内部写入任务失败状态
+    this._executeTask(job, options).catch((error) => {
+      logger.broadcast(`打包任务执行器异常退出: ${error.message}`, 'package');
     });
 
     return {
@@ -127,11 +133,76 @@ class PackageTaskService {
     };
   }
 
+  async cancelTask(jobId = null) {
+    const activeTask = jobId ? await jobService.getJob(jobId) : await this.getActiveTask();
+
+    if (!activeTask || activeTask.type !== 'package.run') {
+      throw createAppError(404, 'PACKAGE_TASK_NOT_FOUND', '当前没有可取消的打包任务', {
+        jobId: jobId || null
+      });
+    }
+
+    if (!['pending', 'running'].includes(activeTask.status)) {
+      throw createAppError(409, 'PACKAGE_TASK_NOT_RUNNING', '打包任务已经结束，无需取消', {
+        jobId: activeTask.jobId,
+        status: activeTask.status
+      });
+    }
+
+    const runtime = this.activeProcesses.get(activeTask.jobId);
+    if (!runtime?.child?.pid) {
+      throw createAppError(409, 'PACKAGE_PROCESS_NOT_ACTIVE', '打包进程不在当前控制面板实例中，请刷新状态后重试', {
+        jobId: activeTask.jobId,
+        pid: activeTask.metadata?.pid || null
+      });
+    }
+
+    if (runtime.cancelRequested) {
+      return {
+        jobId: activeTask.jobId,
+        status: 'cancelling',
+        message: '正在取消打包任务'
+      };
+    }
+
+    runtime.cancelRequested = true;
+
+    await jobService.updateJob(activeTask.jobId, {
+      stage: 'cancelling',
+      message: '正在取消打包任务'
+    });
+
+    websocketService.broadcastPackageEvent('cancelling', {
+      jobId: activeTask.jobId,
+      status: 'running',
+      stage: 'cancelling',
+      message: '正在取消打包任务'
+    });
+
+    try {
+      await packageService.terminatePackageProcess(runtime.child);
+    } catch (error) {
+      runtime.cancelRequested = false;
+      await jobService.updateJob(activeTask.jobId, {
+        stage: 'running',
+        message: '取消失败，打包任务仍在运行'
+      }).catch(() => null);
+      throw error;
+    }
+
+    return {
+      jobId: activeTask.jobId,
+      status: 'cancelling',
+      message: '取消请求已发送'
+    };
+  }
+
   async _executeTask(job, options) {
     const startedAt = Date.now();
     let heartbeatTimer = null;
     let settled = false;
     let gitSnapshot = null;
+    let runtime = null;
     const gitSnapshotPromise = packageReleaseMetadataService.collectSnapshot()
       .then((snapshot) => {
         gitSnapshot = snapshot;
@@ -157,12 +228,13 @@ class PackageTaskService {
 
     const pushHeartbeat = async () => {
       const heartbeatAt = new Date().toISOString();
+      const cancelling = Boolean(runtime?.cancelRequested);
 
       await jobService.renewLock(packageConfig.PACKAGE_RESOURCE_KEY, job.jobId).catch(() => null);
       await jobService.updateJob(job.jobId, {
-        stage: 'running',
+        stage: cancelling ? 'cancelling' : 'running',
         progress: 10,
-        message: '打包脚本运行中',
+        message: cancelling ? '正在取消打包任务' : '打包脚本运行中',
         metadata: {
           lastHeartbeatAt: heartbeatAt
         }
@@ -171,6 +243,8 @@ class PackageTaskService {
       websocketService.broadcastPackageEvent('heartbeat', {
         jobId: job.jobId,
         status: 'running',
+        stage: cancelling ? 'cancelling' : 'running',
+        message: cancelling ? '正在取消打包任务' : '打包脚本运行中',
         heartbeatAt
       });
     };
@@ -210,6 +284,12 @@ class PackageTaskService {
         }
       }
     });
+
+    runtime = {
+      child,
+      cancelRequested: false
+    };
+    this.activeProcesses.set(job.jobId, runtime);
 
     await jobService.updateJob(job.jobId, {
       stage: 'running',
@@ -274,6 +354,20 @@ class PackageTaskService {
       }
     };
 
+    const createResult = (code, signal, extra = {}) => ({
+      exitCode: code,
+      signal,
+      durationMs: Date.now() - startedAt,
+      services: options.services,
+      serviceImageVersions: options.serviceImageVersions,
+      parallelBuild: options.parallelBuild,
+      maxJobs: options.maxJobs,
+      buildOnly: options.buildOnly,
+      packagePath: options.packagePath || null,
+      scriptPath: options.scriptPath,
+      ...extra
+    });
+
     await new Promise((resolve) => {
       const settleFailure = async (error, result = null) => {
         if (settled) {
@@ -312,23 +406,49 @@ class PackageTaskService {
         resolve();
       };
 
-      const settleSuccess = async (code, signal) => {
+      const settleCancelled = async (code, signal) => {
         if (settled) {
           return;
         }
 
-        const result = {
-          exitCode: code,
-          signal,
-          durationMs: Date.now() - startedAt,
-          services: options.services,
-          serviceImageVersions: options.serviceImageVersions,
-          parallelBuild: options.parallelBuild,
-          maxJobs: options.maxJobs,
-          buildOnly: options.buildOnly,
-          packagePath: options.packagePath || null,
-          scriptPath: options.scriptPath
-        };
+        settled = true;
+        stopHeartbeat();
+        const result = createResult(code, signal, { cancelled: true });
+
+        await jobService.completeJob(job.jobId, result, {
+          status: 'cancelled',
+          stage: 'cancelled',
+          progress: 100,
+          message: '打包任务已取消'
+        }).catch(() => null);
+
+        await writeHistoryRecord({
+          status: 'cancelled',
+          result
+        });
+
+        websocketService.broadcastPackageEvent('cancelled', {
+          jobId: job.jobId,
+          status: 'cancelled',
+          stage: 'cancelled',
+          message: '打包任务已取消',
+          result
+        });
+
+        resolve();
+      };
+
+      const settleProcessExit = async (code, signal) => {
+        if (settled) {
+          return;
+        }
+
+        if (runtime?.cancelRequested) {
+          await settleCancelled(code, signal);
+          return;
+        }
+
+        const result = createResult(code, signal);
 
         // 非 0 退出码必须先走失败收尾。不能提前设置 settled，
         // 否则 settleFailure 会直接 return，导致任务永久停留在 running。
@@ -391,16 +511,22 @@ class PackageTaskService {
       };
 
       child.once('error', (error) => {
+        if (runtime?.cancelRequested) {
+          settleCancelled(null, null).catch(() => null);
+          return;
+        }
         logger.broadcast(`打包进程启动失败: ${error.message}`, 'package');
         settleFailure(createAppError(500, 'PACKAGE_PROCESS_ERROR', '打包进程启动失败', {
           cause: error.message
-        }));
+        })).catch(() => null);
       });
 
       child.once('close', (code, signal) => {
-        settleSuccess(code, signal).catch(() => null);
+        settleProcessExit(code, signal).catch(() => null);
       });
     });
+
+    this.activeProcesses.delete(job.jobId);
   }
 }
 
