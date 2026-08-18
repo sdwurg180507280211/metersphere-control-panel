@@ -66,17 +66,18 @@ function getModuleDetail(buildProgress) {
 
 function getFailureText(buildProgress) {
   if (!buildProgress) return null
-  if (buildProgress.lastError) return buildProgress.lastError
 
   const failed = buildProgress.failedModules || []
-  if (failed.length === 0) return null
+  if (failed.length > 0) {
+    const failureStages = buildProgress.moduleFailureStages || {}
+    const details = failed.slice(0, 2).map((moduleName) => {
+      const stage = MODULE_STAGE_LABELS[failureStages[moduleName]] || failureStages[moduleName]
+      return stage ? `${moduleName} · ${stage}` : moduleName
+    })
+    return `失败：${details.join(' / ')}${failed.length > 2 ? ` 等 ${failed.length} 个模块` : ''}`
+  }
 
-  const failureStages = buildProgress.moduleFailureStages || {}
-  const details = failed.slice(0, 2).map((moduleName) => {
-    const stage = MODULE_STAGE_LABELS[failureStages[moduleName]] || failureStages[moduleName]
-    return stage ? `${moduleName} · ${stage}` : moduleName
-  })
-  return `失败：${details.join(' / ')}${failed.length > 2 ? ` 等 ${failed.length} 个模块` : ''}`
+  return buildProgress.lastError || null
 }
 
 export default function PackageProgressStepper({ task, compact = false }) {
