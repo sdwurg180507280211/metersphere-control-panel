@@ -1,8 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { usePackageStore } from '../store/useAppStore'
 
 const POLL_INTERVAL_MS = 5000
+
+const STAGE_LABELS = {
+  prepare: '准备任务',
+  spawn: '启动脚本',
+  running: '执行打包',
+  preflight: '环境检查',
+  dependencies: '依赖初始化',
+  build_modules: '模块构建',
+  maven_build: 'Maven 编译',
+  docker_build: 'Docker 镜像',
+  export_images: '镜像导出',
+  summary: '结果汇总',
+  cancelling: '正在取消'
+}
 
 function extractError(data, fallback) {
   const error = data?.error
@@ -19,6 +33,25 @@ export default function PackageTaskGuard() {
 
   const isRunning = ['pending', 'running'].includes(currentTask?.status)
   const isCancelling = cancelling || currentTask?.stage === 'cancelling'
+  const progress = Math.max(0, Math.min(100, Math.round(Number(currentTask?.progress) || 0)))
+  const buildProgress = currentTask?.metadata?.buildProgress || null
+  const stageLabel = STAGE_LABELS[currentTask?.stage] || currentTask?.stage || '执行打包'
+
+  const moduleSummary = useMemo(() => {
+    if (!buildProgress) return null
+    const total = Number(buildProgress.totalModules) || 0
+    const completed = buildProgress.completedModules?.length || 0
+    const failed = buildProgress.failedModules?.length || 0
+    const active = buildProgress.activeModules || []
+
+    if (active.length > 0) {
+      return `${completed}/${total} 完成 · 当前 ${active.slice(0, 2).join(', ')}${active.length > 2 ? '…' : ''}${failed > 0 ? ` · ${failed} 失败` : ''}`
+    }
+    if (total > 0) {
+      return `${completed}/${total} 完成${failed > 0 ? ` · ${failed} 失败` : ''}`
+    }
+    return null
+  }, [buildProgress])
 
   useEffect(() => {
     if (!isRunning) {
@@ -68,14 +101,21 @@ export default function PackageTaskGuard() {
       <div style={styles.content}>
         <div style={styles.titleRow}>
           <strong style={styles.title}>{isCancelling ? '正在取消打包' : '打包运行中'}</strong>
+          <span style={styles.stage}>{stageLabel}</span>
+          <span style={styles.progressText}>{progress}%</span>
           <span style={styles.jobId}>{currentTask.jobId}</span>
         </div>
+        <div style={styles.progressTrack} aria-label={`打包进度 ${progress}%`}>
+          <div style={{ ...styles.progressBar, width: `${progress}%` }} />
+        </div>
         <div style={styles.message}>{message}</div>
-        {services.length > 0 && (
+        {moduleSummary ? (
+          <div style={styles.services}>{moduleSummary}</div>
+        ) : services.length > 0 ? (
           <div style={styles.services} title={services.join(', ')}>
             {services.length} 个服务 · {services.slice(0, 3).join(', ')}{services.length > 3 ? '…' : ''}
           </div>
-        )}
+        ) : null}
       </div>
       <button
         type="button"
@@ -101,8 +141,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    minWidth: '360px',
-    maxWidth: '560px',
+    minWidth: '390px',
+    maxWidth: '600px',
     padding: '12px 14px',
     borderRadius: '12px',
     border: '1px solid rgba(96, 165, 250, 0.28)',
@@ -132,17 +172,47 @@ const styles = {
     fontSize: '13px',
     color: '#f8fafc'
   },
+  stage: {
+    padding: '2px 7px',
+    borderRadius: '999px',
+    background: 'rgba(59, 130, 246, 0.16)',
+    border: '1px solid rgba(96, 165, 250, 0.2)',
+    color: '#bfdbfe',
+    fontSize: '10px',
+    fontWeight: 700
+  },
+  progressText: {
+    fontFamily: 'monospace',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#93c5fd'
+  },
   jobId: {
-    maxWidth: '160px',
+    marginLeft: 'auto',
+    maxWidth: '130px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     fontFamily: 'monospace',
     fontSize: '10px',
-    color: '#94a3b8'
+    color: '#64748b'
+  },
+  progressTrack: {
+    width: '100%',
+    height: '4px',
+    marginTop: '7px',
+    overflow: 'hidden',
+    borderRadius: '999px',
+    background: 'rgba(148, 163, 184, 0.16)'
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: '999px',
+    background: 'linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%)',
+    transition: 'width 240ms ease'
   },
   message: {
-    marginTop: '3px',
+    marginTop: '5px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
