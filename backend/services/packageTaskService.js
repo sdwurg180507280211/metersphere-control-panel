@@ -5,6 +5,7 @@ const jobService = require('./jobService');
 const websocketService = require('./websocketService');
 const packageHistoryService = require('./packageHistoryService');
 const packageReleaseMetadataService = require('./packageReleaseMetadataService');
+const { createPackageProgressTracker } = require('./packageProgressService');
 const logger = require('../utils/logger');
 const { createAppError } = require('../utils/errors');
 
@@ -183,9 +184,12 @@ class PackageTaskService {
       await packageService.terminatePackageProcess(runtime.child);
     } catch (error) {
       runtime.cancelRequested = false;
+      const snapshot = runtime.progressSnapshot || {};
       await jobService.updateJob(activeTask.jobId, {
-        stage: 'running',
-        message: '取消失败，打包任务仍在运行'
+        stage: snapshot.stage || 'running',
+        progress: snapshot.progress ?? activeTask.progress ?? 10,
+        message: snapshot.message || '取消失败，打包任务仍在运行',
+        metadata: snapshot.metadata || {}
       }).catch(() => null);
       throw error;
     }
@@ -203,6 +207,25 @@ class PackageTaskService {
     let settled = false;
     let gitSnapshot = null;
     let runtime = null;
+    let progressUpdateQueue = Promise.resolve();
+    const progressTracker = createPackageProgressTracker(options.services);
+    let progressSnapshot = {
+      stage: 'running',
+      progress: 10,
+      message: '10% · 打包脚本运行中',
+      metadata: {
+        buildProgress: {
+          stage: 'running',
+          totalModules: options.services.length,
+          completedModules: [],
+          succeededModules: [],
+          failedModules: [],
+          activeModules: [],
+          moduleStates: Object.fromEntries(options.services.map((service) => [service, 'pending']))
+        }
+      }
+    };
+
     const gitSnapshotPromise = packageReleaseMetadataService.collectSnapshot()
       .then((snapshot) => {
         gitSnapshot = snapshot;
@@ -226,16 +249,59 @@ class PackageTaskService {
       }
     };
 
+    const queueProgressUpdate = (update) => {
+      if (!update || settled) return;
+
+      progressSnapshot = {
+        ...progressSnapshot,
+        ...update,
+        metadata: {
+          ...(progressSnapshot.metadata || {}),
+          ...(update.metadata || {})
+        }
+      };
+
+      if (runtime) {
+        runtime.progressSnapshot = progressSnapshot;
+      }
+
+      progressUpdateQueue = progressUpdateQueue
+        .then(() => jobService.updateJob(job.jobId, {
+          stage: progressSnapshot.stage,
+          progress: progressSnapshot.progress,
+          message: progressSnapshot.message,
+          metadata: progressSnapshot.metadata
+        }))
+        .catch((error) => {
+          logger.broadcast(`更新打包进度失败: ${error.message}`, 'package');
+        });
+    };
+
+    const consumeProgress = (message) => {
+      for (const update of progressTracker.consume(message)) {
+        queueProgressUpdate(update);
+      }
+    };
+
+    const flushProgress = async () => {
+      for (const update of progressTracker.flush()) {
+        queueProgressUpdate(update);
+      }
+      await progressUpdateQueue.catch(() => null);
+    };
+
     const pushHeartbeat = async () => {
       const heartbeatAt = new Date().toISOString();
       const cancelling = Boolean(runtime?.cancelRequested);
+      const snapshot = runtime?.progressSnapshot || progressSnapshot;
 
       await jobService.renewLock(packageConfig.PACKAGE_RESOURCE_KEY, job.jobId).catch(() => null);
       await jobService.updateJob(job.jobId, {
-        stage: cancelling ? 'cancelling' : 'running',
-        progress: 10,
-        message: cancelling ? '正在取消打包任务' : '打包脚本运行中',
+        stage: cancelling ? 'cancelling' : snapshot.stage,
+        progress: snapshot.progress,
+        message: cancelling ? '正在取消打包任务' : snapshot.message,
         metadata: {
+          ...(snapshot.metadata || {}),
           lastHeartbeatAt: heartbeatAt
         }
       }).catch(() => null);
@@ -243,8 +309,10 @@ class PackageTaskService {
       websocketService.broadcastPackageEvent('heartbeat', {
         jobId: job.jobId,
         status: 'running',
-        stage: cancelling ? 'cancelling' : 'running',
-        message: cancelling ? '正在取消打包任务' : '打包脚本运行中',
+        stage: cancelling ? 'cancelling' : snapshot.stage,
+        progress: snapshot.progress,
+        message: cancelling ? '正在取消打包任务' : snapshot.message,
+        buildProgress: snapshot.metadata?.buildProgress || null,
         heartbeatAt
       });
     };
@@ -262,6 +330,7 @@ class PackageTaskService {
     const child = packageService.spawnPackageProcess(options, {
       onStdout: (message) => {
         const cleaned = cleanLogText(message);
+        consumeProgress(cleaned);
         if (cleaned.trim()) {
           logger.broadcast(cleaned, 'package');
         }
@@ -287,17 +356,19 @@ class PackageTaskService {
 
     runtime = {
       child,
-      cancelRequested: false
+      cancelRequested: false,
+      progressSnapshot
     };
     this.activeProcesses.set(job.jobId, runtime);
 
     await jobService.updateJob(job.jobId, {
-      stage: 'running',
-      progress: 10,
-      message: '打包脚本运行中',
+      stage: progressSnapshot.stage,
+      progress: progressSnapshot.progress,
+      message: progressSnapshot.message,
       metadata: {
         pid: child.pid,
-        lastHeartbeatAt: new Date().toISOString()
+        lastHeartbeatAt: new Date().toISOString(),
+        ...(progressSnapshot.metadata || {})
       }
     });
 
@@ -365,6 +436,7 @@ class PackageTaskService {
       buildOnly: options.buildOnly,
       packagePath: options.packagePath || null,
       scriptPath: options.scriptPath,
+      buildProgress: progressSnapshot.metadata?.buildProgress || null,
       ...extra
     });
 
@@ -443,6 +515,8 @@ class PackageTaskService {
           return;
         }
 
+        await flushProgress();
+
         if (runtime?.cancelRequested) {
           await settleCancelled(code, signal);
           return;
@@ -455,7 +529,8 @@ class PackageTaskService {
         if (code !== 0) {
           const error = createAppError(500, 'PACKAGE_SCRIPT_FAILED', `打包脚本执行失败，退出码 ${code}`, {
             exitCode: code,
-            signal
+            signal,
+            buildProgress: progressSnapshot.metadata?.buildProgress || null
           });
           await settleFailure(error, result);
           return;
