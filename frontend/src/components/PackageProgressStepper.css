@@ -1,0 +1,325 @@
+.package-pipeline {
+  width: 100%;
+  padding: 12px 14px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(59, 130, 246, 0.12), transparent 36%),
+    linear-gradient(180deg, rgba(15, 27, 64, 0.86) 0%, rgba(8, 16, 36, 0.9) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.package-pipeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.package-pipeline-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.package-pipeline-title {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.package-pipeline-mode {
+  padding: 2px 7px;
+  border: 1px solid rgba(168, 85, 247, 0.22);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #d8b4fe;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.package-pipeline-live-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.package-pipeline-live-dot.is-live {
+  background: #60a5fa;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.9);
+  animation: packagePipelineBlink 1.8s ease-in-out infinite;
+}
+
+.package-pipeline-percent {
+  flex: 0 0 auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #93c5fd;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.package-pipeline-track {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 2px 0;
+}
+
+.package-pipeline-step {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.package-pipeline-node-wrap {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 58px;
+}
+
+.package-pipeline-node {
+  position: relative;
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #111c36;
+  color: #64748b;
+  transition: transform 220ms ease, border-color 220ms ease, background 220ms ease, box-shadow 220ms ease;
+}
+
+.package-pipeline-node-core {
+  position: relative;
+  z-index: 2;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.package-pipeline-step.step-done .package-pipeline-node {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.96), rgba(22, 163, 74, 0.86));
+  color: #f0fdf4;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.18);
+}
+
+.package-pipeline-step.step-active .package-pipeline-node {
+  transform: scale(1.08);
+  border-color: rgba(96, 165, 250, 0.9);
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.98), rgba(124, 58, 237, 0.92));
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(59, 130, 246, 0.42);
+}
+
+.package-pipeline-node-pulse {
+  position: absolute;
+  inset: -6px;
+  z-index: 1;
+  border: 1px solid rgba(96, 165, 250, 0.55);
+  border-radius: 50%;
+  animation: packagePipelinePulse 1.8s ease-out infinite;
+}
+
+.package-pipeline-step.step-failed .package-pipeline-node {
+  border-color: rgba(248, 113, 113, 0.9);
+  background: linear-gradient(145deg, rgba(220, 38, 38, 0.96), rgba(153, 27, 27, 0.9));
+  color: #fff1f2;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.32);
+}
+
+.package-pipeline-step.step-cancelled .package-pipeline-node {
+  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(146, 64, 14, 0.7);
+  color: #fef3c7;
+}
+
+.package-pipeline-step-label {
+  margin-top: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  transition: color 180ms ease;
+}
+
+.package-pipeline-step.step-done .package-pipeline-step-label {
+  color: #86efac;
+}
+
+.package-pipeline-step.step-active .package-pipeline-step-label {
+  color: #bfdbfe;
+}
+
+.package-pipeline-step.step-failed .package-pipeline-step-label {
+  color: #fca5a5;
+}
+
+.package-pipeline-step-detail {
+  margin-top: 2px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.package-pipeline-step-detail.has-failure {
+  color: #fca5a5;
+}
+
+.package-pipeline-connector {
+  position: absolute;
+  top: 13px;
+  right: 50%;
+  width: 100%;
+  height: 2px;
+  z-index: 1;
+  overflow: hidden;
+  background: rgba(100, 116, 139, 0.2);
+}
+
+.package-pipeline-connector.connector-done {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.65), rgba(96, 165, 250, 0.7));
+}
+
+.package-pipeline-connector.connector-active {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.package-pipeline-flow {
+  display: none;
+}
+
+.package-pipeline-connector.connector-active .package-pipeline-flow {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(147, 197, 253, 0.95), rgba(196, 181, 253, 0.95), transparent);
+  filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.8));
+  animation: packagePipelineFlow 1.55s linear infinite;
+}
+
+.package-pipeline-detail {
+  margin-top: 8px;
+  min-height: 18px;
+  padding: 5px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.48);
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.package-pipeline-detail.detail-failed {
+  border: 1px solid rgba(248, 113, 113, 0.16);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+}
+
+.package-pipeline.pipeline-failed {
+  border-color: rgba(248, 113, 113, 0.24);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(239, 68, 68, 0.09), transparent 36%),
+    linear-gradient(180deg, rgba(38, 17, 35, 0.9) 0%, rgba(22, 12, 28, 0.92) 100%);
+}
+
+.package-pipeline.pipeline-success {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.package-pipeline-compact {
+  padding: 8px 10px 7px;
+  border-radius: 10px;
+  background: rgba(8, 16, 36, 0.54);
+  box-shadow: none;
+}
+
+.package-pipeline-compact .package-pipeline-head {
+  margin-bottom: 7px;
+}
+
+.package-pipeline-compact .package-pipeline-title,
+.package-pipeline-compact .package-pipeline-mode {
+  display: none;
+}
+
+.package-pipeline-compact .package-pipeline-node {
+  width: 20px;
+  height: 20px;
+}
+
+.package-pipeline-compact .package-pipeline-node-core {
+  font-size: 8px;
+}
+
+.package-pipeline-compact .package-pipeline-node-pulse {
+  inset: -4px;
+}
+
+.package-pipeline-compact .package-pipeline-connector {
+  top: 9px;
+}
+
+.package-pipeline-compact .package-pipeline-step-label {
+  margin-top: 4px;
+  font-size: 8px;
+}
+
+.package-pipeline-compact .package-pipeline-node-wrap {
+  min-width: 42px;
+}
+
+@keyframes packagePipelineFlow {
+  from { transform: translateX(-115%); }
+  to { transform: translateX(340%); }
+}
+
+@keyframes packagePipelinePulse {
+  0% { opacity: 0.8; transform: scale(0.82); }
+  70%, 100% { opacity: 0; transform: scale(1.28); }
+}
+
+@keyframes packagePipelineBlink {
+  0%, 100% { opacity: 0.65; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@media (max-width: 760px) {
+  .package-pipeline {
+    overflow-x: auto;
+  }
+
+  .package-pipeline-track {
+    min-width: 430px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .package-pipeline-live-dot.is-live,
+  .package-pipeline-node-pulse,
+  .package-pipeline-connector.connector-active .package-pipeline-flow {
+    animation: none;
+  }
+
+  .package-pipeline-step.step-active .package-pipeline-node {
+    transform: none;
+  }
+}

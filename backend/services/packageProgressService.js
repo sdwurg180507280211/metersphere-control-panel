@@ -21,10 +21,20 @@ function unique(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function normalizeErrorLine(line) {
+  return String(line || '')
+    .replace(/^\[(?:ERROR|WARN)]\s*/i, '')
+    .trim()
+    .replace(/^\d{2}:\d{2}:\d{2}\s*-\s*/, '')
+    .trim();
+}
+
 class PackageProgressTracker {
   constructor(services = []) {
     this.services = unique(services.map((item) => String(item || '').trim()));
     this.moduleStates = Object.fromEntries(this.services.map((service) => [service, 'pending']));
+    this.moduleFailureStages = {};
+    this.lastError = null;
     this.tail = '';
     this.lastSignature = '';
     this.stage = 'spawn';
@@ -50,16 +60,36 @@ class PackageProgressTracker {
     return this._consumeLine(line);
   }
 
+  _findModuleLog(line) {
+    for (const service of this.services) {
+      const token = `[${service}]`;
+      const index = line.indexOf(token);
+      if (index >= 0) {
+        return [service, line.slice(index + token.length).trim()];
+      }
+    }
+    return null;
+  }
+
   _consumeLine(rawLine) {
     const line = String(rawLine || '').trim();
     if (!line) return [];
 
     const updates = [];
+    let errorMetadataChanged = false;
     const push = (update) => {
       const next = this._buildUpdate(update);
       if (!next) return;
       updates.push(next);
     };
+
+    if (/\[ERROR]/i.test(line)) {
+      const errorText = normalizeErrorLine(line);
+      if (errorText && !/^={3,}/.test(errorText)) {
+        this.lastError = errorText;
+        errorMetadataChanged = true;
+      }
+    }
 
     if (line.includes('检查构建环境')) {
       push({ stage: 'preflight', progress: 8, message: '检查构建环境' });
@@ -82,15 +112,16 @@ class PackageProgressTracker {
       push(this._setModuleState(launched[1], 'started', `${launched[1]} · 准备构建`));
     }
 
-    const moduleLog = line.match(/\[([a-zA-Z0-9._-]+)]\s*(.+)/);
+    const moduleLog = this._findModuleLog(line);
     if (moduleLog) {
-      const moduleName = moduleLog[1];
-      const detail = moduleLog[2];
+      const [moduleName, detail] = moduleLog;
 
       if (detail.includes('开始构建')) {
         push(this._setModuleState(moduleName, 'started', `${moduleName} · 开始构建`));
       } else if (detail.includes('Maven 编译失败')) {
-        push(this._setModuleState(moduleName, 'failed', `${moduleName} · Maven 编译失败`));
+        this.lastError = `${moduleName} · Maven 编译失败`;
+        errorMetadataChanged = true;
+        push(this._setModuleState(moduleName, 'failed', this.lastError, 'maven'));
       } else if (detail.includes('Maven 编译完成')) {
         push(this._setModuleState(moduleName, 'jar', `${moduleName} · Maven 编译完成`));
       } else if (detail.includes('Maven 编译')) {
@@ -98,7 +129,9 @@ class PackageProgressTracker {
       } else if (detail.includes('解压 JAR 依赖')) {
         push(this._setModuleState(moduleName, 'jar', `${moduleName} · 准备镜像依赖`));
       } else if (detail.includes('Docker 镜像构建失败')) {
-        push(this._setModuleState(moduleName, 'failed', `${moduleName} · Docker 镜像构建失败`));
+        this.lastError = `${moduleName} · Docker 镜像构建失败`;
+        errorMetadataChanged = true;
+        push(this._setModuleState(moduleName, 'failed', this.lastError, 'docker'));
       } else if (detail.includes('构建 Docker 镜像')) {
         push(this._setModuleState(moduleName, 'docker', `${moduleName} · 构建 Docker 镜像`));
       } else if (detail.includes('构建完成:')) {
@@ -113,11 +146,18 @@ class PackageProgressTracker {
 
     const moduleFailed = line.match(/模块构建失败:\s*([a-zA-Z0-9._-]+)/);
     if (moduleFailed) {
-      push(this._setModuleState(moduleFailed[1], 'failed', `${moduleFailed[1]} · 构建失败`));
+      const moduleName = moduleFailed[1];
+      this.lastError = `${moduleName} · 构建失败`;
+      errorMetadataChanged = true;
+      push(this._setModuleState(moduleName, 'failed', this.lastError));
     }
 
     if (/导出\s+\d+\s+个镜像到:/.test(line)) {
       push({ stage: 'export_images', progress: 90, message: '导出 Docker 镜像包' });
+    } else if (line.includes('镜像导出失败')) {
+      this.lastError = 'Docker 镜像导出失败';
+      errorMetadataChanged = true;
+      push({ stage: 'export_images', progress: 94, message: this.lastError });
     } else if (line.includes('镜像导出完成:')) {
       push({ stage: 'export_images', progress: 96, message: '镜像导出完成' });
     } else if (line.includes('构建完成（有')) {
@@ -126,10 +166,14 @@ class PackageProgressTracker {
       push({ stage: 'summary', progress: 98, message: '生成构建结果' });
     }
 
+    if (errorMetadataChanged && updates.length === 0) {
+      push({ stage: this.stage, progress: this.progress, message: this.message });
+    }
+
     return updates.filter(Boolean);
   }
 
-  _setModuleState(moduleName, state, message) {
+  _setModuleState(moduleName, state, message, failureStage = null) {
     if (!moduleName) return null;
     if (!this.moduleStates[moduleName] && this.services.length > 0 && !this.services.includes(moduleName)) {
       return null;
@@ -140,10 +184,15 @@ class PackageProgressTracker {
       this.moduleStates[moduleName] = 'pending';
     }
 
-    const currentWeight = MODULE_STAGE_WEIGHT[this.moduleStates[moduleName]] ?? 0;
+    const previousState = this.moduleStates[moduleName];
+    const currentWeight = MODULE_STAGE_WEIGHT[previousState] ?? 0;
     const nextWeight = MODULE_STAGE_WEIGHT[state] ?? currentWeight;
     if (nextWeight >= currentWeight || state === 'failed') {
       this.moduleStates[moduleName] = state;
+    }
+
+    if (state === 'failed') {
+      this.moduleFailureStages[moduleName] = failureStage || previousState || 'build';
     }
 
     const weights = this.services.map((service) => MODULE_STAGE_WEIGHT[this.moduleStates[service]] ?? 0);
@@ -178,7 +227,9 @@ class PackageProgressTracker {
         succeededModules,
         failedModules,
         activeModules,
-        moduleStates: { ...this.moduleStates }
+        moduleStates: { ...this.moduleStates },
+        moduleFailureStages: { ...this.moduleFailureStages },
+        lastError: this.lastError
       }
     };
 
