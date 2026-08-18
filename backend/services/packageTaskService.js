@@ -317,9 +317,6 @@ class PackageTaskService {
           return;
         }
 
-        settled = true;
-        stopHeartbeat();
-
         const result = {
           exitCode: code,
           signal,
@@ -333,58 +330,64 @@ class PackageTaskService {
           scriptPath: options.scriptPath
         };
 
-        if (code === 0) {
-          // 打包成功：自动递增每个服务的镜像版本号
-          const nextVersions = {};
-          for (const serviceId of options.services) {
-            const current = options.serviceImageVersions?.[serviceId];
-            const next = incrementVersion(current);
-            if (next !== current) {
-              nextVersions[serviceId] = next;
-              logger.broadcast(`[${serviceId}] 版本递增: ${current} -> ${next}`, 'package');
-            }
-          }
-
-          // 写回 config（持久化递增后的版本）
-          try {
-            configManager.updateServiceImageVersions(nextVersions);
-          } catch (err) {
-            logger.broadcast(`版本递增写回失败: ${err.message}`, 'package');
-          }
-
-          const resultWithVersions = {
-            ...result,
-            serviceImageVersions: options.serviceImageVersions,
-            nextImageVersions: nextVersions
-          };
-
-          await jobService.completeJob(job.jobId, resultWithVersions, {
-            stage: 'completed',
-            progress: 100,
-            message: '打包任务已完成'
-          }).catch(() => null);
-
-          await writeHistoryRecord({
-            status: 'succeeded',
-            result: resultWithVersions,
-            nextImageVersions: nextVersions
+        // 非 0 退出码必须先走失败收尾。不能提前设置 settled，
+        // 否则 settleFailure 会直接 return，导致任务永久停留在 running。
+        if (code !== 0) {
+          const error = createAppError(500, 'PACKAGE_SCRIPT_FAILED', `打包脚本执行失败，退出码 ${code}`, {
+            exitCode: code,
+            signal
           });
-
-          websocketService.broadcastPackageEvent('completed', {
-            jobId: job.jobId,
-            status: 'success',
-            result: resultWithVersions,
-            nextImageVersions: nextVersions
-          });
-
-          return resolve();
+          await settleFailure(error, result);
+          return;
         }
 
-        const error = createAppError(500, 'PACKAGE_SCRIPT_FAILED', `打包脚本执行失败，退出码 ${code}`, {
-          exitCode: code,
-          signal
+        settled = true;
+        stopHeartbeat();
+
+        // 打包成功：自动递增每个服务的镜像版本号
+        const nextVersions = {};
+        for (const serviceId of options.services) {
+          const current = options.serviceImageVersions?.[serviceId];
+          const next = incrementVersion(current);
+          if (next !== current) {
+            nextVersions[serviceId] = next;
+            logger.broadcast(`[${serviceId}] 版本递增: ${current} -> ${next}`, 'package');
+          }
+        }
+
+        // 写回 config（持久化递增后的版本）
+        try {
+          configManager.updateServiceImageVersions(nextVersions);
+        } catch (err) {
+          logger.broadcast(`版本递增写回失败: ${err.message}`, 'package');
+        }
+
+        const resultWithVersions = {
+          ...result,
+          serviceImageVersions: options.serviceImageVersions,
+          nextImageVersions: nextVersions
+        };
+
+        await jobService.completeJob(job.jobId, resultWithVersions, {
+          stage: 'completed',
+          progress: 100,
+          message: '打包任务已完成'
+        }).catch(() => null);
+
+        await writeHistoryRecord({
+          status: 'succeeded',
+          result: resultWithVersions,
+          nextImageVersions: nextVersions
         });
-        await settleFailure(error, result);
+
+        websocketService.broadcastPackageEvent('completed', {
+          jobId: job.jobId,
+          status: 'success',
+          result: resultWithVersions,
+          nextImageVersions: nextVersions
+        });
+
+        resolve();
       };
 
       child.once('error', (error) => {
