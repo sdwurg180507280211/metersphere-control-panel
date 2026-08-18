@@ -24,6 +24,7 @@ function unique(values) {
 function normalizeErrorLine(line) {
   return String(line || '')
     .replace(/^\[(?:ERROR|WARN)]\s*/i, '')
+    .trim()
     .replace(/^\d{2}:\d{2}:\d{2}\s*-\s*/, '')
     .trim();
 }
@@ -59,11 +60,23 @@ class PackageProgressTracker {
     return this._consumeLine(line);
   }
 
+  _findModuleLog(line) {
+    for (const service of this.services) {
+      const token = `[${service}]`;
+      const index = line.indexOf(token);
+      if (index >= 0) {
+        return [service, line.slice(index + token.length).trim()];
+      }
+    }
+    return null;
+  }
+
   _consumeLine(rawLine) {
     const line = String(rawLine || '').trim();
     if (!line) return [];
 
     const updates = [];
+    let errorMetadataChanged = false;
     const push = (update) => {
       const next = this._buildUpdate(update);
       if (!next) return;
@@ -74,6 +87,7 @@ class PackageProgressTracker {
       const errorText = normalizeErrorLine(line);
       if (errorText && !/^={3,}/.test(errorText)) {
         this.lastError = errorText;
+        errorMetadataChanged = true;
       }
     }
 
@@ -98,15 +112,15 @@ class PackageProgressTracker {
       push(this._setModuleState(launched[1], 'started', `${launched[1]} · 准备构建`));
     }
 
-    const moduleLog = line.match(/\[([a-zA-Z0-9._-]+)]\s*(.+)/);
+    const moduleLog = this._findModuleLog(line);
     if (moduleLog) {
-      const moduleName = moduleLog[1];
-      const detail = moduleLog[2];
+      const [moduleName, detail] = moduleLog;
 
       if (detail.includes('开始构建')) {
         push(this._setModuleState(moduleName, 'started', `${moduleName} · 开始构建`));
       } else if (detail.includes('Maven 编译失败')) {
         this.lastError = `${moduleName} · Maven 编译失败`;
+        errorMetadataChanged = true;
         push(this._setModuleState(moduleName, 'failed', this.lastError, 'maven'));
       } else if (detail.includes('Maven 编译完成')) {
         push(this._setModuleState(moduleName, 'jar', `${moduleName} · Maven 编译完成`));
@@ -116,6 +130,7 @@ class PackageProgressTracker {
         push(this._setModuleState(moduleName, 'jar', `${moduleName} · 准备镜像依赖`));
       } else if (detail.includes('Docker 镜像构建失败')) {
         this.lastError = `${moduleName} · Docker 镜像构建失败`;
+        errorMetadataChanged = true;
         push(this._setModuleState(moduleName, 'failed', this.lastError, 'docker'));
       } else if (detail.includes('构建 Docker 镜像')) {
         push(this._setModuleState(moduleName, 'docker', `${moduleName} · 构建 Docker 镜像`));
@@ -133,6 +148,7 @@ class PackageProgressTracker {
     if (moduleFailed) {
       const moduleName = moduleFailed[1];
       this.lastError = `${moduleName} · 构建失败`;
+      errorMetadataChanged = true;
       push(this._setModuleState(moduleName, 'failed', this.lastError));
     }
 
@@ -140,6 +156,7 @@ class PackageProgressTracker {
       push({ stage: 'export_images', progress: 90, message: '导出 Docker 镜像包' });
     } else if (line.includes('镜像导出失败')) {
       this.lastError = 'Docker 镜像导出失败';
+      errorMetadataChanged = true;
       push({ stage: 'export_images', progress: 94, message: this.lastError });
     } else if (line.includes('镜像导出完成:')) {
       push({ stage: 'export_images', progress: 96, message: '镜像导出完成' });
@@ -147,6 +164,10 @@ class PackageProgressTracker {
       push({ stage: 'summary', progress: 98, message: '生成构建结果（存在失败模块）' });
     } else if (line.includes('构建完成！')) {
       push({ stage: 'summary', progress: 98, message: '生成构建结果' });
+    }
+
+    if (errorMetadataChanged && updates.length === 0) {
+      push({ stage: this.stage, progress: this.progress, message: this.message });
     }
 
     return updates.filter(Boolean);
