@@ -1,0 +1,40 @@
+.desktop-group-controls {
+  display: flex !important;
+  align-items: center;
+  gap: 7px !important;
+}
+
+.desktop-add-app,
+.desktop-empty-add {
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.14);
+  color: #bfdbfe;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.desktop-add-app {
+  height: 25px;
+  padding: 0 8px;
+}
+
+.desktop-empty-add {
+  margin-top: 10px;
+  padding: 7px 10px;
+}
+
+.desktop-add-app:hover,
+.desktop-empty-add:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.24);
+}
+
+.desktop-health-wait {
+  color: #fbbf24 !important;
+  font-size: 9px;
+  font-weight: 800;
+}
