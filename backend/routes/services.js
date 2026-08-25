@@ -4,10 +4,19 @@
 const express = require('express');
 const router = express.Router();
 const serviceController = require('../controllers/serviceController');
+const desktopAppController = require('../controllers/desktopAppController');
 
 // 服务目录与状态
 router.get('/catalog', serviceController.getCatalog);
 router.get('/status', serviceController.getAllStatus);
+
+// 桌面本地应用：只允许操作 config.json 中预先登记的命令
+router.get('/desktop-apps/catalog', desktopAppController.getCatalog);
+router.get('/desktop-apps/status', desktopAppController.getAllStatus);
+router.get('/desktop-apps/:id/logs', desktopAppController.logs);
+router.post('/desktop-apps/:id/start', desktopAppController.start);
+router.post('/desktop-apps/:id/stop', desktopAppController.stop);
+router.post('/desktop-apps/:id/restart', desktopAppController.restart);
 
 // 基础设施状态
 router.get('/infra/status', serviceController.getInfraStatus);
@@ -30,7 +39,7 @@ router.get('/tunnel/status', serviceController.tunnelStatus);
 router.get('/tunnel/config', serviceController.getTunnelConfig);
 router.post('/tunnel/config', serviceController.saveTunnelConfig);
 
-// 单个服务操作
+// 单个 MeterSphere 服务操作
 router.get('/:id/status', serviceController.getStatus);
 router.get('/:id/health', serviceController.healthCheck);
 router.post('/:id/start', serviceController.start);
