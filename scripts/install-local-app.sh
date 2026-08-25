@@ -8,6 +8,9 @@ STAGING_APP="${TARGET_APP}.new"
 BACKUP_APP="${TARGET_APP}.previous"
 ICON_PATH="build/icon.icns"
 
+replacement_started=false
+install_committed=false
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "错误：install:local 仅支持 macOS。" >&2
   exit 1
@@ -19,8 +22,16 @@ if [[ ! -f "$ICON_PATH" ]]; then
   exit 1
 fi
 
-cleanup_staging() {
+on_exit() {
+  status=$?
   rm -rf "$STAGING_APP"
+
+  if [[ "$status" -ne 0 && "$replacement_started" == "true" && "$install_committed" != "true" ]]; then
+    if [[ ! -d "$TARGET_APP" && -d "$BACKUP_APP" ]]; then
+      echo "安装过程被中断，正在恢复旧版本..." >&2
+      mv "$BACKUP_APP" "$TARGET_APP" || true
+    fi
+  fi
 }
 
 rollback_install() {
@@ -33,7 +44,7 @@ rollback_install() {
   fi
 }
 
-trap cleanup_staging EXIT
+trap on_exit EXIT
 
 echo "[1/6] 校验桌面端代码与前端构建"
 npm run verify:desktop
@@ -82,6 +93,8 @@ fi
 
 echo "[5/6] 原子替换 /Applications 中的版本"
 rm -rf "$BACKUP_APP"
+replacement_started=true
+
 if [[ -d "$TARGET_APP" ]]; then
   mv "$TARGET_APP" "$BACKUP_APP"
 fi
@@ -114,6 +127,7 @@ if [[ "$launched" != "true" ]]; then
   exit 1
 fi
 
+install_committed=true
 rm -rf "$BACKUP_APP"
 trap - EXIT
 
