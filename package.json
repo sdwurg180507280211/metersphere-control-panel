@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "predev": "node scripts/clean-port.js 3000 5000 && node scripts/clean-port.js 3001 5000",
-    "dev": "concurrently --kill-others-on-fail \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run electron:dev\"",
+    "dev": "concurrently --kill-others \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run electron:dev\"",
     "dev:web": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "nodemon backend/server.js",
     "dev:frontend": "cd frontend && npm run dev",
