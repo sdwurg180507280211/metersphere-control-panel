@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import DesktopAppEditor from './DesktopAppEditor'
+import DesktopAppDiscovery from './DesktopAppDiscovery'
 import './DesktopShell.css'
 
 const POLL_MS = 3000
@@ -106,6 +107,7 @@ export default function DesktopShell() {
   const [pinned, setPinned] = useState(true)
   const [logPanel, setLogPanel] = useState(null)
   const [editor, setEditor] = useState(null)
+  const [discoveryOpen, setDiscoveryOpen] = useState(false)
 
   const refresh = useCallback(async (silent = false) => {
     try {
@@ -177,6 +179,27 @@ export default function DesktopShell() {
     }
   }, [])
 
+  const openDiscoveredProject = useCallback((project) => {
+    const first = project.candidates?.[0]
+    setDiscoveryOpen(false)
+    setEditor({
+      mode: 'create',
+      detection: project,
+      app: {
+        id: project.suggestedId || '',
+        name: project.suggestedName || '',
+        group: '本地应用',
+        runtime: first?.runtime || project.suggestedRuntime || 'process',
+        cwd: project.cwd || '',
+        port: project.suggestedPort || '',
+        start: {
+          command: first?.command || '',
+          args: first?.args || []
+        }
+      }
+    })
+  }, [])
+
   const togglePin = async () => {
     const next = !pinned
     setPinned(next)
@@ -242,6 +265,7 @@ export default function DesktopShell() {
             </div>
             <div className="desktop-group-controls">
               <span>{summary.desktopRunning}/{desktopCatalog.length}</span>
+              <button type="button" className="desktop-discover-app" onClick={() => setDiscoveryOpen(true)}>自动发现</button>
               <button type="button" className="desktop-add-app" onClick={() => setEditor({ mode: 'create' })}>＋ 添加</button>
             </div>
           </div>
@@ -249,8 +273,11 @@ export default function DesktopShell() {
           {desktopCatalog.length === 0 ? (
             <div className="desktop-empty-state">
               <strong>还没有登记本地应用</strong>
-              <span>选择项目目录后自动识别 Node / Python / Maven / Gradle / Shell 启动方式。</span>
-              <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 添加第一个应用</button>
+              <span>可自动扫描本地项目，也可以手动选择目录添加。</span>
+              <div className="desktop-empty-actions">
+                <button type="button" className="desktop-empty-discover" onClick={() => setDiscoveryOpen(true)}>自动发现本地项目</button>
+                <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 手动添加</button>
+              </div>
             </div>
           ) : (
             <div className="desktop-card-list">
@@ -288,9 +315,18 @@ export default function DesktopShell() {
         </div>
       )}
 
+      {discoveryOpen && (
+        <DesktopAppDiscovery
+          onClose={() => setDiscoveryOpen(false)}
+          onSelect={openDiscoveredProject}
+        />
+      )}
+
       {editor && (
         <DesktopAppEditor
-          app={editor.mode === 'edit' ? editor.app : null}
+          app={editor.app || null}
+          initialDetection={editor.detection || null}
+          createMode={editor.mode === 'create'}
           onClose={() => setEditor(null)}
           onSaved={() => refresh(false)}
         />
