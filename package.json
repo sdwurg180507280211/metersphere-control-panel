@@ -42,6 +42,7 @@
     "asar": false,
     "files": [
       "electron.js",
+      "electron-preload.js",
       "backend/**/*",
       "frontend/dist/**/*",
       "config.json",
