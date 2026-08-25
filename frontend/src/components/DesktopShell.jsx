@@ -24,7 +24,7 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function LocalServiceCard({ item, status, busy, onStart, onStop, onEdit }) {
+function LocalServiceRow({ item, status, busy, onStart, onStop, onEdit }) {
   const phase = busy || status?.phase || 'unknown'
   const meta = PHASE_META[phase] || PHASE_META.unknown
   const running = status?.running === true
@@ -33,35 +33,32 @@ function LocalServiceCard({ item, status, busy, onStart, onStop, onEdit }) {
   const port = status?.port || item.statusPort
 
   return (
-    <article className={`desktop-service-card tone-${meta.tone}`}>
-      <div className="desktop-service-topline">
-        <div className="desktop-service-title-wrap">
-          <span className={`desktop-status-dot dot-${meta.tone}`} />
-          <div className="desktop-service-heading">
-            <strong>{item.name}</strong>
-            <span>{statusKnown && port ? `127.0.0.1:${port}` : '未配置状态检测'}</span>
-          </div>
+    <article className="desktop-service-row">
+      <div className="desktop-service-identity">
+        <span className={`desktop-status-dot dot-${meta.tone}`} aria-hidden="true" />
+        <div>
+          <strong>{item.name}</strong>
+          <span>{statusKnown && port ? `127.0.0.1:${port}` : '未配置状态端口'}</span>
         </div>
+      </div>
+
+      <div className="desktop-service-state">
+        <span className={`desktop-state-pill state-${meta.tone}`}>{meta.label}</span>
+        <small>{statusKnown && port ? `TCP ${port}` : '手动控制'}</small>
+      </div>
+
+      <div className="desktop-service-actions">
         <button
           type="button"
-          className="desktop-config-button"
+          className="desktop-action desktop-action-secondary"
           disabled={Boolean(busy)}
           onClick={onEdit}
-          title="配置服务"
         >
           配置
         </button>
-      </div>
-
-      <div className="desktop-service-meta">
-        <span className={`desktop-phase phase-${meta.tone}`}>{meta.label}</span>
-        {statusKnown && port ? <span>端口 {port}</span> : <span>启动 / 关闭由命令控制</span>}
-      </div>
-
-      <div className="desktop-service-actions desktop-primary-actions">
         <button
           type="button"
-          className="action-start"
+          className="desktop-action desktop-action-start"
           disabled={Boolean(busy) || running}
           onClick={onStart}
         >
@@ -69,7 +66,7 @@ function LocalServiceCard({ item, status, busy, onStart, onStop, onEdit }) {
         </button>
         <button
           type="button"
-          className="action-stop"
+          className="desktop-action desktop-action-stop"
           disabled={Boolean(busy) || stopped}
           onClick={onStop}
         >
@@ -86,7 +83,6 @@ export default function DesktopShell() {
   const [busy, setBusy] = useState({})
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [pinned, setPinned] = useState(true)
   const [editor, setEditor] = useState(null)
 
   const refresh = useCallback(async (silent = false) => {
@@ -111,11 +107,12 @@ export default function DesktopShell() {
     return () => clearInterval(timer)
   }, [refresh])
 
-  const summary = useMemo(() => ({
-    running: catalog.filter((item) => status[item.id]?.running === true).length,
-    total: catalog.length,
-    unknown: catalog.filter((item) => status[item.id]?.statusKnown !== true).length
-  }), [catalog, status])
+  const summary = useMemo(() => {
+    const running = catalog.filter((item) => status[item.id]?.running === true).length
+    const stopped = catalog.filter((item) => status[item.id]?.running === false).length
+    const unknown = catalog.filter((item) => status[item.id]?.statusKnown !== true).length
+    return { running, stopped, unknown, total: catalog.length }
+  }, [catalog, status])
 
   const runAction = useCallback(async (id, action) => {
     setBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
@@ -136,80 +133,100 @@ export default function DesktopShell() {
     }
   }, [refresh])
 
-  const togglePin = async () => {
-    const next = !pinned
-    setPinned(next)
-    try {
-      await window.desktopBridge?.setAlwaysOnTop?.(next)
-    } catch {
-      // Browser fallback: visual state only.
-    }
-  }
-
   return (
     <div className="desktop-shell">
-      <Toaster position="top-center" toastOptions={{ duration: 2200 }} />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 2200,
+          style: {
+            background: '#ffffff',
+            color: '#1d1d1f',
+            border: '1px solid #e5e5e7',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.10)'
+          }
+        }}
+      />
 
-      <header className="desktop-shell-header desktop-drag-region">
-        <div>
-          <div className="desktop-eyebrow">MAC LOCAL CONTROL</div>
-          <h1>Local Service Hub</h1>
+      <header className="desktop-app-header">
+        <div className="desktop-app-brand">
+          <div className="desktop-app-mark" aria-hidden="true">LS</div>
+          <div>
+            <span className="desktop-app-kicker">LOCAL SERVICE HUB</span>
+            <h1>本地服务</h1>
+            <p>在 Mac 上集中启动和关闭常用开发服务。</p>
+          </div>
         </div>
-        <div className="desktop-window-actions desktop-no-drag">
-          <button type="button" className={pinned ? 'is-active' : ''} onClick={togglePin} title="置顶">PIN</button>
-          <button type="button" onClick={() => window.desktopBridge?.hideWindow?.()} title="隐藏">—</button>
-        </div>
+        <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
+          ＋ 添加服务
+        </button>
       </header>
 
-      <section className="desktop-overview desktop-no-drag">
-        <div className="desktop-overview-count">
-          <strong>{summary.running}</strong>
-          <span>/ {summary.total} RUNNING</span>
+      <section className="desktop-summary-grid" aria-label="服务概览">
+        <div className="desktop-summary-card">
+          <span>全部服务</span>
+          <strong>{summary.total}</strong>
+          <small>已保存的本地服务</small>
         </div>
-        <div className="desktop-overview-pulse"><span /></div>
-        <button type="button" onClick={() => refresh(false)} disabled={loading}>{loading ? '同步中' : '刷新'}</button>
+        <div className="desktop-summary-card summary-running">
+          <span>运行中</span>
+          <strong>{summary.running}</strong>
+          <small>状态端口可连接</small>
+        </div>
+        <div className="desktop-summary-card">
+          <span>已停止</span>
+          <strong>{summary.stopped}</strong>
+          <small>状态端口未监听</small>
+        </div>
+        <div className="desktop-summary-card">
+          <span>未检测</span>
+          <strong>{summary.unknown}</strong>
+          <small>未配置状态端口</small>
+        </div>
       </section>
 
-      <main className="desktop-shell-scroll desktop-no-drag">
-        <section className="desktop-group">
-          <div className="desktop-group-heading">
-            <div>
-              <span className="group-code">APP</span>
-              <h2>本地服务</h2>
-            </div>
-            <div className="desktop-group-controls">
-              {summary.unknown > 0 ? <span>{summary.unknown} 个未检测</span> : null}
-              <button type="button" className="desktop-add-app" onClick={() => setEditor({ mode: 'create' })}>＋ 添加</button>
-            </div>
+      <main className="desktop-content-panel">
+        <div className="desktop-list-toolbar">
+          <div>
+            <h2>服务列表</h2>
+            <span>{lastUpdated ? `最后更新 ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '正在读取状态'}</span>
           </div>
+          <button type="button" className="desktop-refresh-button" onClick={() => refresh(false)} disabled={loading}>
+            {loading ? '刷新中…' : '刷新状态'}
+          </button>
+        </div>
 
+        <div className="desktop-service-list">
           {catalog.length === 0 ? (
             <div className="desktop-empty-state">
+              <div className="desktop-empty-icon">＋</div>
               <strong>还没有本地服务</strong>
-              <span>填写服务名称、启动命令和关闭命令，就可以直接在这里控制。</span>
-              <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 添加第一个服务</button>
+              <span>添加服务名称、启动命令、关闭命令和可选状态端口后，就可以从这里直接管理。</span>
+              <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
+                添加第一个服务
+              </button>
             </div>
           ) : (
-            <div className="desktop-card-list">
-              {catalog.map((item) => (
-                <LocalServiceCard
-                  key={item.id}
-                  item={item}
-                  status={status[item.id]}
-                  busy={busy[item.id]}
-                  onStart={() => runAction(item.id, 'start')}
-                  onStop={() => runAction(item.id, 'stop')}
-                  onEdit={() => setEditor({ mode: 'edit', app: item })}
-                />
-              ))}
-            </div>
+            catalog.map((item) => (
+              <LocalServiceRow
+                key={item.id}
+                item={item}
+                status={status[item.id]}
+                busy={busy[item.id]}
+                onStart={() => runAction(item.id, 'start')}
+                onStop={() => runAction(item.id, 'stop')}
+                onEdit={() => setEditor({ mode: 'edit', app: item })}
+              />
+            ))
           )}
-        </section>
+        </div>
       </main>
 
-      <footer className="desktop-shell-footer desktop-no-drag">
-        <span>{lastUpdated ? `更新 ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '等待状态'}</span>
-        <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>打开完整控制面板 ↗</button>
+      <footer className="desktop-app-footer">
+        <span>Local Service Hub · macOS</span>
+        <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>
+          打开完整控制面板
+        </button>
       </footer>
 
       {editor && (
