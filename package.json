@@ -17,6 +17,7 @@
     "electron:build": "npm run electron:app",
     "pack": "npm run electron:app",
     "dist": "npm run build && electron-builder --mac dmg",
+    "install:local": "bash scripts/install-local-app.sh",
     "install:all": "npm install && cd frontend && npm install",
     "test": "jest",
     "test:watch": "jest --watch"
@@ -57,6 +58,7 @@
       "!.git*"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
       "target": [
         "dmg"
