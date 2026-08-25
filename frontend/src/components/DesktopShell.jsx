@@ -23,13 +23,19 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function LocalServiceRow({ item, status, busy, onStart, onStop, onEdit }) {
+function LocalServiceRow({ item, status, busy, onStart, onStop, onVisit, onEdit }) {
   const phase = busy || status?.phase || 'unknown'
   const meta = PHASE_META[phase] || PHASE_META.unknown
   const running = status?.running === true
-  const stopped = status?.running === false
-  const statusKnown = status?.statusKnown === true
   const port = status?.port || item.statusPort
+  const actionIsStop = running || busy === 'stopping'
+  const actionLabel = busy === 'starting'
+    ? '启动中…'
+    : busy === 'stopping'
+      ? '关闭中…'
+      : actionIsStop
+        ? '关闭'
+        : '启动'
 
   return (
     <article className="desktop-service-row">
@@ -37,13 +43,13 @@ function LocalServiceRow({ item, status, busy, onStart, onStop, onEdit }) {
         <span className={`desktop-status-dot dot-${meta.tone}`} aria-hidden="true" />
         <div>
           <strong>{item.name}</strong>
-          <span>{statusKnown && port ? `127.0.0.1:${port}` : '未配置状态端口'}</span>
+          <span>{port ? `127.0.0.1:${port}` : '未配置状态端口'}</span>
         </div>
       </div>
 
       <div className="desktop-service-state">
         <span className={`desktop-state-pill state-${meta.tone}`}>{meta.label}</span>
-        <small>{statusKnown && port ? `TCP ${port}` : '手动控制'}</small>
+        <small>{port ? `TCP ${port}` : '手动控制'}</small>
       </div>
 
       <div className="desktop-service-actions">
@@ -55,21 +61,24 @@ function LocalServiceRow({ item, status, busy, onStart, onStop, onEdit }) {
         >
           配置
         </button>
+        {port && (
+          <button
+            type="button"
+            className="desktop-action desktop-action-visit"
+            disabled={Boolean(busy) || !running}
+            onClick={onVisit}
+            title={running ? `在浏览器中打开 http://127.0.0.1:${port}` : '服务运行后可访问'}
+          >
+            访问
+          </button>
+        )}
         <button
           type="button"
-          className="desktop-action desktop-action-start"
-          disabled={Boolean(busy) || running}
-          onClick={onStart}
+          className={`desktop-action ${actionIsStop ? 'desktop-action-stop' : 'desktop-action-start'}`}
+          disabled={Boolean(busy)}
+          onClick={actionIsStop ? onStop : onStart}
         >
-          {busy === 'starting' ? '启动中…' : '启动'}
-        </button>
-        <button
-          type="button"
-          className="desktop-action desktop-action-stop"
-          disabled={Boolean(busy) || stopped}
-          onClick={onStop}
-        >
-          {busy === 'stopping' ? '关闭中…' : '关闭'}
+          {actionLabel}
         </button>
       </div>
     </article>
@@ -140,6 +149,22 @@ export default function DesktopShell() {
     }
   }, [refresh])
 
+  const visitService = useCallback(async (item) => {
+    const port = status[item.id]?.port || item.statusPort
+    if (!port || status[item.id]?.running !== true) return
+
+    const url = `http://127.0.0.1:${port}`
+    try {
+      if (window.desktopBridge?.openExternal) {
+        await window.desktopBridge.openExternal(url)
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer')
+      }
+    } catch (error) {
+      toast.error(error.message || '打开服务地址失败')
+    }
+  }, [status])
+
   return (
     <div className="desktop-shell">
       <Toaster
@@ -161,7 +186,7 @@ export default function DesktopShell() {
           <div>
             <span className="desktop-app-kicker">LOCAL SERVICE HUB</span>
             <h1>本地服务</h1>
-            <p>在 Mac 上集中启动和关闭常用开发服务。</p>
+            <p>在 Mac 上集中启动、访问和关闭常用开发服务。</p>
           </div>
         </div>
         <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
@@ -222,6 +247,7 @@ export default function DesktopShell() {
                 busy={busy[item.id]}
                 onStart={() => runAction(item.id, 'start')}
                 onStop={() => runAction(item.id, 'stop')}
+                onVisit={() => visitService(item)}
                 onEdit={() => setEditor({ mode: 'edit', app: item })}
               />
             ))
