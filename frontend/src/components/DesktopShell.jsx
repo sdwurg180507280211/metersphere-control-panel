@@ -4,6 +4,7 @@ import DesktopAppEditor from './DesktopAppEditor'
 import './DesktopShell.css'
 
 const POLL_MS = 3000
+const MANUAL_RUNNING_KEY = 'local-service-hub.manual-running'
 
 const PHASE_META = {
   running: { label: '运行中', tone: 'running' },
@@ -23,10 +24,20 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function LocalServiceRow({ item, status, busy, onStart, onStop, onVisit, onEdit }) {
+function readManualRunning() {
+  try {
+    const value = JSON.parse(localStorage.getItem(MANUAL_RUNNING_KEY) || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, onVisit, onEdit }) {
   const phase = busy || status?.phase || 'unknown'
   const meta = PHASE_META[phase] || PHASE_META.unknown
-  const running = status?.running === true
+  const statusKnown = status?.statusKnown === true
+  const running = statusKnown ? status?.running === true : manualRunning === true
   const port = status?.port || item.statusPort
   const actionIsStop = running || busy === 'stopping'
   const actionLabel = busy === 'starting'
@@ -65,9 +76,9 @@ function LocalServiceRow({ item, status, busy, onStart, onStop, onVisit, onEdit 
           <button
             type="button"
             className="desktop-action desktop-action-visit"
-            disabled={Boolean(busy) || !running}
+            disabled={Boolean(busy) || !statusKnown || !running}
             onClick={onVisit}
-            title={running ? `在浏览器中打开 http://127.0.0.1:${port}` : '服务运行后可访问'}
+            title={statusKnown && running ? `在浏览器中打开 http://127.0.0.1:${port}` : '服务运行后可访问'}
           >
             访问
           </button>
@@ -88,6 +99,7 @@ function LocalServiceRow({ item, status, busy, onStart, onStop, onVisit, onEdit 
 export default function DesktopShell() {
   const [catalog, setCatalog] = useState([])
   const [status, setStatus] = useState({})
+  const [manualRunning, setManualRunning] = useState(readManualRunning)
   const [busy, setBusy] = useState({})
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -130,10 +142,25 @@ export default function DesktopShell() {
     return { running, stopped, unknown, total: catalog.length }
   }, [catalog, status])
 
+  const rememberManualRunning = useCallback((id, running) => {
+    setManualRunning((current) => {
+      const next = { ...current, [id]: Boolean(running) }
+      try {
+        localStorage.setItem(MANUAL_RUNNING_KEY, JSON.stringify(next))
+      } catch {
+        // localStorage 不可用时仅保留当前会话状态。
+      }
+      return next
+    })
+  }, [])
+
   const runAction = useCallback(async (id, action) => {
     setBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
     try {
       await requestJson(`/api/services/desktop-apps/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+      if (status[id]?.statusKnown !== true) {
+        rememberManualRunning(id, action === 'start')
+      }
       toast.success(action === 'start' ? '启动命令已执行' : '关闭命令已执行')
       setTimeout(() => refresh(true), 300)
       setTimeout(() => refresh(true), 1200)
@@ -147,11 +174,12 @@ export default function DesktopShell() {
         return next
       })
     }
-  }, [refresh])
+  }, [refresh, rememberManualRunning, status])
 
   const visitService = useCallback(async (item) => {
-    const port = status[item.id]?.port || item.statusPort
-    if (!port || status[item.id]?.running !== true) return
+    const serviceStatus = status[item.id]
+    const port = serviceStatus?.port || item.statusPort
+    if (!port || serviceStatus?.statusKnown !== true || serviceStatus?.running !== true) return
 
     const url = `http://127.0.0.1:${port}`
     try {
@@ -244,6 +272,7 @@ export default function DesktopShell() {
                 key={item.id}
                 item={item}
                 status={status[item.id]}
+                manualRunning={manualRunning[item.id]}
                 busy={busy[item.id]}
                 onStart={() => runAction(item.id, 'start')}
                 onStop={() => runAction(item.id, 'stop')}
