@@ -44,7 +44,9 @@ function exists(root, name) {
   return fs.existsSync(path.join(root, name));
 }
 
-function detectPackageManager(root) {
+function detectPackageManager(root, packageJson) {
+  const declared = String(packageJson?.packageManager || '').split('@')[0];
+  if (['npm', 'pnpm', 'yarn', 'bun'].includes(declared)) return declared;
   if (exists(root, 'pnpm-lock.yaml')) return 'pnpm';
   if (exists(root, 'yarn.lock')) return 'yarn';
   if (exists(root, 'bun.lockb') || exists(root, 'bun.lock')) return 'bun';
@@ -55,20 +57,23 @@ function buildNodeCandidates(root, packageJson) {
   const scripts = packageJson?.scripts && typeof packageJson.scripts === 'object'
     ? packageJson.scripts
     : {};
-  const manager = detectPackageManager(root);
+  const manager = detectPackageManager(root, packageJson);
   const preferred = ['dev', 'start', 'serve', 'preview'];
   const orderedNames = [
     ...preferred.filter((name) => scripts[name]),
     ...Object.keys(scripts).filter((name) => !preferred.includes(name)).sort()
   ].slice(0, 12);
 
-  return orderedNames.map((script) => ({
-    label: `${manager} ${manager === 'npm' ? 'run ' : ''}${script}`,
-    runtime: 'node',
-    command: manager,
-    args: manager === 'npm' ? ['run', script] : [script],
-    source: `package.json#scripts.${script}`
-  }));
+  return orderedNames.map((script) => {
+    const needsRun = manager === 'npm' || manager === 'bun';
+    return {
+      label: `${manager} ${needsRun ? 'run ' : ''}${script}`,
+      runtime: 'node',
+      command: manager,
+      args: needsRun ? ['run', script] : [script],
+      source: `package.json#scripts.${script}`
+    };
+  });
 }
 
 function detectSuggestedPort(packageJson, candidates) {
@@ -88,6 +93,12 @@ function detectSuggestedPort(packageJson, candidates) {
   if (deps.vite) return 5173;
   if (deps.next) return 3000;
   return null;
+}
+
+function detectPythonCommand(root) {
+  if (exists(root, '.venv/bin/python')) return './.venv/bin/python';
+  if (exists(root, 'venv/bin/python')) return './venv/bin/python';
+  return 'python3';
 }
 
 function detectDirectory(cwd) {
@@ -118,11 +129,12 @@ function detectDirectory(cwd) {
   if (pythonEntry || exists(root, 'pyproject.toml') || exists(root, 'requirements.txt')) {
     detectedTypes.push('python');
     if (!packageJson) suggestedRuntime = 'python';
+    const pythonCommand = detectPythonCommand(root);
     if (pythonEntry === 'manage.py') {
-      candidates.push({ label: 'python manage.py runserver', runtime: 'python', command: 'python3', args: ['manage.py', 'runserver'], source: 'manage.py' });
+      candidates.push({ label: `${pythonCommand} manage.py runserver`, runtime: 'python', command: pythonCommand, args: ['manage.py', 'runserver'], source: 'manage.py' });
       if (!suggestedPort) suggestedPort = 8000;
     } else if (pythonEntry) {
-      candidates.push({ label: `python3 ${pythonEntry}`, runtime: 'python', command: 'python3', args: [pythonEntry], source: pythonEntry });
+      candidates.push({ label: `${pythonCommand} ${pythonEntry}`, runtime: 'python', command: pythonCommand, args: [pythonEntry], source: pythonEntry });
     }
   }
 
