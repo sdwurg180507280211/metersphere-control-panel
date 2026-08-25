@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import DesktopAppEditor from './DesktopAppEditor'
-import DesktopAppDiscovery from './DesktopAppDiscovery'
 import './DesktopShell.css'
 import './DesktopShellManage.css'
 
@@ -10,17 +9,9 @@ const POLL_MS = 3000
 const PHASE_META = {
   running: { label: '运行中', tone: 'running' },
   starting: { label: '启动中', tone: 'busy' },
-  checking_health: { label: '检查中', tone: 'busy' },
-  stopping: { label: '停止中', tone: 'busy' },
-  restarting: { label: '重启中', tone: 'busy' },
-  failed: { label: '失败', tone: 'failed' },
-  stopped: { label: '已停止', tone: 'stopped' }
-}
-
-function normalizePhase(status) {
-  if (!status) return 'stopped'
-  if (status.phase) return status.phase
-  return status.running ? 'running' : 'stopped'
+  stopping: { label: '关闭中', tone: 'busy' },
+  stopped: { label: '已停止', tone: 'stopped' },
+  unknown: { label: '未检测', tone: 'unknown' }
 }
 
 async function requestJson(url, init) {
@@ -33,12 +24,13 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs, onEdit }) {
-  const phase = busy || normalizePhase(status)
-  const meta = PHASE_META[phase] || PHASE_META.stopped
+function LocalServiceCard({ item, status, busy, onStart, onStop, onEdit }) {
+  const phase = busy || status?.phase || 'unknown'
+  const meta = PHASE_META[phase] || PHASE_META.unknown
   const running = status?.running === true
-  const port = item.port || status?.port
-  const runtime = item.runtime || (kind === 'metersphere' ? 'JAVA' : 'PROCESS')
+  const stopped = status?.running === false
+  const statusKnown = status?.statusKnown === true
+  const port = status?.port || item.statusPort
 
   return (
     <article className={`desktop-service-card tone-${meta.tone}`}>
@@ -46,85 +38,68 @@ function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs, onEdit
         <div className="desktop-service-title-wrap">
           <span className={`desktop-status-dot dot-${meta.tone}`} />
           <div className="desktop-service-heading">
-            <strong>{item.name || item.id}</strong>
-            <span>{item.id}</span>
+            <strong>{item.name}</strong>
+            <span>{statusKnown && port ? `127.0.0.1:${port}` : '未配置状态检测'}</span>
           </div>
         </div>
-        <span className="desktop-runtime-badge">{String(runtime).toUpperCase()}</span>
+        <button
+          type="button"
+          className="desktop-config-button"
+          disabled={Boolean(busy)}
+          onClick={onEdit}
+          title="配置服务"
+        >
+          配置
+        </button>
       </div>
 
       <div className="desktop-service-meta">
         <span className={`desktop-phase phase-${meta.tone}`}>{meta.label}</span>
-        {port ? <span>:{port}</span> : null}
-        {status?.pid ? <span>PID {status.pid}</span> : null}
-        {status?.portReachable === true ? <span className="desktop-health-ok">PORT OK</span> : null}
-        {status?.portReachable === false && running ? <span className="desktop-health-wait">PORT WAIT</span> : null}
+        {statusKnown && port ? <span>端口 {port}</span> : <span>启动 / 关闭由命令控制</span>}
       </div>
 
-      <div className="desktop-service-actions">
+      <div className="desktop-service-actions desktop-primary-actions">
         <button
           type="button"
-          className={running ? 'action-stop' : 'action-start'}
-          disabled={Boolean(busy)}
-          onClick={() => onAction(running ? 'stop' : 'start')}
+          className="action-start"
+          disabled={Boolean(busy) || running}
+          onClick={onStart}
         >
-          {busy ? '处理中…' : running ? '停止' : '启动'}
+          {busy === 'starting' ? '启动中…' : '启动'}
         </button>
         <button
           type="button"
-          className="action-secondary"
-          disabled={Boolean(busy) || !running}
-          onClick={() => onAction('restart')}
+          className="action-stop"
+          disabled={Boolean(busy) || stopped}
+          onClick={onStop}
         >
-          重启
+          {busy === 'stopping' ? '关闭中…' : '关闭'}
         </button>
-        {kind === 'desktop' ? (
-          <>
-            <button type="button" className="action-secondary" onClick={onLogs}>日志</button>
-            <button
-              type="button"
-              className="action-secondary"
-              disabled={Boolean(busy) || running}
-              onClick={onEdit}
-              title={running ? '停止应用后可修改配置' : '配置应用'}
-            >
-              配置
-            </button>
-          </>
-        ) : null}
       </div>
     </article>
   )
 }
 
 export default function DesktopShell() {
-  const [meterCatalog, setMeterCatalog] = useState([])
-  const [meterStatus, setMeterStatus] = useState({})
-  const [desktopCatalog, setDesktopCatalog] = useState([])
-  const [desktopStatus, setDesktopStatus] = useState({})
+  const [catalog, setCatalog] = useState([])
+  const [status, setStatus] = useState({})
   const [busy, setBusy] = useState({})
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [pinned, setPinned] = useState(true)
-  const [logPanel, setLogPanel] = useState(null)
   const [editor, setEditor] = useState(null)
-  const [discoveryOpen, setDiscoveryOpen] = useState(false)
 
   const refresh = useCallback(async (silent = false) => {
     try {
-      const [meterCatalogData, meterStatusData, desktopCatalogData, desktopStatusData] = await Promise.all([
-        requestJson('/api/services/catalog'),
-        requestJson('/api/services/status'),
+      const [catalogData, statusData] = await Promise.all([
         requestJson('/api/services/desktop-apps/catalog'),
         requestJson('/api/services/desktop-apps/status')
       ])
-      setMeterCatalog(Array.isArray(meterCatalogData) ? meterCatalogData : [])
-      setMeterStatus(meterStatusData || {})
-      setDesktopCatalog(Array.isArray(desktopCatalogData) ? desktopCatalogData : [])
-      setDesktopStatus(desktopStatusData || {})
+      setCatalog(Array.isArray(catalogData) ? catalogData : [])
+      setStatus(statusData || {})
       setLastUpdated(new Date())
     } catch (error) {
-      if (!silent) toast.error(error.message || '读取服务状态失败')
+      if (!silent) toast.error(error.message || '读取本地服务状态失败')
     } finally {
       setLoading(false)
     }
@@ -136,70 +111,30 @@ export default function DesktopShell() {
     return () => clearInterval(timer)
   }, [refresh])
 
-  const summary = useMemo(() => {
-    const meterRunning = meterCatalog.filter((item) => meterStatus[item.id]?.running).length
-    const desktopRunning = desktopCatalog.filter((item) => desktopStatus[item.id]?.running).length
-    return {
-      running: meterRunning + desktopRunning,
-      total: meterCatalog.length + desktopCatalog.length,
-      meterRunning,
-      desktopRunning
-    }
-  }, [meterCatalog, meterStatus, desktopCatalog, desktopStatus])
+  const summary = useMemo(() => ({
+    running: catalog.filter((item) => status[item.id]?.running === true).length,
+    total: catalog.length,
+    unknown: catalog.filter((item) => status[item.id]?.statusKnown !== true).length
+  }), [catalog, status])
 
-  const runAction = useCallback(async (kind, id, action) => {
-    const key = `${kind}:${id}`
-    setBusy((current) => ({ ...current, [key]: action === 'stop' ? 'stopping' : action === 'restart' ? 'restarting' : 'starting' }))
+  const runAction = useCallback(async (id, action) => {
+    setBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
     try {
-      const base = kind === 'desktop'
-        ? `/api/services/desktop-apps/${encodeURIComponent(id)}`
-        : `/api/services/${encodeURIComponent(id)}`
-      await requestJson(`${base}/${action}`, { method: 'POST' })
-      toast.success(`${action === 'start' ? '启动' : action === 'stop' ? '停止' : '重启'}命令已发送`)
-      setTimeout(() => refresh(true), 500)
-      setTimeout(() => refresh(true), 1800)
+      await requestJson(`/api/services/desktop-apps/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+      toast.success(action === 'start' ? '启动命令已执行' : '关闭命令已执行')
+      setTimeout(() => refresh(true), 300)
+      setTimeout(() => refresh(true), 1200)
+      setTimeout(() => refresh(true), 3000)
     } catch (error) {
-      toast.error(error.message || '操作失败')
+      toast.error(error.message || (action === 'start' ? '启动失败' : '关闭失败'))
     } finally {
-      setTimeout(() => {
-        setBusy((current) => {
-          const next = { ...current }
-          delete next[key]
-          return next
-        })
-      }, 1200)
+      setBusy((current) => {
+        const next = { ...current }
+        delete next[id]
+        return next
+      })
     }
   }, [refresh])
-
-  const showLogs = useCallback(async (item) => {
-    try {
-      const data = await requestJson(`/api/services/desktop-apps/${encodeURIComponent(item.id)}/logs?tail=160`)
-      setLogPanel({ item, content: data?.content || '暂无日志' })
-    } catch (error) {
-      toast.error(error.message || '读取日志失败')
-    }
-  }, [])
-
-  const openDiscoveredProject = useCallback((project) => {
-    const first = project.candidates?.[0]
-    setDiscoveryOpen(false)
-    setEditor({
-      mode: 'create',
-      detection: project,
-      app: {
-        id: project.suggestedId || '',
-        name: project.suggestedName || '',
-        group: '本地应用',
-        runtime: first?.runtime || project.suggestedRuntime || 'process',
-        cwd: project.cwd || '',
-        port: project.suggestedPort || '',
-        start: {
-          command: first?.command || '',
-          args: first?.args || []
-        }
-      }
-    })
-  }, [])
 
   const togglePin = async () => {
     const next = !pinned
@@ -239,58 +174,31 @@ export default function DesktopShell() {
         <section className="desktop-group">
           <div className="desktop-group-heading">
             <div>
-              <span className="group-code">MS</span>
-              <h2>MeterSphere</h2>
-            </div>
-            <span>{summary.meterRunning}/{meterCatalog.length}</span>
-          </div>
-          <div className="desktop-card-list">
-            {meterCatalog.map((item) => (
-              <DesktopServiceCard
-                key={item.id}
-                item={item}
-                kind="metersphere"
-                status={meterStatus[item.id]}
-                busy={busy[`metersphere:${item.id}`]}
-                onAction={(action) => runAction('metersphere', item.id, action)}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section className="desktop-group">
-          <div className="desktop-group-heading">
-            <div>
               <span className="group-code">APP</span>
-              <h2>本地应用</h2>
+              <h2>本地服务</h2>
             </div>
             <div className="desktop-group-controls">
-              <span>{summary.desktopRunning}/{desktopCatalog.length}</span>
-              <button type="button" className="desktop-discover-app" onClick={() => setDiscoveryOpen(true)}>自动发现</button>
+              {summary.unknown > 0 ? <span>{summary.unknown} 个未检测</span> : null}
               <button type="button" className="desktop-add-app" onClick={() => setEditor({ mode: 'create' })}>＋ 添加</button>
             </div>
           </div>
 
-          {desktopCatalog.length === 0 ? (
+          {catalog.length === 0 ? (
             <div className="desktop-empty-state">
-              <strong>还没有登记本地应用</strong>
-              <span>可自动扫描本地项目，也可以手动选择目录添加。</span>
-              <div className="desktop-empty-actions">
-                <button type="button" className="desktop-empty-discover" onClick={() => setDiscoveryOpen(true)}>自动发现本地项目</button>
-                <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 手动添加</button>
-              </div>
+              <strong>还没有本地服务</strong>
+              <span>填写服务名称、启动命令和关闭命令，就可以直接在这里控制。</span>
+              <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 添加第一个服务</button>
             </div>
           ) : (
             <div className="desktop-card-list">
-              {desktopCatalog.map((item) => (
-                <DesktopServiceCard
+              {catalog.map((item) => (
+                <LocalServiceCard
                   key={item.id}
                   item={item}
-                  kind="desktop"
-                  status={desktopStatus[item.id]}
-                  busy={busy[`desktop:${item.id}`]}
-                  onAction={(action) => runAction('desktop', item.id, action)}
-                  onLogs={() => showLogs(item)}
+                  status={status[item.id]}
+                  busy={busy[item.id]}
+                  onStart={() => runAction(item.id, 'start')}
+                  onStop={() => runAction(item.id, 'stop')}
                   onEdit={() => setEditor({ mode: 'edit', app: item })}
                 />
               ))}
@@ -304,30 +212,9 @@ export default function DesktopShell() {
         <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>打开完整控制面板 ↗</button>
       </footer>
 
-      {logPanel && (
-        <div className="desktop-log-backdrop desktop-no-drag" onClick={() => setLogPanel(null)}>
-          <section className="desktop-log-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="desktop-log-head">
-              <div><strong>{logPanel.item.name}</strong><span>最新日志</span></div>
-              <button type="button" onClick={() => setLogPanel(null)}>×</button>
-            </div>
-            <pre>{logPanel.content}</pre>
-          </section>
-        </div>
-      )}
-
-      {discoveryOpen && (
-        <DesktopAppDiscovery
-          onClose={() => setDiscoveryOpen(false)}
-          onSelect={openDiscoveredProject}
-        />
-      )}
-
       {editor && (
         <DesktopAppEditor
-          app={editor.app || null}
-          initialDetection={editor.detection || null}
-          createMode={editor.mode === 'create'}
+          app={editor.mode === 'edit' ? editor.app : null}
           onClose={() => setEditor(null)}
           onSaved={() => refresh(false)}
         />
