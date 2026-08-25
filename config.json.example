@@ -103,37 +103,11 @@
     }
   },
   "desktopApplications": {
-    "poster-web": {
-      "name": "Poster Web",
-      "group": "本地应用",
-      "runtime": "node",
-      "enabled": false,
-      "cwd": "/Users/your-name/Workspace/poster-web",
-      "port": 3001,
-      "start": {
-        "command": "npm",
-        "args": ["run", "dev"],
-        "env": {
-          "NODE_ENV": "development"
-        }
-      },
-      "healthCheck": {
-        "type": "port",
-        "host": "127.0.0.1",
-        "port": 3001
-      }
-    },
-    "image-worker": {
-      "name": "Image Worker",
-      "group": "AI Tools",
-      "runtime": "python",
-      "enabled": false,
-      "cwd": "/Users/your-name/Workspace/image-worker",
-      "port": 8001,
-      "start": {
-        "command": ".venv/bin/python",
-        "args": ["app.py"]
-      }
+    "deepseek-harness": {
+      "name": "DeepSeek Harness",
+      "startCommand": "cd /Users/your-name/ideaProjects/deepseek-harness\nnohup npm run dsh -- web > /tmp/dsh-web.log 2>&1 &",
+      "stopCommand": "dsh_pid=$(lsof -tiTCP:3080 -sTCP:LISTEN)\nif [ -n \"$dsh_pid\" ]; then\n  kill -TERM $dsh_pid\nfi",
+      "statusPort": 3080
     }
   },
   "package": {
