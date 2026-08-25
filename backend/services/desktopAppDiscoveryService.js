@@ -35,6 +35,15 @@ function hasProjectMarker(dir) {
   }
 }
 
+function slugify(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'local-app';
+}
+
 function uniqueExistingDirs(values) {
   const seen = new Set();
   return values.flatMap((value) => {
@@ -111,7 +120,7 @@ function normalizeRegisteredApps() {
   }));
 }
 
-function enhanceCandidates(detection) {
+function enhanceDetection(detection) {
   const candidates = [...(detection.candidates || [])];
   const dshCandidate = candidates.find((candidate) => candidate.source === 'package.json#scripts.dsh');
   if (dshCandidate) {
@@ -128,7 +137,14 @@ function enhanceCandidates(detection) {
       });
     }
   }
-  return { ...detection, candidates };
+
+  const folderName = path.basename(detection.cwd || '');
+  const scopedPackageName = String(detection.suggestedName || '').startsWith('@');
+  const monorepoName = scopedPackageName && folderName
+    ? { suggestedName: folderName, suggestedId: slugify(folderName) }
+    : {};
+
+  return { ...detection, ...monorepoName, candidates };
 }
 
 function discoverProjects() {
@@ -144,7 +160,7 @@ function discoverProjects() {
 
     let detection;
     try {
-      detection = enhanceCandidates(desktopAppConfigService.detectDirectory(resolved));
+      detection = enhanceDetection(desktopAppConfigService.detectDirectory(resolved));
     } catch {
       return [];
     }
