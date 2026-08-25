@@ -1,25 +1,26 @@
 .desktop-editor-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 10px;
-  background: rgba(2, 6, 23, 0.68);
-  backdrop-filter: blur(8px);
+  padding: 28px;
+  background: rgba(0, 0, 0, 0.20);
+  backdrop-filter: blur(5px);
 }
 
 .desktop-editor {
-  width: 100%;
-  max-height: calc(100% - 4px);
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 56px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: linear-gradient(180deg, rgba(12, 22, 47, 0.99), rgba(7, 13, 29, 0.99));
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.5);
+  border: 1px solid #d2d2d7;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #1d1d1f;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .desktop-editor-head,
@@ -27,154 +28,195 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
+  gap: 16px;
+  padding: 16px 18px;
 }
 
 .desktop-editor-head {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: 1px solid #e5e5e7;
+  background: #fafafa;
 }
 
 .desktop-editor-head span {
   display: block;
   margin-bottom: 3px;
-  color: #60a5fa;
+  color: #007aff;
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-weight: 700;
+  letter-spacing: 0.11em;
 }
 
 .desktop-editor-head h2 {
   margin: 0;
-  color: #f8fafc;
-  font-size: 16px;
+  color: #1d1d1f;
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
 }
 
 .desktop-editor-head > button {
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 9px;
-  background: rgba(148, 163, 184, 0.09);
-  color: #94a3b8;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #8e8e93;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.desktop-editor-head > button:hover {
+  border-color: #e5e5e7;
+  background: #f2f2f7;
+  color: #3a3a3c;
 }
 
 .desktop-editor-body {
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 16px;
+  padding: 18px;
+  background: #ffffff;
 }
 
 .desktop-editor-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
 }
 
 .desktop-editor-block + .desktop-editor-block {
-  margin-top: 13px;
+  margin-top: 16px;
 }
 
 .desktop-editor-block > span {
-  color: #cbd5e1;
-  font-size: 10px;
-  font-weight: 800;
+  color: #3a3a3c;
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .desktop-editor input,
 .desktop-editor textarea {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 10px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
   outline: none;
-  background: rgba(15, 23, 42, 0.82);
-  color: #e2e8f0;
-  font-size: 11px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  background: #ffffff;
+  color: #1d1d1f;
+  font-size: 12px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .desktop-editor input {
-  height: 36px;
-  padding: 0 10px;
+  height: 38px;
+  padding: 0 11px;
 }
 
 .desktop-editor textarea {
-  min-height: 96px;
-  padding: 10px;
+  min-height: 104px;
+  padding: 10px 11px;
   resize: vertical;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  line-height: 1.5;
+  font-family: "SF Mono", Menlo, Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.55;
   tab-size: 2;
+}
+
+.desktop-editor input::placeholder,
+.desktop-editor textarea::placeholder {
+  color: #aeaeb2;
 }
 
 .desktop-editor input:focus,
 .desktop-editor textarea:focus {
-  border-color: rgba(96, 165, 250, 0.55);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
 }
 
 .desktop-editor small {
-  color: #64748b;
-  font-size: 9px;
-  line-height: 1.45;
-}
-
-.desktop-port-field input {
-  max-width: 150px;
-}
-
-.desktop-command-safety {
-  margin-top: 14px;
-  padding: 10px 11px;
-  border: 1px solid rgba(96, 165, 250, 0.16);
-  border-radius: 11px;
-  background: rgba(30, 64, 175, 0.09);
-  color: #93c5fd;
-  font-size: 9px;
+  color: #8e8e93;
+  font-size: 10px;
   line-height: 1.5;
 }
 
+.desktop-port-field input {
+  max-width: 180px;
+}
+
+.desktop-command-safety {
+  margin-top: 18px;
+  padding: 11px 12px;
+  border: 1px solid #dbe9fb;
+  border-radius: 9px;
+  background: #f3f8ff;
+  color: #45617f;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
 .desktop-editor-footer {
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid #e5e5e7;
+  background: #fafafa;
 }
 
 .desktop-editor-footer > div {
   display: flex;
-  gap: 7px;
+  gap: 8px;
 }
 
 .desktop-editor-footer button {
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 700;
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .desktop-editor-cancel {
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(15, 23, 42, 0.72);
-  color: #cbd5e1;
+  border: 1px solid #d2d2d7;
+  background: #ffffff;
+  color: #3a3a3c;
+}
+
+.desktop-editor-cancel:hover {
+  background: #f2f2f7;
 }
 
 .desktop-editor-save {
-  border: 1px solid rgba(96, 165, 250, 0.3);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(124, 58, 237, 0.92));
-  color: #fff;
+  border: 1px solid #007aff;
+  background: #007aff;
+  color: #ffffff;
+}
+
+.desktop-editor-save:hover:not(:disabled) {
+  background: #0066d6;
+  border-color: #0066d6;
 }
 
 .desktop-editor-save:disabled,
 .desktop-editor-delete:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .desktop-editor-delete {
-  border: 1px solid rgba(248, 113, 113, 0.26);
-  background: rgba(127, 29, 29, 0.18);
-  color: #fca5a5;
+  border: 1px solid #ffd0cc;
+  background: #fff5f4;
+  color: #d70015;
+}
+
+.desktop-editor-delete:hover:not(:disabled) {
+  background: #ffe9e7;
+}
+
+@media (max-width: 780px) {
+  .desktop-editor-backdrop {
+    padding: 18px;
+  }
+
+  .desktop-editor {
+    max-height: calc(100vh - 36px);
+  }
 }
