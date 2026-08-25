@@ -101,6 +101,14 @@ export default function DesktopShell() {
   }, [])
 
   useEffect(() => {
+    const previousTitle = document.title
+    document.title = 'Local Service Hub'
+    return () => {
+      document.title = previousTitle
+    }
+  }, [])
+
+  useEffect(() => {
     refresh(false)
     const timer = setInterval(() => refresh(true), POLL_MS)
     return () => clearInterval(timer)
