@@ -1,15 +1,6 @@
 const desktopAppService = require('../services/desktopAppService');
 const desktopAppConfigService = require('../services/desktopAppConfigService');
-const desktopAppDiscoveryService = require('../services/desktopAppDiscoveryService');
 const { createAppError, sendError } = require('../utils/errors');
-
-async function assertStopped(id, action) {
-  if (!desktopAppConfigService.hasApp(id)) return;
-  const status = await desktopAppService.getStatus(id);
-  if (status.running) {
-    throw createAppError(409, 'DESKTOP_APP_RUNNING', `请先停止应用再${action}`, { appId: id, pid: status.pid });
-  }
-}
 
 const desktopAppController = {
   getCatalog(req, res) {
@@ -28,32 +19,8 @@ const desktopAppController = {
     }
   },
 
-  discover(req, res) {
+  save(req, res) {
     try {
-      res.json({ success: true, data: desktopAppDiscoveryService.discoverProjects() });
-    } catch (error) {
-      sendError(res, error);
-    }
-  },
-
-  detect(req, res) {
-    try {
-      res.json({ success: true, data: desktopAppConfigService.detectDirectory(req.body?.cwd) });
-    } catch (error) {
-      sendError(res, error);
-    }
-  },
-
-  async save(req, res) {
-    try {
-      const id = String(req.body?.id || '').trim().toLowerCase();
-      const exists = desktopAppConfigService.hasApp(id);
-      if (exists && req.body?.createOnly === true) {
-        throw createAppError(409, 'DESKTOP_APP_ID_EXISTS', `应用 ID 已存在: ${id}`, { appId: id });
-      }
-      if (exists) {
-        await assertStopped(id, '修改配置');
-      }
       const saved = desktopAppConfigService.saveApp(req.body || {});
       res.json({ success: true, data: saved, message: '本地应用配置已保存' });
     } catch (error) {
@@ -64,7 +31,15 @@ const desktopAppController = {
   async remove(req, res) {
     try {
       const { id } = req.params;
-      await assertStopped(id, '删除');
+      if (desktopAppConfigService.hasApp(id)) {
+        const status = await desktopAppService.getStatus(id);
+        if (status.running === true) {
+          throw createAppError(409, 'DESKTOP_APP_RUNNING', '请先关闭服务再删除配置', {
+            appId: id,
+            port: status.port
+          });
+        }
+      }
       const removed = desktopAppConfigService.removeApp(id);
       res.json({ success: true, data: removed, message: '本地应用已删除' });
     } catch (error) {
@@ -83,28 +58,6 @@ const desktopAppController = {
   async stop(req, res) {
     try {
       res.json({ success: true, data: await desktopAppService.stop(req.params.id) });
-    } catch (error) {
-      sendError(res, error);
-    }
-  },
-
-  async restart(req, res) {
-    try {
-      res.json({ success: true, data: await desktopAppService.restart(req.params.id) });
-    } catch (error) {
-      sendError(res, error);
-    }
-  },
-
-  logs(req, res) {
-    try {
-      res.json({
-        success: true,
-        data: {
-          id: req.params.id,
-          content: desktopAppService.readLogs(req.params.id, req.query.tail)
-        }
-      });
     } catch (error) {
       sendError(res, error);
     }
