@@ -248,7 +248,8 @@
   border: 1px solid transparent;
   border-radius: 10px;
   background: var(--mac-surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  outline: none;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .desktop-service-row + .desktop-service-row {
@@ -258,6 +259,20 @@
 .desktop-service-row:hover {
   border-color: #ededf0;
   background: #fbfbfc;
+}
+
+.desktop-service-row-visitable {
+  cursor: pointer;
+}
+
+.desktop-service-row-visitable:hover {
+  border-color: #cfe3ff;
+  background: #f8fbff;
+}
+
+.desktop-service-row-visitable:focus-visible {
+  border-color: rgba(0, 122, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
 }
 
 .desktop-service-identity {
@@ -294,14 +309,40 @@
   min-width: 0;
 }
 
-.desktop-service-identity strong {
+.desktop-service-title {
   display: block;
+  max-width: 100%;
+  padding: 0;
   overflow: hidden;
+  border: 0;
+  background: transparent;
   color: var(--mac-text);
   font-size: 13px;
   font-weight: 650;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-service-title:not(:disabled) {
+  cursor: pointer;
+}
+
+.desktop-service-title:not(:disabled):hover {
+  color: var(--mac-blue-hover);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.desktop-service-title:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.desktop-service-title:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid rgba(0, 122, 255, 0.34);
+  outline-offset: 2px;
 }
 
 .desktop-service-identity span {
@@ -378,17 +419,6 @@
 
 .desktop-action-secondary:hover:not(:disabled) {
   background: #f2f2f7;
-}
-
-.desktop-action-visit {
-  border: 1px solid #b9d6ff;
-  background: #f6faff;
-  color: #0066cc;
-}
-
-.desktop-action-visit:hover:not(:disabled) {
-  border-color: #9cc6ff;
-  background: #eaf3ff;
 }
 
 .desktop-action-start {
