@@ -38,7 +38,11 @@ const desktopAppController = {
   async save(req, res) {
     try {
       const id = String(req.body?.id || '').trim().toLowerCase();
-      if (desktopAppConfigService.hasApp(id)) {
+      const exists = desktopAppConfigService.hasApp(id);
+      if (exists && req.body?.createOnly === true) {
+        throw createAppError(409, 'DESKTOP_APP_ID_EXISTS', `应用 ID 已存在: ${id}`, { appId: id });
+      }
+      if (exists) {
         await assertStopped(id, '修改配置');
       }
       const saved = desktopAppConfigService.saveApp(req.body || {});
