@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import toast from 'react-hot-toast'
 import App from './App.jsx'
-import DesktopShell from './components/DesktopShell.jsx'
 import PackageTaskGuard from './components/PackageTaskGuard.jsx'
 import './styles/index.css'
+
+const DesktopShell = React.lazy(() => import('./components/DesktopShell.jsx'))
 
 const LOCAL_TOKEN_KEY = 'msLocalToken'
 const params = new URLSearchParams(window.location.search)
@@ -44,7 +45,9 @@ window.fetch = async (input, init = {}) => {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {desktopMode ? (
-      <DesktopShell />
+      <Suspense fallback={null}>
+        <DesktopShell />
+      </Suspense>
     ) : (
       <>
         <App />
