@@ -15,24 +15,31 @@ function toArgsText(args) {
   return Array.isArray(args) ? args.join('\n') : ''
 }
 
-function buildInitial(app) {
+function buildInitial(app, detection) {
+  const first = detection?.candidates?.[0]
   return {
-    id: app?.id || '',
-    name: app?.name || '',
+    id: app?.id || detection?.suggestedId || '',
+    name: app?.name || detection?.suggestedName || '',
     group: app?.group || '本地应用',
-    runtime: app?.runtime || 'process',
-    cwd: app?.cwd || '',
-    port: app?.port || '',
-    command: app?.start?.command || '',
-    argsText: toArgsText(app?.start?.args),
+    runtime: app?.runtime || first?.runtime || detection?.suggestedRuntime || 'process',
+    cwd: app?.cwd || detection?.cwd || '',
+    port: app?.port || detection?.suggestedPort || '',
+    command: app?.start?.command || first?.command || '',
+    argsText: toArgsText(app?.start?.args || first?.args),
     env: app?.start?.env || {}
   }
 }
 
-export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
-  const editing = Boolean(app?.id)
-  const [form, setForm] = useState(() => buildInitial(app))
-  const [detection, setDetection] = useState(null)
+export default function DesktopAppEditor({
+  app = null,
+  initialDetection = null,
+  createMode = false,
+  onClose,
+  onSaved
+}) {
+  const editing = Boolean(app?.id) && !createMode
+  const [form, setForm] = useState(() => buildInitial(app, initialDetection))
+  const [detection, setDetection] = useState(initialDetection)
   const [detecting, setDetecting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
