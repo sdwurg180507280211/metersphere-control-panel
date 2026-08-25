@@ -2,12 +2,14 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import toast from 'react-hot-toast'
 import App from './App.jsx'
+import DesktopShell from './components/DesktopShell.jsx'
 import PackageTaskGuard from './components/PackageTaskGuard.jsx'
 import './styles/index.css'
 
 const LOCAL_TOKEN_KEY = 'msLocalToken'
 const params = new URLSearchParams(window.location.search)
 const urlToken = params.get('token')
+const desktopMode = params.get('desktop') === '1'
 
 if (urlToken) {
   localStorage.setItem(LOCAL_TOKEN_KEY, urlToken)
@@ -41,7 +43,13 @@ window.fetch = async (input, init = {}) => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
-    <PackageTaskGuard />
+    {desktopMode ? (
+      <DesktopShell />
+    ) : (
+      <>
+        <App />
+        <PackageTaskGuard />
+      </>
+    )}
   </React.StrictMode>,
 )
