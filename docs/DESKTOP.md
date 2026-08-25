@@ -22,6 +22,14 @@ Local Service Hub 使用标准 macOS 桌面窗口，不再使用右上角悬浮�
 - 不再使用 `PIN`
 - 使用浅色 macOS 风格界面
 - 正常显示在 Dock
+- 使用单实例锁；重复双击 App 只会唤醒已有窗口
+- 自动记住上次窗口尺寸、位置和最大化状态
+
+窗口状态保存在：
+
+```text
+~/.metersphere-control-panel/window-state.json
+```
 
 窗口关闭后，macOS 上应用进程仍保持运行；点击 Dock 图标或顶部菜单栏 Local Service Hub 图标可以重新打开窗口。顶部菜单栏图标是辅助入口，不是应用未启动时的启动器。
 
@@ -190,6 +198,8 @@ Local Service Hub 检查：
 - 不提供 `POST /execute { command }` 一类任意命令执行接口
 - 配置写入采用临时文件替换，并保留 `config.json.bak`
 - 继续使用现有本地访问 token / localhost 访问保护
+- 退出 App 时优雅清理 Job、WebSocket、Redis、连接池、日志和内置 HTTP Server
+- 默认不会因为退出 Local Service Hub 而关闭已经启动的本地服务
 
 ## 本地开发
 
@@ -213,9 +223,19 @@ Electron 开发模式不会启动第二套 backend。它会等待 `http://localh
 npm run dev:web
 ```
 
+## 正式 App 图标
+
+macOS 打包固定读取：
+
+```text
+build/icon.icns
+```
+
+自用版打包前应确保该文件存在。`npm run install:local` 会在构建前检查图标，避免缺失时误用 Electron 默认图标。
+
 ## 生成 macOS App
 
-生成可直接双击的未封装目录版 `.app`：
+生成可直接双击的目录版 `.app`：
 
 ```bash
 npm run electron:app
@@ -235,6 +255,52 @@ dist/mac*/Local Service Hub.app
 
 该 `.app` 可以直接双击启动，也可以复制到 `/Applications`。
 
+## 一键安装 / 更新自用 App
+
+推荐长期自用时使用：
+
+```bash
+npm run install:local
+```
+
+执行流程：
+
+```text
+检查 build/icon.icns
+        ↓
+构建 Local Service Hub.app
+        ↓
+请求已安装旧版本正常退出
+        ↓
+等待旧进程结束
+        ↓
+覆盖 /Applications/Local Service Hub.app
+        ↓
+重新启动最新版本
+```
+
+默认安装目录：
+
+```text
+/Applications/Local Service Hub.app
+```
+
+如果旧 App 不能在限定时间内正常退出，安装脚本会停止并提示手动退出，不会直接强制杀进程后覆盖。
+
+以后更新通常只需要：
+
+```bash
+git checkout desktop
+git pull origin desktop
+npm run install:local
+```
+
+如果需要安装到其他目录，可临时指定：
+
+```bash
+LOCAL_SERVICE_HUB_INSTALL_DIR="$HOME/Applications" npm run install:local
+```
+
 ## 生成 DMG 安装包
 
 ```bash
@@ -249,4 +315,4 @@ Local-Service-Hub-<version>-<arch>.dmg
 
 打开 DMG 后，把 `Local Service Hub.app` 拖入“应用程序”，以后即可从 Finder、Launchpad 或 Dock 启动。
 
-当前打包配置尚未加入 Apple Developer ID 签名与 notarization。自用版可以先运行；如果后续分发给其他 Mac 用户，应再增加签名、公证和正式 App 图标。
+当前打包配置尚未加入 Apple Developer ID 签名与 notarization。自用版无需优先处理；如果后续分发给其他 Mac 用户，再增加签名与公证。
