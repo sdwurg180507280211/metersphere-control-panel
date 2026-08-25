@@ -1,0 +1,213 @@
+.desktop-discovery-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 42;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.desktop-discovery {
+  width: 100%;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(8, 15, 31, 0.98);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.desktop-discovery-head,
+.desktop-discovery-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.desktop-discovery-head {
+  padding: 14px 14px 10px;
+}
+
+.desktop-discovery-head span {
+  display: block;
+  margin-bottom: 2px;
+  color: #60a5fa;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.desktop-discovery-head h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.desktop-discovery-head > button,
+.desktop-discovery-summary button {
+  border: 0;
+  border-radius: 9px;
+  background: rgba(96, 165, 250, .12);
+  color: #bfdbfe;
+  cursor: pointer;
+}
+
+.desktop-discovery-head > button {
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+}
+
+.desktop-discovery-summary {
+  padding: 8px 14px;
+  border-top: 1px solid rgba(148, 163, 184, .08);
+  border-bottom: 1px solid rgba(148, 163, 184, .08);
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.desktop-discovery-summary button {
+  padding: 6px 9px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.desktop-discovery-roots {
+  max-height: 76px;
+  overflow: auto;
+  padding: 9px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(15, 23, 42, .55);
+}
+
+.desktop-discovery-roots strong {
+  color: #cbd5e1;
+  font-size: 9px;
+}
+
+.desktop-discovery-roots span {
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 8px;
+  word-break: break-all;
+}
+
+.desktop-discovery-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.desktop-discovery-item {
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, .14);
+  background: rgba(15, 23, 42, .72);
+}
+
+.desktop-discovery-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-discovery-title > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desktop-discovery-title strong {
+  color: #f1f5f9;
+  font-size: 11px;
+}
+
+.desktop-discovery-title > div > span {
+  color: #64748b;
+  font-size: 8px;
+  word-break: break-all;
+}
+
+.desktop-discovery-runtime {
+  flex: 0 0 auto;
+  color: #93c5fd;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.desktop-discovery-meta {
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.desktop-discovery-meta code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c4b5fd;
+}
+
+.desktop-discovery-add {
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(96, 165, 250, .2);
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, .24), rgba(124, 58, 237, .18));
+  color: #dbeafe;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.desktop-discovery-managed {
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, .12);
+  background: rgba(20, 83, 45, .08);
+}
+
+.desktop-discovery-managed > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #86efac;
+  font-size: 9px;
+}
+
+.desktop-discovery-managed > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  color: #94a3b8;
+  font-size: 9px;
+}
+
+.desktop-discovery-managed code {
+  color: #64748b;
+}
+
+.desktop-discovery-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: #64748b;
+  font-size: 10px;
+}
