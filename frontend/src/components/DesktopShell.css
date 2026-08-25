@@ -380,6 +380,17 @@
   background: #f2f2f7;
 }
 
+.desktop-action-visit {
+  border: 1px solid #b9d6ff;
+  background: #f6faff;
+  color: #0066cc;
+}
+
+.desktop-action-visit:hover:not(:disabled) {
+  border-color: #9cc6ff;
+  background: #eaf3ff;
+}
+
 .desktop-action-start {
   background: #eaf3ff;
   color: #0066cc;
