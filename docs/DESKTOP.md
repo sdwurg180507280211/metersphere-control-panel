@@ -65,8 +65,8 @@ Desktop Shell 中点击 `+ 添加` 即可：
 
 当前目录识别规则：
 
-- `package.json`：读取 scripts，并根据 lockfile 选择 npm / pnpm / yarn / bun；优先展示 `dev`、`start`、`serve`、`preview`
-- `app.py` / `main.py` / `manage.py` / `pyproject.toml` / `requirements.txt`：识别 Python 项目
+- `package.json`：读取 scripts，并根据 `packageManager` / lockfile 选择 npm / pnpm / yarn / bun；优先展示 `dev`、`start`、`serve`、`preview`
+- `app.py` / `main.py` / `manage.py` / `pyproject.toml` / `requirements.txt`：识别 Python 项目，并优先使用项目 `.venv/bin/python` 或 `venv/bin/python`
 - `pom.xml`：候选 `./mvnw spring-boot:run` 或 `mvn spring-boot:run`
 - `build.gradle` / `build.gradle.kts`：候选 Gradle `bootRun`
 - `start.sh`：作为 Shell 启动候选
@@ -85,24 +85,36 @@ Desktop Apps 使用 detached process group 启动，并且 `shell: false`。
 
 ## 本地开发
 
-先启动 Vite：
+Desktop 分支继续保持单命令开发方式：
 
 ```bash
-npm run dev:frontend
+npm run dev
 ```
 
-再启动 Electron：
+该命令会同时启动：
+
+- backend：`127.0.0.1:3000`
+- Vite：`localhost:3001`
+- Electron Desktop Shell
+
+Electron 开发模式不会再启动第二套 backend。它会等待 `http://localhost:3001/api/health` 可访问后再打开窗口；Vite 的 `/api` 与 `/ws` 继续代理到 3000，因此浏览器页面和 Desktop Shell 共用同一套开发后端、进程状态和配置。
+
+`predev` 会显式清理 3000 与 3001 两个开发端口。
+
+如果只想运行原来的浏览器开发模式、不启动 Electron：
 
 ```bash
-npm run electron:dev
+npm run dev:web
 ```
 
-Electron 仍会自行启动 backend，并把本地访问 token 注入桌面窗和完整控制面板。
+单独执行 `npm run electron:dev` 不再是推荐开发入口，因为它要求 backend 与 Vite 已经运行。
 
 ## 打包
 
 ```bash
 npm run electron:build
 ```
+
+生产版 Electron 仍由自身启动内置 backend，并加载 `frontend/dist`，不依赖 Vite 开发服务器。
 
 `electron-preload.js` 已加入 electron-builder 文件清单。
