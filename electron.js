@@ -1,34 +1,172 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 const fixPath = require('fix-path');
 
-// 修复 macOS 打包后的 PATH 问题
+// 修复 macOS 打包后的 PATH 问题，让 npm/node/java 等本地命令可被 Desktop Apps 使用。
 fixPath();
 
-let mainWindow;
-let server;
+let mainWindow = null;
+let desktopWindow = null;
+let tray = null;
+let server = null;
+let backendPort = null;
+let accessToken = '';
+let isQuitting = false;
 
-function createWindow(port = 5001) {
+function buildRendererUrl({ desktop = false } = {}) {
+  const base = process.env.ELECTRON_START_URL || `http://localhost:${backendPort}`;
+  const url = new URL(base);
+  if (accessToken) url.searchParams.set('token', accessToken);
+  if (desktop) {
+    url.searchParams.set('desktop', '1');
+    url.hash = '';
+  } else {
+    url.searchParams.delete('desktop');
+    url.hash = 'services';
+  }
+  return url.toString();
+}
+
+function sharedWebPreferences() {
+  return {
+    nodeIntegration: false,
+    contextIsolation: true,
+    preload: path.join(__dirname, 'electron-preload.js')
+  };
+}
+
+function createMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
-    }
+    width: 1240,
+    height: 820,
+    minWidth: 960,
+    minHeight: 680,
+    show: false,
+    backgroundColor: '#08101f',
+    title: 'MeterSphere Control Panel',
+    webPreferences: sharedWebPreferences()
   });
 
-  const startURL = process.env.ELECTRON_START_URL || `http://localhost:${port}`;
-  mainWindow.loadURL(startURL);
+  mainWindow.loadURL(buildRendererUrl());
+  mainWindow.once('ready-to-show', () => mainWindow?.show());
 
-  // 仅开发环境打开开发者工具
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+
+  mainWindow.on('close', (event) => {
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  return mainWindow;
+}
+
+function positionDesktopWindow() {
+  if (!desktopWindow || desktopWindow.isDestroyed()) return;
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { x, y, width } = display.workArea;
+  const [windowWidth] = desktopWindow.getSize();
+  desktopWindow.setPosition(x + width - windowWidth - 18, y + 18, false);
+}
+
+function createDesktopWindow() {
+  if (desktopWindow && !desktopWindow.isDestroyed()) {
+    desktopWindow.show();
+    desktopWindow.focus();
+    return desktopWindow;
+  }
+
+  desktopWindow = new BrowserWindow({
+    width: 430,
+    height: 680,
+    minWidth: 390,
+    minHeight: 520,
+    maxWidth: 560,
+    frame: false,
+    transparent: false,
+    show: false,
+    resizable: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#08101f',
+    hasShadow: true,
+    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
+    visualEffectState: process.platform === 'darwin' ? 'active' : undefined,
+    webPreferences: sharedWebPreferences()
+  });
+
+  desktopWindow.setAlwaysOnTop(true, 'floating');
+  desktopWindow.loadURL(buildRendererUrl({ desktop: true }));
+  desktopWindow.once('ready-to-show', () => {
+    positionDesktopWindow();
+    desktopWindow?.show();
+  });
+
+  desktopWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      desktopWindow.hide();
+    }
+  });
+
+  desktopWindow.on('closed', () => {
+    desktopWindow = null;
+  });
+
+  return desktopWindow;
+}
+
+function createTray() {
+  if (tray) return tray;
+
+  let icon = nativeImage.createEmpty();
+  if (process.platform === 'darwin') {
+    icon = nativeImage.createFromNamedImage('NSStatusAvailable');
+    icon.setTemplateImage?.(true);
+  }
+
+  tray = new Tray(icon);
+  tray.setToolTip('Local Service Hub');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示 Local Service Hub',
+      click: () => createDesktopWindow()
+    },
+    {
+      label: '打开完整控制面板',
+      click: () => createMainWindow()
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => app.quit()
+    }
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    if (!desktopWindow || desktopWindow.isDestroyed() || !desktopWindow.isVisible()) {
+      createDesktopWindow();
+      return;
+    }
+    desktopWindow.hide();
+  });
+
+  return tray;
 }
 
 async function startBackend() {
@@ -40,100 +178,101 @@ async function startBackend() {
   console.log('=== Backend Startup Debug ===');
   console.log('Is packaged:', app.isPackaged);
   console.log('Is dev:', isDev);
-  console.log('__dirname:', __dirname);
-  console.log('process.resourcesPath:', process.resourcesPath);
   console.log('Backend path:', backendPath);
-  console.log('Backend exists:', require('fs').existsSync(backendPath));
 
   try {
     const { startServer } = require(backendPath);
-    console.log('Backend module loaded successfully');
+    const localAuthService = require(path.join(path.dirname(backendPath), 'services/localAuthService.js'));
 
     let port = 5001;
     let retries = 5;
 
     while (retries > 0) {
       try {
-        console.log('Trying port:', port);
         server = await startServer(port);
-        console.log(`Backend started on port ${port}`);
-        return port;
+        return {
+          port,
+          token: localAuthService.getToken()
+        };
       } catch (error) {
         if (error.code === 'EADDRINUSE' && retries > 1) {
-          console.log(`Port ${port} in use, trying ${port + 1}`);
-          port++;
-          retries--;
+          port += 1;
+          retries -= 1;
           continue;
         }
-
-        console.error('Failed to start backend:', error);
-        const { dialog } = require('electron');
-        dialog.showErrorBox(
-          'Backend 启动失败',
-          `无法启动后端服务:\n\n${error.message}\n\n请检查端口是否被占用或 Redis 是否运行。`
-        );
-        app.quit();
-        return null;
+        throw error;
       }
     }
   } catch (error) {
-    console.error('Failed to load backend module:', error);
+    console.error('Failed to start backend:', error);
     const { dialog } = require('electron');
     dialog.showErrorBox(
-      'Backend 模块加载失败',
-      `无法加载后端模块:\n\n${error.message}\n\nPath: ${backendPath}`
+      'Backend 启动失败',
+      `无法启动后端服务:\n\n${error.message}\n\n请检查端口、Node 环境或 Redis 配置。`
     );
     app.quit();
     return null;
   }
+
+  return null;
 }
 
-app.on('ready', async () => {
-  const port = await startBackend();
-  if (port) {
-    setTimeout(() => createWindow(port), 2000);
-  }
+ipcMain.on('desktop:open-main', () => {
+  createMainWindow();
 });
 
-let isQuitting = false;
+ipcMain.on('desktop:hide', () => {
+  desktopWindow?.hide();
+});
+
+ipcMain.handle('desktop:set-always-on-top', (_event, value) => {
+  if (!desktopWindow || desktopWindow.isDestroyed()) return false;
+  desktopWindow.setAlwaysOnTop(Boolean(value), 'floating');
+  return desktopWindow.isAlwaysOnTop();
+});
+
+app.whenReady().then(async () => {
+  const backend = await startBackend();
+  if (!backend) return;
+
+  backendPort = backend.port;
+  accessToken = backend.token;
+
+  createTray();
+  createDesktopWindow();
+});
 
 async function cleanup() {
-  if (server && !isQuitting) {
-    isQuitting = true;
-    console.log('Cleaning up backend server...');
+  if (isQuitting) return;
+  isQuitting = true;
 
-    try {
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Server close timeout'));
-        }, 5000);
+  tray?.destroy();
+  tray = null;
 
-        server.close((err) => {
-          clearTimeout(timeout);
-          if (err) {
-            console.error('Error closing server:', err);
-            reject(err);
-          } else {
-            console.log('Backend server closed successfully');
-            resolve();
-          }
-        });
+  if (!server) return;
+
+  try {
+    await new Promise((resolve) => {
+      const timeout = setTimeout(resolve, 5000);
+      server.close(() => {
+        clearTimeout(timeout);
+        resolve();
       });
-    } catch (error) {
-      console.error('Cleanup error:', error);
-    }
-
+    });
+  } catch (error) {
+    console.error('Cleanup error:', error);
+  } finally {
     server = null;
   }
 }
 
-app.on('window-all-closed', async () => {
-  await cleanup();
-  app.quit();
+app.on('window-all-closed', () => {
+  // macOS 上保持菜单栏常驻；退出由 Tray 菜单显式触发。
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', async (event) => {
-  if (server && !isQuitting) {
+  if (!isQuitting) {
     event.preventDefault();
     await cleanup();
     app.quit();
@@ -141,7 +280,5 @@ app.on('before-quit', async (event) => {
 });
 
 app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
+  createDesktopWindow();
 });
