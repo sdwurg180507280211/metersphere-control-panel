@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import toast from 'react-hot-toast'
 import './DesktopAppEditor.css'
 
@@ -11,104 +11,28 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function toArgsText(args) {
-  return Array.isArray(args) ? args.join('\n') : ''
-}
-
-function buildInitial(app, detection) {
-  const first = detection?.candidates?.[0]
+function buildInitial(app) {
   return {
-    id: app?.id || detection?.suggestedId || '',
-    name: app?.name || detection?.suggestedName || '',
-    group: app?.group || '本地应用',
-    runtime: app?.runtime || first?.runtime || detection?.suggestedRuntime || 'process',
-    cwd: app?.cwd || detection?.cwd || '',
-    port: app?.port || detection?.suggestedPort || '',
-    command: app?.start?.command || first?.command || '',
-    argsText: toArgsText(app?.start?.args || first?.args),
-    env: app?.start?.env || {}
+    id: app?.id || '',
+    name: app?.name || '',
+    startCommand: app?.startCommand || '',
+    stopCommand: app?.stopCommand || '',
+    statusPort: app?.statusPort || ''
   }
 }
 
-export default function DesktopAppEditor({
-  app = null,
-  initialDetection = null,
-  createMode = false,
-  onClose,
-  onSaved
-}) {
-  const editing = Boolean(app?.id) && !createMode
-  const [form, setForm] = useState(() => buildInitial(app, initialDetection))
-  const [detection, setDetection] = useState(initialDetection)
-  const [detecting, setDetecting] = useState(false)
+export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
+  const editing = Boolean(app?.id)
+  const [form, setForm] = useState(() => buildInitial(app))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const candidates = detection?.candidates || []
-  const canSave = form.id.trim() && form.name.trim() && form.cwd.trim() && form.command.trim() && !saving
-
-  const detectedLabel = useMemo(() => {
-    if (!detection) return null
-    const types = detection.detectedTypes || []
-    return types.length > 0 ? types.join(' / ') : '未识别框架，可手动配置'
-  }, [detection])
+  const canSave = form.name.trim()
+    && form.startCommand.trim()
+    && form.stopCommand.trim()
+    && !saving
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
-
-  const applyCandidate = (candidate) => {
-    setForm((current) => ({
-      ...current,
-      runtime: candidate.runtime || current.runtime,
-      command: candidate.command || '',
-      argsText: toArgsText(candidate.args)
-    }))
-  }
-
-  const detectDirectory = async (cwd) => {
-    if (!cwd) return
-    setDetecting(true)
-    try {
-      const result = await requestJson('/api/services/desktop-apps/detect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cwd })
-      })
-      setDetection(result)
-      setForm((current) => {
-        const first = result.candidates?.[0]
-        return {
-          ...current,
-          cwd: result.cwd || cwd,
-          id: editing ? current.id : (current.id || result.suggestedId || ''),
-          name: editing ? current.name : (current.name || result.suggestedName || ''),
-          runtime: first?.runtime || result.suggestedRuntime || current.runtime,
-          port: current.port || result.suggestedPort || '',
-          command: current.command || first?.command || '',
-          argsText: current.argsText || toArgsText(first?.args)
-        }
-      })
-    } catch (error) {
-      toast.error(error.message || '项目识别失败')
-    } finally {
-      setDetecting(false)
-    }
-  }
-
-  const chooseDirectory = async () => {
-    try {
-      let cwd = null
-      if (window.desktopBridge?.selectDirectory) {
-        cwd = await window.desktopBridge.selectDirectory()
-      } else {
-        cwd = window.prompt('输入本地项目绝对路径', form.cwd) || null
-      }
-      if (!cwd) return
-      update('cwd', cwd)
-      await detectDirectory(cwd)
-    } catch (error) {
-      toast.error(error.message || '选择目录失败')
-    }
-  }
 
   const handleSave = async () => {
     if (!canSave) return
@@ -118,21 +42,14 @@ export default function DesktopAppEditor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: form.id.trim().toLowerCase(),
+          ...(editing ? { id: form.id } : {}),
           name: form.name.trim(),
-          group: form.group.trim() || '本地应用',
-          runtime: form.runtime,
-          cwd: form.cwd.trim(),
-          port: form.port === '' ? null : Number(form.port),
-          createOnly: !editing,
-          start: {
-            command: form.command.trim(),
-            args: form.argsText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
-            env: form.env
-          }
+          startCommand: form.startCommand.trim(),
+          stopCommand: form.stopCommand.trim(),
+          statusPort: form.statusPort === '' ? null : Number(form.statusPort)
         })
       })
-      toast.success(editing ? '应用配置已更新' : '本地应用已添加')
+      toast.success(editing ? '服务配置已更新' : '本地服务已添加')
       await onSaved?.()
       onClose?.()
     } catch (error) {
@@ -144,11 +61,11 @@ export default function DesktopAppEditor({
 
   const handleDelete = async () => {
     if (!editing || deleting) return
-    if (!window.confirm(`确定删除“${form.name || form.id}”吗？\n\n只删除控制中心配置，不删除项目文件。`)) return
+    if (!window.confirm(`确定删除“${form.name}”吗？\n\n只删除 Local Service Hub 配置，不执行关闭命令。`)) return
     setDeleting(true)
     try {
       await requestJson(`/api/services/desktop-apps/${encodeURIComponent(form.id)}`, { method: 'DELETE' })
-      toast.success('本地应用已移除')
+      toast.success('本地服务配置已删除')
       await onSaved?.()
       onClose?.()
     } catch (error) {
@@ -163,117 +80,75 @@ export default function DesktopAppEditor({
       <section className="desktop-editor" onMouseDown={(event) => event.stopPropagation()}>
         <header className="desktop-editor-head">
           <div>
-            <span>{editing ? 'EDIT LOCAL APP' : 'ADD LOCAL APP'}</span>
-            <h2>{editing ? '配置本地应用' : '添加本地应用'}</h2>
+            <span>{editing ? 'EDIT LOCAL SERVICE' : 'ADD LOCAL SERVICE'}</span>
+            <h2>{editing ? '配置本地服务' : '添加本地服务'}</h2>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </header>
 
         <div className="desktop-editor-body">
-          <div className="desktop-editor-path-row">
-            <label>
-              <span>项目目录</span>
-              <input value={form.cwd} onChange={(event) => update('cwd', event.target.value)} placeholder="/Users/me/Workspace/project" />
-            </label>
-            <button type="button" className="desktop-editor-detect" onClick={chooseDirectory} disabled={detecting}>
-              {detecting ? '识别中…' : '选择目录'}
-            </button>
-          </div>
-
-          {detection && (
-            <div className="desktop-detection-card">
-              <div>
-                <strong>已识别</strong>
-                <span>{detectedLabel}</span>
-              </div>
-              {detection.suggestedPort ? <span className="desktop-detect-port">建议端口 {detection.suggestedPort}</span> : null}
-            </div>
-          )}
-
-          {candidates.length > 0 && (
-            <div className="desktop-candidate-section">
-              <span className="desktop-editor-label">启动方式候选</span>
-              <div className="desktop-candidate-list">
-                {candidates.map((candidate, index) => {
-                  const selected = candidate.command === form.command && toArgsText(candidate.args) === form.argsText
-                  return (
-                    <button
-                      key={`${candidate.command}-${index}`}
-                      type="button"
-                      className={selected ? 'is-selected' : ''}
-                      onClick={() => applyCandidate(candidate)}
-                    >
-                      <strong>{candidate.label}</strong>
-                      <span>{candidate.source}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="desktop-editor-grid">
-            <label>
-              <span>应用 ID</span>
-              <input
-                value={form.id}
-                disabled={editing}
-                onChange={(event) => update('id', event.target.value.toLowerCase())}
-                placeholder="poster-web"
-              />
-            </label>
-            <label>
-              <span>显示名称</span>
-              <input value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Poster Web" />
-            </label>
-            <label>
-              <span>类型</span>
-              <select value={form.runtime} onChange={(event) => update('runtime', event.target.value)}>
-                <option value="node">Node</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-                <option value="shell">Shell</option>
-                <option value="process">Process</option>
-              </select>
-            </label>
-            <label>
-              <span>端口（可选）</span>
-              <input type="number" min="1" max="65535" value={form.port} onChange={(event) => update('port', event.target.value)} placeholder="3000" />
-            </label>
-          </div>
-
           <label className="desktop-editor-block">
-            <span>分组</span>
-            <input value={form.group} onChange={(event) => update('group', event.target.value)} placeholder="本地应用" />
+            <span>服务名称</span>
+            <input
+              value={form.name}
+              onChange={(event) => update('name', event.target.value)}
+              placeholder="DeepSeek Harness"
+              autoFocus
+            />
           </label>
 
           <label className="desktop-editor-block">
             <span>启动命令</span>
-            <input value={form.command} onChange={(event) => update('command', event.target.value)} placeholder="npm" />
-            <small>以 `spawn(command, args)` 执行，不经过 shell。</small>
+            <textarea
+              rows="6"
+              value={form.startCommand}
+              onChange={(event) => update('startCommand', event.target.value)}
+              placeholder={'cd /Users/edy/ideaProjects/deepseek-harness\nnohup npm run dsh -- web > /tmp/dsh-web.log 2>&1 &'}
+              spellCheck="false"
+            />
+            <small>按原样交给本机 shell 执行，可使用 cd、nohup、重定向、环境变量和多行命令。</small>
           </label>
 
           <label className="desktop-editor-block">
-            <span>启动参数 · 每行一个</span>
+            <span>关闭命令</span>
             <textarea
-              rows="4"
-              value={form.argsText}
-              onChange={(event) => update('argsText', event.target.value)}
-              placeholder={'run\ndev'}
+              rows="7"
+              value={form.stopCommand}
+              onChange={(event) => update('stopCommand', event.target.value)}
+              placeholder={'dsh_pid=$(lsof -tiTCP:3080 -sTCP:LISTEN)\nif [ -n "$dsh_pid" ]; then\n  kill -TERM $dsh_pid\nfi'}
+              spellCheck="false"
             />
+            <small>建议优先使用应用自己的正常关闭方式或 SIGTERM，不默认强制 kill。</small>
           </label>
+
+          <label className="desktop-editor-block desktop-port-field">
+            <span>状态端口（可选）</span>
+            <input
+              type="number"
+              min="1"
+              max="65535"
+              value={form.statusPort}
+              onChange={(event) => update('statusPort', event.target.value)}
+              placeholder="3080"
+            />
+            <small>填写后通过 127.0.0.1 端口判断运行状态；不填写时仍可手动启动和关闭。</small>
+          </label>
+
+          <div className="desktop-command-safety">
+            命令只会先保存到本机配置；点击对应服务的“启动”或“关闭”时，后端才会按服务 ID 读取并执行。
+          </div>
         </div>
 
         <footer className="desktop-editor-footer">
           {editing ? (
             <button type="button" className="desktop-editor-delete" onClick={handleDelete} disabled={deleting || saving}>
-              {deleting ? '删除中…' : '删除应用'}
+              {deleting ? '删除中…' : '删除配置'}
             </button>
           ) : <span />}
           <div>
             <button type="button" className="desktop-editor-cancel" onClick={onClose}>取消</button>
             <button type="button" className="desktop-editor-save" disabled={!canSave} onClick={handleSave}>
-              {saving ? '保存中…' : editing ? '保存配置' : '添加应用'}
+              {saving ? '保存中…' : editing ? '保存配置' : '添加服务'}
             </button>
           </div>
         </footer>
