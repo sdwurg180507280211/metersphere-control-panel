@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, dialog } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, nativeTheme, dialog } = require('electron');
 const http = require('http');
 const https = require('https');
 const path = require('path');
@@ -228,6 +228,10 @@ async function startBackend() {
 
   return null;
 }
+
+ipcMain.on('desktop:open-main', () => {
+  createMainWindow();
+});
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'light';
