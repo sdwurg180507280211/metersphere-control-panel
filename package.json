@@ -1,7 +1,7 @@
 {
   "name": "metersphere-control-panel",
   "version": "2.0.0",
-  "description": "MeterSphere 服务控制面板",
+  "description": "macOS 本地服务启动与关闭控制中心",
   "author": "MeterSphere Team",
   "main": "electron.js",
   "scripts": {
@@ -13,8 +13,9 @@
     "dev:frontend": "cd frontend && npm run dev",
     "electron:dev": "ELECTRON_START_URL=http://localhost:3001 MS_ELECTRON_EXTERNAL_BACKEND=1 electron .",
     "build": "cd frontend && npm run build",
-    "electron:build": "npm run build && electron-builder --mac",
-    "pack": "electron-builder --mac --dir",
+    "electron:app": "npm run build && electron-builder --mac --dir",
+    "electron:build": "npm run electron:app",
+    "pack": "npm run electron:app",
     "dist": "npm run build && electron-builder --mac dmg",
     "install:all": "npm install && cd frontend && npm install",
     "test": "jest",
@@ -38,8 +39,9 @@
     "nodemon": "^3.0.2"
   },
   "build": {
-    "appId": "com.metersphere.control-panel",
-    "productName": "MeterSphere Control Panel",
+    "appId": "com.localservicehub.desktop",
+    "productName": "Local Service Hub",
+    "artifactName": "Local-Service-Hub-${version}-${arch}.${ext}",
     "asar": false,
     "files": [
       "electron.js",
@@ -61,7 +63,7 @@
       ]
     },
     "dmg": {
-      "title": "MeterSphere Control Panel"
+      "title": "Local Service Hub"
     },
     "directories": {
       "buildResources": "build"
