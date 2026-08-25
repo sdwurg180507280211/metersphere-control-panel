@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import DesktopAppEditor from './DesktopAppEditor'
 import './DesktopShell.css'
-import './DesktopShellManage.css'
 
 const POLL_MS = 3000
 
