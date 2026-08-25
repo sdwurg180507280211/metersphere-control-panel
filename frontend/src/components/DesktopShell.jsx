@@ -8,6 +8,7 @@ const MANUAL_RUNNING_KEY = 'local-service-hub.manual-running'
 
 const PHASE_META = {
   running: { label: '运行中', tone: 'running' },
+  'manual-running': { label: '手动已启动', tone: 'running' },
   starting: { label: '启动中', tone: 'busy' },
   stopping: { label: '关闭中', tone: 'busy' },
   stopped: { label: '已停止', tone: 'stopped' },
@@ -34,10 +35,10 @@ function readManualRunning() {
 }
 
 function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, onVisit, onEdit }) {
-  const phase = busy || status?.phase || 'unknown'
-  const meta = PHASE_META[phase] || PHASE_META.unknown
   const statusKnown = status?.statusKnown === true
   const running = statusKnown ? status?.running === true : manualRunning === true
+  const phase = busy || (statusKnown ? status?.phase : running ? 'manual-running' : 'unknown')
+  const meta = PHASE_META[phase] || PHASE_META.unknown
   const port = status?.port || item.statusPort
   const actionIsStop = running || busy === 'stopping'
   const actionLabel = busy === 'starting'
@@ -134,6 +135,21 @@ export default function DesktopShell() {
     const timer = setInterval(() => refresh(true), POLL_MS)
     return () => clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    if (catalog.length === 0) return
+    const ids = new Set(catalog.map((item) => item.id))
+    setManualRunning((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id)))
+      if (Object.keys(next).length === Object.keys(current).length) return current
+      try {
+        localStorage.setItem(MANUAL_RUNNING_KEY, JSON.stringify(next))
+      } catch {
+        // localStorage 不可用时仅清理当前会话状态。
+      }
+      return next
+    })
+  }, [catalog])
 
   const summary = useMemo(() => {
     const running = catalog.filter((item) => status[item.id]?.running === true).length
