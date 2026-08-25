@@ -13,7 +13,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "electron:dev": "ELECTRON_START_URL=http://localhost:3001 MS_ELECTRON_EXTERNAL_BACKEND=1 electron .",
     "build": "cd frontend && npm run build",
-    "verify:desktop": "node --check electron.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/backendShutdownService.js && npm run build",
+    "verify:desktop": "node --check electron.js && node --check electron-preload.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/backendShutdownService.js && bash -n scripts/install-local-app.sh && npm run build",
     "electron:app": "npm run build && electron-builder --mac --dir",
     "electron:build": "npm run electron:app",
     "pack": "npm run electron:app",
