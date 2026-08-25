@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
+import DesktopAppEditor from './DesktopAppEditor'
 import './DesktopShell.css'
 
 const POLL_MS = 3000
@@ -30,7 +31,7 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs }) {
+function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs, onEdit }) {
   const phase = busy || normalizePhase(status)
   const meta = PHASE_META[phase] || PHASE_META.stopped
   const running = status?.running === true
@@ -55,6 +56,7 @@ function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs }) {
         {port ? <span>:{port}</span> : null}
         {status?.pid ? <span>PID {status.pid}</span> : null}
         {status?.portReachable === true ? <span className="desktop-health-ok">PORT OK</span> : null}
+        {status?.portReachable === false && running ? <span className="desktop-health-wait">PORT WAIT</span> : null}
       </div>
 
       <div className="desktop-service-actions">
@@ -75,7 +77,18 @@ function DesktopServiceCard({ item, status, kind, busy, onAction, onLogs }) {
           重启
         </button>
         {kind === 'desktop' ? (
-          <button type="button" className="action-secondary" onClick={onLogs}>日志</button>
+          <>
+            <button type="button" className="action-secondary" onClick={onLogs}>日志</button>
+            <button
+              type="button"
+              className="action-secondary"
+              disabled={Boolean(busy) || running}
+              onClick={onEdit}
+              title={running ? '停止应用后可修改配置' : '配置应用'}
+            >
+              配置
+            </button>
+          </>
         ) : null}
       </div>
     </article>
@@ -92,6 +105,7 @@ export default function DesktopShell() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [pinned, setPinned] = useState(true)
   const [logPanel, setLogPanel] = useState(null)
+  const [editor, setEditor] = useState(null)
 
   const refresh = useCallback(async (silent = false) => {
     try {
@@ -188,7 +202,7 @@ export default function DesktopShell() {
         </div>
       </header>
 
-      <section className="desktop-overview">
+      <section className="desktop-overview desktop-no-drag">
         <div className="desktop-overview-count">
           <strong>{summary.running}</strong>
           <span>/ {summary.total} RUNNING</span>
@@ -197,7 +211,7 @@ export default function DesktopShell() {
         <button type="button" onClick={() => refresh(false)} disabled={loading}>{loading ? '同步中' : '刷新'}</button>
       </section>
 
-      <main className="desktop-shell-scroll">
+      <main className="desktop-shell-scroll desktop-no-drag">
         <section className="desktop-group">
           <div className="desktop-group-heading">
             <div>
@@ -226,13 +240,17 @@ export default function DesktopShell() {
               <span className="group-code">APP</span>
               <h2>本地应用</h2>
             </div>
-            <span>{summary.desktopRunning}/{desktopCatalog.length}</span>
+            <div className="desktop-group-controls">
+              <span>{summary.desktopRunning}/{desktopCatalog.length}</span>
+              <button type="button" className="desktop-add-app" onClick={() => setEditor({ mode: 'create' })}>＋ 添加</button>
+            </div>
           </div>
 
           {desktopCatalog.length === 0 ? (
             <div className="desktop-empty-state">
               <strong>还没有登记本地应用</strong>
-              <span>在 config.json 的 desktopApplications 中添加 Node / Python / Shell / Java 应用。</span>
+              <span>选择项目目录后自动识别 Node / Python / Maven / Gradle / Shell 启动方式。</span>
+              <button type="button" className="desktop-empty-add" onClick={() => setEditor({ mode: 'create' })}>＋ 添加第一个应用</button>
             </div>
           ) : (
             <div className="desktop-card-list">
@@ -245,6 +263,7 @@ export default function DesktopShell() {
                   busy={busy[`desktop:${item.id}`]}
                   onAction={(action) => runAction('desktop', item.id, action)}
                   onLogs={() => showLogs(item)}
+                  onEdit={() => setEditor({ mode: 'edit', app: item })}
                 />
               ))}
             </div>
@@ -258,7 +277,7 @@ export default function DesktopShell() {
       </footer>
 
       {logPanel && (
-        <div className="desktop-log-backdrop" onClick={() => setLogPanel(null)}>
+        <div className="desktop-log-backdrop desktop-no-drag" onClick={() => setLogPanel(null)}>
           <section className="desktop-log-panel" onClick={(event) => event.stopPropagation()}>
             <div className="desktop-log-head">
               <div><strong>{logPanel.item.name}</strong><span>最新日志</span></div>
@@ -267,6 +286,14 @@ export default function DesktopShell() {
             <pre>{logPanel.content}</pre>
           </section>
         </div>
+      )}
+
+      {editor && (
+        <DesktopAppEditor
+          app={editor.mode === 'edit' ? editor.app : null}
+          onClose={() => setEditor(null)}
+          onSaved={() => refresh(false)}
+        />
       )}
     </div>
   )
