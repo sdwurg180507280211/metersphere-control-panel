@@ -21,14 +21,10 @@ Electron 启动后默认打开 430px 宽的浮动 `Local Service Hub`，并在 m
 
 用于管理任意本地进程，例如 Node、Python、Java、Vite、Next.js、Shell worker。
 
-Desktop Shell 中点击 `+ 添加` 即可：
+Desktop Shell 支持两种添加方式：
 
-1. 使用 macOS Finder 选择项目目录；
-2. 后端只扫描项目文件，不执行命令；
-3. 自动识别 `package.json`、Python、Maven、Gradle、`start.sh`；
-4. 对 Node 项目读取 npm / pnpm / yarn / bun scripts；
-5. 从候选启动方式中选择一个，确认名称、类型和端口；
-6. 保存后才允许从卡片启动。
+- `自动发现`：扫描常用本地项目根目录，列出未纳管项目，再选择候选启动方式保存；
+- `+ 添加`：使用 macOS Finder 手动选择单个项目目录。
 
 已有应用在停止状态下可点击“配置”修改或删除。运行中的应用不能改配置或删除，避免运行 PID 与启动定义不一致。
 
@@ -61,7 +57,51 @@ Desktop Shell 中点击 `+ 添加` 即可：
 }
 ```
 
-## 自动识别
+## 自动发现
+
+默认自动扫描这些实际存在的目录：
+
+- MeterSphere `projectRoot` 的父目录
+- 当前控制面板项目的父目录
+- `~/ideaProjects`
+- `~/Workspace`
+- `~/Projects`
+- `~/Developer`
+- `~/Code`
+
+可以额外在 `config.json` 中加入：
+
+```json
+{
+  "desktopDiscoveryRoots": [
+    "/Users/me/company-projects",
+    "/Volumes/work/code"
+  ]
+}
+```
+
+扫描最大深度和目录数量都有上限，并跳过 `.git`、`node_modules`、`dist`、`build`、`target`、`.venv` 等目录，不会递归扫描整个磁盘。当前 MeterSphere 主项目和控制面板自身也会从候选中排除。
+
+自动发现只识别项目，不会直接执行扫描到的命令。项目需要经过“配置并添加”确认后才进入可启动状态。
+
+### DeepSeek Harness 示例
+
+对于类似：
+
+```bash
+cd /Users/edy/ideaProjects/deepseek-harness
+nohup npm run dsh -- web > /tmp/dsh-web.log 2>&1 &
+```
+
+自动发现会识别项目根目录和 `package.json#scripts.dsh`，并额外提供：
+
+```text
+npm run dsh -- web
+```
+
+作为启动候选。加入 Local Service Hub 后无需再使用 `nohup`、日志重定向或 `&`，DesktopAppService 会 detached 启动进程并统一保存 PID 和日志。
+
+## 单目录自动识别
 
 当前目录识别规则：
 
