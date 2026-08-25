@@ -1,4 +1,6 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, dialog } = require('electron');
+const http = require('http');
+const https = require('https');
 const path = require('path');
 const fixPath = require('fix-path');
 
@@ -12,6 +14,8 @@ let server = null;
 let backendPort = null;
 let accessToken = '';
 let isQuitting = false;
+
+const useExternalDevBackend = process.env.MS_ELECTRON_EXTERNAL_BACKEND === '1';
 
 function buildRendererUrl({ desktop = false } = {}) {
   const base = process.env.ELECTRON_START_URL || `http://localhost:${backendPort}`;
@@ -33,6 +37,43 @@ function sharedWebPreferences() {
     contextIsolation: true,
     preload: path.join(__dirname, 'electron-preload.js')
   };
+}
+
+function probeUrl(url) {
+  return new Promise((resolve) => {
+    let target;
+    try {
+      target = new URL(url);
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    const client = target.protocol === 'https:' ? https : http;
+    const request = client.get(target, (response) => {
+      response.resume();
+      resolve(response.statusCode >= 200 && response.statusCode < 400);
+    });
+
+    request.setTimeout(1000, () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.once('error', () => resolve(false));
+  });
+}
+
+async function waitForDevStack(timeoutMs = 20000) {
+  const rendererBase = process.env.ELECTRON_START_URL || 'http://localhost:3001';
+  const healthUrl = new URL('/api/health', rendererBase).toString();
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (await probeUrl(healthUrl)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error(`开发服务未就绪: ${healthUrl}`);
 }
 
 function createMainWindow() {
@@ -205,7 +246,6 @@ async function startBackend() {
     }
   } catch (error) {
     console.error('Failed to start backend:', error);
-    const { dialog } = require('electron');
     dialog.showErrorBox(
       'Backend 启动失败',
       `无法启动后端服务:\n\n${error.message}\n\n请检查端口、Node 环境或 Redis 配置。`
@@ -232,7 +272,6 @@ ipcMain.handle('desktop:set-always-on-top', (_event, value) => {
 });
 
 ipcMain.handle('desktop:select-directory', async (event) => {
-  const { dialog } = require('electron');
   const owner = BrowserWindow.fromWebContents(event.sender) || desktopWindow || mainWindow;
   const result = await dialog.showOpenDialog(owner, {
     title: '选择本地应用项目目录',
@@ -242,6 +281,26 @@ ipcMain.handle('desktop:select-directory', async (event) => {
 });
 
 app.whenReady().then(async () => {
+  if (useExternalDevBackend) {
+    backendPort = Number(process.env.MS_DEV_BACKEND_PORT || 3000);
+    accessToken = process.env.MS_LOCAL_TOKEN || '';
+
+    try {
+      await waitForDevStack();
+    } catch (error) {
+      dialog.showErrorBox(
+        '开发环境启动失败',
+        `${error.message}\n\n请直接运行 npm run dev；它会同时启动 backend、Vite 和 Electron。`
+      );
+      app.quit();
+      return;
+    }
+
+    createTray();
+    createDesktopWindow();
+    return;
+  }
+
   const backend = await startBackend();
   if (!backend) return;
 
