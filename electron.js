@@ -24,6 +24,8 @@ let accessToken = '';
 let backendShutdown = null;
 let isQuitting = false;
 let windowStateTimer = null;
+let rendererReady = false;
+let pendingDesktopFocus = false;
 
 const useExternalDevBackend = process.env.MS_ELECTRON_EXTERNAL_BACKEND === '1';
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -184,6 +186,22 @@ function focusDesktopWindow() {
   app.focus({ steal: true });
 }
 
+function requestDesktopFocus() {
+  if (!rendererReady || !backendPort) {
+    pendingDesktopFocus = true;
+    return;
+  }
+
+  pendingDesktopFocus = false;
+  focusDesktopWindow();
+}
+
+function markRendererReady() {
+  rendererReady = true;
+  createTray();
+  requestDesktopFocus();
+}
+
 function createMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show();
@@ -227,6 +245,8 @@ function createDesktopWindow() {
   if (desktopWindow && !desktopWindow.isDestroyed()) {
     return desktopWindow;
   }
+
+  if (!rendererReady || !backendPort) return null;
 
   const savedState = getDesktopWindowState();
   desktopWindow = new BrowserWindow({
@@ -278,7 +298,7 @@ function createTray() {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: '打开 Local Service Hub',
-      click: () => focusDesktopWindow()
+      click: () => requestDesktopFocus()
     },
     {
       label: '打开完整控制面板',
@@ -292,7 +312,7 @@ function createTray() {
   ]);
 
   tray.setContextMenu(contextMenu);
-  tray.on('click', () => focusDesktopWindow());
+  tray.on('click', () => requestDesktopFocus());
   return tray;
 }
 
@@ -351,11 +371,7 @@ ipcMain.on('desktop:open-main', () => {
 
 app.on('second-instance', () => {
   if (!hasSingleInstanceLock) return;
-  if (app.isReady()) {
-    focusDesktopWindow();
-  } else {
-    app.once('ready', () => focusDesktopWindow());
-  }
+  requestDesktopFocus();
 });
 
 app.whenReady().then(async () => {
@@ -379,8 +395,7 @@ app.whenReady().then(async () => {
       return;
     }
 
-    createTray();
-    focusDesktopWindow();
+    markRendererReady();
     return;
   }
 
@@ -389,14 +404,14 @@ app.whenReady().then(async () => {
 
   backendPort = backend.port;
   accessToken = backend.token;
-
-  createTray();
-  focusDesktopWindow();
+  markRendererReady();
 });
 
 async function cleanup() {
   if (isQuitting) return;
   isQuitting = true;
+  rendererReady = false;
+  pendingDesktopFocus = false;
 
   clearTimeout(windowStateTimer);
   windowStateTimer = null;
@@ -443,5 +458,5 @@ app.on('before-quit', async (event) => {
 });
 
 app.on('activate', () => {
-  focusDesktopWindow();
+  requestDesktopFocus();
 });
