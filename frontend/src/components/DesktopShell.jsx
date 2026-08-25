@@ -3,6 +3,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import DesktopAppEditor from './DesktopAppEditor'
 import DesktopAppDiscovery from './DesktopAppDiscovery'
 import './DesktopShell.css'
+import './DesktopShellManage.css'
 
 const POLL_MS = 3000
 
