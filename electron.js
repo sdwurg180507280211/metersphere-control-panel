@@ -271,15 +271,6 @@ ipcMain.handle('desktop:set-always-on-top', (_event, value) => {
   return desktopWindow.isAlwaysOnTop();
 });
 
-ipcMain.handle('desktop:select-directory', async (event) => {
-  const owner = BrowserWindow.fromWebContents(event.sender) || desktopWindow || mainWindow;
-  const result = await dialog.showOpenDialog(owner, {
-    title: '选择本地应用项目目录',
-    properties: ['openDirectory', 'createDirectory']
-  });
-  return result.canceled ? null : result.filePaths[0] || null;
-});
-
 app.whenReady().then(async () => {
   if (useExternalDevBackend) {
     backendPort = Number(process.env.MS_DEV_BACKEND_PORT || 3000);
