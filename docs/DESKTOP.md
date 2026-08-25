@@ -1,20 +1,45 @@
 # Desktop / Local Service Hub
 
-`desktop` 分支把现有 MeterSphere 控制面板扩展成 macOS 本地服务快捷控制中心。
+`desktop` 分支把现有 MeterSphere 控制面板扩展成正式的 macOS 本地服务快捷控制中心。
 
 ## 定位
 
-Desktop 小窗口只管理本地服务，不显示 MeterSphere 的 Eureka、Gateway、Project Management 等服务卡片。
+Local Service Hub 只管理本地服务，不显示 MeterSphere 的 Eureka、Gateway、Project Management 等服务卡片。
 
-- Desktop 小窗口：本地服务快捷启动 / 关闭
+- Local Service Hub：本地服务快捷启动 / 关闭
 - 完整控制面板：继续保留原有 MeterSphere 服务管理与其他功能
-- `打开完整控制面板`：从小窗口进入原完整页面
+- `打开完整控制面板`：从 Local Service Hub 进入原完整页面
 
-Electron 启动后默认打开 430px 宽的浮动 `Local Service Hub`，并在 macOS 菜单栏常驻。
+## macOS App 窗口
 
-- 点击菜单栏图标：显示 / 隐藏桌面控制窗
-- `PIN`：切换始终置顶
-- 关闭桌面窗不会退出应用；通过菜单栏“退出”才会结束控制面板
+Local Service Hub 使用标准 macOS 桌面窗口，不再使用右上角悬浮小窗。
+
+- 默认窗口：`920 × 680`
+- 最小窗口：`760 × 540`
+- 使用标准 macOS 标题栏和红黄绿窗口按钮
+- 支持正常拖动、缩放、最小化和全屏
+- 不再 `alwaysOnTop`
+- 不再使用 `PIN`
+- 使用浅色 macOS 风格界面
+- 正常显示在 Dock
+
+窗口关闭后，macOS 上应用进程仍保持运行；点击 Dock 图标或顶部菜单栏 Local Service Hub 图标可以重新打开窗口。顶部菜单栏图标是辅助入口，不是应用未启动时的启动器。
+
+安装后的日常启动方式是：
+
+```text
+应用程序 / Launchpad / Dock
+        ↓
+Local Service Hub.app
+        ↓
+双击或单击启动
+        ↓
+内置 backend 自动启动
+        ↓
+打开 Local Service Hub 窗口
+```
+
+不需要运行 `npm run dev`、`node backend/server.js` 或其他终端命令。
 
 ## 本地服务模型
 
@@ -25,7 +50,13 @@ Electron 启动后默认打开 430px 宽的浮动 `Local Service Hub`，并在 m
 3. 关闭命令
 4. 状态端口（可选）
 
-配置保存在用户实际 `config.json` 的 `desktopApplications` 字段。
+配置保存在：
+
+```text
+~/.metersphere-control-panel/config.json
+```
+
+配置结构：
 
 ```json
 {
@@ -40,7 +71,7 @@ Electron 启动后默认打开 430px 宽的浮动 `Local Service Hub`，并在 m
 }
 ```
 
-应用 ID 由后端根据服务名称生成，Desktop 配置界面不要求用户填写。
+应用 ID 由后端根据服务名称生成，配置界面不要求用户填写。
 
 ## 命令执行
 
@@ -70,16 +101,14 @@ macOS 上命令通过登录 shell 语义执行，因此可以直接使用：
 - shell 变量
 - `if ... then ... fi`
 
-例如 DeepSeek Harness：
-
-### 启动
+### DeepSeek Harness 启动
 
 ```bash
 cd /Users/edy/ideaProjects/deepseek-harness
 nohup npm run dsh -- web > /tmp/dsh-web.log 2>&1 &
 ```
 
-### 关闭
+### DeepSeek Harness 关闭
 
 ```bash
 dsh_pid=$(lsof -tiTCP:3080 -sTCP:LISTEN)
@@ -89,7 +118,7 @@ if [ -n "$dsh_pid" ]; then
 fi
 ```
 
-控制面板不会自动替换 `SIGTERM` 为 `SIGKILL`。如果某个服务需要强制关闭，应由该服务自己的关闭命令明确配置。
+Local Service Hub 不会自动替换 `SIGTERM` 为 `SIGKILL`。如果某个服务需要强制关闭，应由该服务自己的关闭命令明确配置。
 
 ## 状态检测
 
@@ -103,7 +132,7 @@ fi
 }
 ```
 
-控制面板会检查：
+Local Service Hub 检查：
 
 ```text
 127.0.0.1:3080
@@ -113,21 +142,29 @@ fi
 - 不可连接：显示“已停止”，禁用“关闭”
 - 未配置端口：显示“未检测”，启动和关闭都可手动点击
 
-## Desktop 小窗口
+## 桌面界面
 
-卡片只保留本地服务需要的操作：
+正式窗口由四部分组成：
 
 ```text
-┌──────────────────────────────┐
-│ Local Service Hub            │
-│                    ＋ 添加   │
-├──────────────────────────────┤
-│ ● DeepSeek Harness           │
-│   运行中 · 端口 3080         │
-│                              │
-│   [启动]       [关闭]        │
-│                    [配置]    │
-└──────────────────────────────┘
+应用标题区
+├── Local Service Hub
+├── 本地服务说明
+└── 添加服务
+
+状态概览
+├── 全部服务
+├── 运行中
+├── 已停止
+└── 未检测
+
+服务列表
+├── 服务名称 / 端口
+├── 当前状态
+└── 配置 / 启动 / 关闭
+
+底部
+└── 打开完整控制面板
 ```
 
 不再提供：
@@ -138,6 +175,8 @@ fi
 - runtime / cwd / args 拆分配置
 - 重启按钮
 - Desktop 日志按钮
+- PIN / 置顶模式
+- 右上角浮动定位
 
 需要重启时直接执行“关闭 → 启动”。服务日志由启动命令自行决定，例如 DeepSeek Harness 已写入 `/tmp/dsh-web.log`。
 
@@ -154,30 +193,60 @@ fi
 
 ## 本地开发
 
-Desktop 分支继续保持单命令开发方式：
+开发阶段仍然使用：
 
 ```bash
 npm run dev
 ```
 
-该命令会同时启动：
+该命令同时启动：
 
 - backend：`127.0.0.1:3000`
 - Vite：`localhost:3001`
-- Electron Desktop Shell
+- Electron Local Service Hub
 
 Electron 开发模式不会启动第二套 backend。它会等待 `http://localhost:3001/api/health` 可访问后再打开窗口；Vite 的 `/api` 与 `/ws` 继续代理到 3000。
 
-如果只想运行原来的浏览器开发模式、不启动 Electron：
+只运行浏览器开发模式：
 
 ```bash
 npm run dev:web
 ```
 
-## 打包
+## 生成 macOS App
+
+生成可直接双击的未封装目录版 `.app`：
+
+```bash
+npm run electron:app
+```
+
+也可以使用兼容命令：
 
 ```bash
 npm run electron:build
 ```
 
-生产版 Electron 由自身启动内置 backend，并加载 `frontend/dist`，不依赖 Vite 开发服务器。
+输出位于类似：
+
+```text
+dist/mac*/Local Service Hub.app
+```
+
+该 `.app` 可以直接双击启动，也可以复制到 `/Applications`。
+
+## 生成 DMG 安装包
+
+```bash
+npm run dist
+```
+
+产物命名：
+
+```text
+Local-Service-Hub-<version>-<arch>.dmg
+```
+
+打开 DMG 后，把 `Local Service Hub.app` 拖入“应用程序”，以后即可从 Finder、Launchpad 或 Dock 启动。
+
+当前打包配置尚未加入 Apple Developer ID 签名与 notarization。自用版可以先运行；如果后续分发给其他 Mac 用户，应再增加签名、公证和正式 App 图标。
