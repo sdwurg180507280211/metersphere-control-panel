@@ -102,6 +102,40 @@
       "startOrder": 3
     }
   },
+  "desktopApplications": {
+    "poster-web": {
+      "name": "Poster Web",
+      "group": "本地应用",
+      "runtime": "node",
+      "enabled": false,
+      "cwd": "/Users/your-name/Workspace/poster-web",
+      "port": 3001,
+      "start": {
+        "command": "npm",
+        "args": ["run", "dev"],
+        "env": {
+          "NODE_ENV": "development"
+        }
+      },
+      "healthCheck": {
+        "type": "port",
+        "host": "127.0.0.1",
+        "port": 3001
+      }
+    },
+    "image-worker": {
+      "name": "Image Worker",
+      "group": "AI Tools",
+      "runtime": "python",
+      "enabled": false,
+      "cwd": "/Users/your-name/Workspace/image-worker",
+      "port": 8001,
+      "start": {
+        "command": ".venv/bin/python",
+        "args": ["app.py"]
+      }
+    }
+  },
   "package": {
     "parallelBuild": true,
     "buildOnly": false,
