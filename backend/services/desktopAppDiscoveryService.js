@@ -55,8 +55,12 @@ function uniqueExistingDirs(values) {
   });
 }
 
+function getRawConfig() {
+  return loadConfigFromFile(CONFIG_PATH) || {};
+}
+
 function getDiscoveryRoots() {
-  const raw = loadConfigFromFile(CONFIG_PATH) || {};
+  const raw = getRawConfig();
   const configuredRoots = Array.isArray(raw.desktopDiscoveryRoots) ? raw.desktopDiscoveryRoots : [];
   const projectRoot = raw.projectRoot ? path.resolve(String(raw.projectRoot)) : null;
   const cwd = process.cwd();
@@ -71,6 +75,14 @@ function getDiscoveryRoots() {
     path.join(home, 'Projects'),
     path.join(home, 'Developer'),
     path.join(home, 'Code')
+  ]);
+}
+
+function getExcludedProjectDirs() {
+  const raw = getRawConfig();
+  return new Set([
+    path.resolve(process.cwd()),
+    ...(raw.projectRoot ? [path.resolve(String(raw.projectRoot))] : [])
   ]);
 }
 
@@ -110,7 +122,7 @@ function scanRoot(root, options = {}) {
 }
 
 function normalizeRegisteredApps() {
-  const raw = loadConfigFromFile(CONFIG_PATH) || {};
+  const raw = getRawConfig();
   const apps = raw.desktopApplications && typeof raw.desktopApplications === 'object' && !Array.isArray(raw.desktopApplications)
     ? raw.desktopApplications
     : {};
@@ -150,12 +162,13 @@ function enhanceDetection(detection) {
 function discoverProjects() {
   const roots = getDiscoveryRoots();
   const registered = normalizeRegisteredApps();
+  const excluded = getExcludedProjectDirs();
   const seen = new Set();
   const projectDirs = roots.flatMap((root) => scanRoot(root));
 
   const projects = projectDirs.flatMap((cwd) => {
     const resolved = path.resolve(cwd);
-    if (seen.has(resolved)) return [];
+    if (seen.has(resolved) || excluded.has(resolved)) return [];
     seen.add(resolved);
 
     let detection;
