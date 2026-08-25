@@ -1,11 +1,12 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, dialog } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, dialog } = require('electron');
 const http = require('http');
 const https = require('https');
 const path = require('path');
 const fixPath = require('fix-path');
 
-// 修复 macOS 打包后的 PATH 问题，让 npm/node/java 等本地命令可被 Desktop Apps 使用。
+// 修复 macOS 从 Finder / Dock 启动后 PATH 不完整的问题，让本地服务命令仍能找到 npm/node/java 等工具。
 fixPath();
+app.setName('Local Service Hub');
 
 let mainWindow = null;
 let desktopWindow = null;
@@ -115,14 +116,6 @@ function createMainWindow() {
   return mainWindow;
 }
 
-function positionDesktopWindow() {
-  if (!desktopWindow || desktopWindow.isDestroyed()) return;
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const { x, y, width } = display.workArea;
-  const [windowWidth] = desktopWindow.getSize();
-  desktopWindow.setPosition(x + width - windowWidth - 18, y + 18, false);
-}
-
 function createDesktopWindow() {
   if (desktopWindow && !desktopWindow.isDestroyed()) {
     desktopWindow.show();
@@ -131,36 +124,22 @@ function createDesktopWindow() {
   }
 
   desktopWindow = new BrowserWindow({
-    width: 430,
+    width: 920,
     height: 680,
-    minWidth: 390,
-    minHeight: 520,
-    maxWidth: 560,
-    frame: false,
-    transparent: false,
+    minWidth: 760,
+    minHeight: 540,
     show: false,
     resizable: true,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    backgroundColor: '#08101f',
-    hasShadow: true,
-    vibrancy: process.platform === 'darwin' ? 'sidebar' : undefined,
-    visualEffectState: process.platform === 'darwin' ? 'active' : undefined,
+    backgroundColor: '#f5f5f7',
+    title: 'Local Service Hub',
     webPreferences: sharedWebPreferences()
   });
 
-  desktopWindow.setAlwaysOnTop(true, 'floating');
   desktopWindow.loadURL(buildRendererUrl({ desktop: true }));
   desktopWindow.once('ready-to-show', () => {
-    positionDesktopWindow();
+    desktopWindow?.center();
     desktopWindow?.show();
-  });
-
-  desktopWindow.on('close', (event) => {
-    if (!isQuitting) {
-      event.preventDefault();
-      desktopWindow.hide();
-    }
+    desktopWindow?.focus();
   });
 
   desktopWindow.on('closed', () => {
@@ -184,7 +163,7 @@ function createTray() {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: '显示 Local Service Hub',
+      label: '打开 Local Service Hub',
       click: () => createDesktopWindow()
     },
     {
@@ -193,20 +172,13 @@ function createTray() {
     },
     { type: 'separator' },
     {
-      label: '退出',
+      label: '退出 Local Service Hub',
       click: () => app.quit()
     }
   ]);
 
   tray.setContextMenu(contextMenu);
-  tray.on('click', () => {
-    if (!desktopWindow || desktopWindow.isDestroyed() || !desktopWindow.isVisible()) {
-      createDesktopWindow();
-      return;
-    }
-    desktopWindow.hide();
-  });
-
+  tray.on('click', () => createDesktopWindow());
   return tray;
 }
 
@@ -247,8 +219,8 @@ async function startBackend() {
   } catch (error) {
     console.error('Failed to start backend:', error);
     dialog.showErrorBox(
-      'Backend 启动失败',
-      `无法启动后端服务:\n\n${error.message}\n\n请检查端口、Node 环境或 Redis 配置。`
+      'Local Service Hub 启动失败',
+      `无法启动内置服务:\n\n${error.message}\n\n请检查端口、Node 环境或 Redis 配置。`
     );
     app.quit();
     return null;
@@ -257,21 +229,10 @@ async function startBackend() {
   return null;
 }
 
-ipcMain.on('desktop:open-main', () => {
-  createMainWindow();
-});
-
-ipcMain.on('desktop:hide', () => {
-  desktopWindow?.hide();
-});
-
-ipcMain.handle('desktop:set-always-on-top', (_event, value) => {
-  if (!desktopWindow || desktopWindow.isDestroyed()) return false;
-  desktopWindow.setAlwaysOnTop(Boolean(value), 'floating');
-  return desktopWindow.isAlwaysOnTop();
-});
-
 app.whenReady().then(async () => {
+  nativeTheme.themeSource = 'light';
+  app.dock?.show();
+
   if (useExternalDevBackend) {
     backendPort = Number(process.env.MS_DEV_BACKEND_PORT || 3000);
     accessToken = process.env.MS_LOCAL_TOKEN || '';
@@ -327,7 +288,7 @@ async function cleanup() {
 }
 
 app.on('window-all-closed', () => {
-  // macOS 上保持菜单栏常驻；退出由 Tray 菜单显式触发。
+  // macOS 保持应用和菜单栏入口存活；点击 Dock 图标或菜单栏即可重新打开窗口。
   if (process.platform !== 'darwin') app.quit();
 });
 
