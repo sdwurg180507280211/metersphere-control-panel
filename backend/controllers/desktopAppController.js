@@ -1,5 +1,6 @@
 const desktopAppService = require('../services/desktopAppService');
 const desktopAppConfigService = require('../services/desktopAppConfigService');
+const desktopAppDiscoveryService = require('../services/desktopAppDiscoveryService');
 const { createAppError, sendError } = require('../utils/errors');
 
 async function assertStopped(id, action) {
@@ -22,6 +23,14 @@ const desktopAppController = {
   async getAllStatus(req, res) {
     try {
       res.json({ success: true, data: await desktopAppService.getAllStatus() });
+    } catch (error) {
+      sendError(res, error);
+    }
+  },
+
+  discover(req, res) {
+    try {
+      res.json({ success: true, data: desktopAppDiscoveryService.discoverProjects() });
     } catch (error) {
       sendError(res, error);
     }
