@@ -6,6 +6,16 @@ const logger = require('../utils/logger');
 
 let shutdownPromise = null;
 
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs);
+      timer.unref?.();
+    })
+  ]);
+}
+
 function closeHttpServer(server, timeoutMs = 5000) {
   if (!server || !server.listening) return Promise.resolve();
 
@@ -32,7 +42,7 @@ function closeHttpServer(server, timeoutMs = 5000) {
   });
 }
 
-async function closeWebSockets() {
+async function closeWebSockets(timeoutMs = 1500) {
   const wss = websocketService.wss;
   if (!wss) return;
 
@@ -44,13 +54,13 @@ async function closeWebSockets() {
     }
   }
 
-  await new Promise((resolve) => {
+  await withTimeout(new Promise((resolve) => {
     try {
       wss.close(() => resolve());
     } catch {
       resolve();
     }
-  });
+  }), timeoutMs);
 }
 
 async function shutdownBackend(server, options = {}) {
@@ -62,7 +72,7 @@ async function shutdownBackend(server, options = {}) {
 
     if (!keepServices) {
       try {
-        await processManager.stopAll();
+        await withTimeout(processManager.stopAll(), 5000);
       } catch (error) {
         console.warn(`停止 MeterSphere 服务失败: ${error.message}`);
       }
@@ -75,26 +85,26 @@ async function shutdownBackend(server, options = {}) {
     }
 
     try {
-      await closeWebSockets();
+      await closeWebSockets(options.webSocketCloseTimeoutMs || 1500);
     } catch (error) {
       console.warn(`关闭 WebSocket 失败: ${error.message}`);
     }
 
     try {
-      await cacheService.disconnect();
+      await withTimeout(cacheService.disconnect(), 2500);
     } catch (error) {
       console.warn(`关闭 Redis 失败: ${error.message}`);
     }
 
     try {
       const packageHistoryService = require('./packageHistoryService');
-      await packageHistoryService.closePool();
+      await withTimeout(packageHistoryService.closePool(), 2500);
     } catch (error) {
       console.warn(`关闭打包历史连接池失败: ${error.message}`);
     }
 
     try {
-      await logger.closeStreams();
+      await withTimeout(logger.closeStreams(), 2500);
     } catch (error) {
       console.warn(`关闭日志流失败: ${error.message}`);
     }
