@@ -54,12 +54,6 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
     if (canVisit) onVisit()
   }
 
-  const handleRowKeyDown = (event) => {
-    if (!canVisit || (event.key !== 'Enter' && event.key !== ' ')) return
-    event.preventDefault()
-    onVisit()
-  }
-
   const handleTitleClick = (event) => {
     event.stopPropagation()
     if (canVisit) onVisit()
@@ -69,9 +63,6 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
     <article
       className={`desktop-service-row ${canVisit ? 'desktop-service-row-visitable' : ''}`}
       onClick={visitFromRow}
-      onKeyDown={handleRowKeyDown}
-      role={canVisit ? 'link' : undefined}
-      tabIndex={canVisit ? 0 : undefined}
       title={canVisit ? `打开 http://127.0.0.1:${port}` : undefined}
     >
       <div className="desktop-service-identity">
