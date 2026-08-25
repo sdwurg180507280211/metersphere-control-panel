@@ -40,6 +40,7 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
   const phase = busy || (statusKnown ? status?.phase : running ? 'manual-running' : 'unknown')
   const meta = PHASE_META[phase] || PHASE_META.unknown
   const port = status?.port || item.statusPort
+  const canVisit = Boolean(port && statusKnown && running && !busy)
   const actionIsStop = running || busy === 'stopping'
   const actionLabel = busy === 'starting'
     ? '启动中…'
@@ -49,12 +50,42 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
         ? '关闭'
         : '启动'
 
+  const visitFromRow = () => {
+    if (canVisit) onVisit()
+  }
+
+  const handleRowKeyDown = (event) => {
+    if (!canVisit || (event.key !== 'Enter' && event.key !== ' ')) return
+    event.preventDefault()
+    onVisit()
+  }
+
+  const handleTitleClick = (event) => {
+    event.stopPropagation()
+    if (canVisit) onVisit()
+  }
+
   return (
-    <article className="desktop-service-row">
+    <article
+      className={`desktop-service-row ${canVisit ? 'desktop-service-row-visitable' : ''}`}
+      onClick={visitFromRow}
+      onKeyDown={handleRowKeyDown}
+      role={canVisit ? 'link' : undefined}
+      tabIndex={canVisit ? 0 : undefined}
+      title={canVisit ? `打开 http://127.0.0.1:${port}` : undefined}
+    >
       <div className="desktop-service-identity">
         <span className={`desktop-status-dot dot-${meta.tone}`} aria-hidden="true" />
         <div>
-          <strong>{item.name}</strong>
+          <button
+            type="button"
+            className="desktop-service-title"
+            disabled={!canVisit}
+            onClick={handleTitleClick}
+            title={canVisit ? `在浏览器中打开 http://127.0.0.1:${port}` : undefined}
+          >
+            {item.name}
+          </button>
           <span>{port ? `127.0.0.1:${port}` : '未配置状态端口'}</span>
         </div>
       </div>
@@ -64,7 +95,7 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
         <small>{port ? `TCP ${port}` : '手动控制'}</small>
       </div>
 
-      <div className="desktop-service-actions">
+      <div className="desktop-service-actions" onClick={(event) => event.stopPropagation()}>
         <button
           type="button"
           className="desktop-action desktop-action-secondary"
@@ -73,17 +104,6 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
         >
           配置
         </button>
-        {port && (
-          <button
-            type="button"
-            className="desktop-action desktop-action-visit"
-            disabled={Boolean(busy) || !statusKnown || !running}
-            onClick={onVisit}
-            title={statusKnown && running ? `在浏览器中打开 http://127.0.0.1:${port}` : '服务运行后可访问'}
-          >
-            访问
-          </button>
-        )}
         <button
           type="button"
           className={`desktop-action ${actionIsStop ? 'desktop-action-stop' : 'desktop-action-start'}`}
