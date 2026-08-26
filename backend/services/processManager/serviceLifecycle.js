@@ -192,7 +192,10 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 ========== 启动 ${serviceConfig.name} ==========`, 'service', serviceId);
 
     const errorFilePath = path.join(LOG_DIR, `hs_err_pid%p_${serviceId}.log`);
-    const errorFileOpt = `-XX:ErrorFile=${errorFilePath}`;
+    // JAVA_TOOL_OPTIONS is parsed by the JVM as whitespace-separated options.
+    // Quote the ErrorFile value so paths containing spaces (e.g. the packaged
+    // app path ".../Local Service Hub.app/...") are treated as a single value.
+    const errorFileOpt = `-XX:ErrorFile=${shellQuote(errorFilePath)}`;
     const serviceLogFile = path.join(LOG_DIR, `${serviceId}.log`);
 
     // Build JAVA_TOOL_OPTIONS: env base + config jvmOptions + per-service override + error file
