@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const { Readable } = require('stream');
 const { ReadableStream } = require('stream/web');
+const { spawnSync } = require('child_process');
 
 function loadTransport(fetchMock, electron = false, timers = {}) {
   const filename = path.resolve(__dirname, '../services/desktopUpdateService.js');
@@ -37,11 +38,54 @@ function loadTransport(fetchMock, electron = false, timers = {}) {
     fetch: electron ? () => { throw new Error('Node fetch must not be used'); } : fetchMock,
     URL, AbortController, Buffer, Response, Headers, setTimeout, clearTimeout, ...timers
   };
-  vm.runInNewContext(`${fs.readFileSync(filename, 'utf8')}\nmodule.exports = { requestText, downloadFile, checkForUpdate };`, sandbox);
+  vm.runInNewContext(`${fs.readFileSync(filename, 'utf8')}\nmodule.exports = { requestText, downloadFile, checkForUpdate, createHelperScript };`, sandbox);
   return sandbox.module.exports;
 }
 
 describe('Desktop updater network transport', () => {
+  test('installer script preserves shell variables and has valid Bash syntax', () => {
+    const script = loadTransport(jest.fn()).createHelperScript();
+    expect(script).toContain('NEW_APP="$TARGET_APP.new"');
+    expect(script).toContain('BACKUP_APP="$TARGET_APP.previous"');
+    const checked = spawnSync('/bin/bash', ['-n'], { input: script, encoding: 'utf8' });
+    expect(checked.stderr).toBe('');
+    expect(checked.status).toBe(0);
+  });
+
+  test.each([false, true])('installer helper replaces or rolls back a temporary app (launch fails: %s)', launchFails => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-helper-test-'));
+    const target = path.join(directory, 'Local Service Hub.app');
+    const staged = path.join(directory, 'staged.app');
+    const bin = path.join(directory, 'bin');
+    try {
+      for (const [bundle, version] of [[target, 'old'], [staged, 'new']]) {
+        fs.mkdirSync(path.join(bundle, 'Contents', 'MacOS'), { recursive: true });
+        fs.writeFileSync(path.join(bundle, 'Contents', 'Info.plist'), version);
+        fs.writeFileSync(path.join(bundle, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      }
+      fs.mkdirSync(bin);
+      const commands = {
+        ditto: '/bin/cp -R "$1" "$2"',
+        open: `exit ${launchFails ? 1 : 0}`,
+        pgrep: 'exit 0',
+        sleep: 'exit 0'
+      };
+      for (const [name, body] of Object.entries(commands)) {
+        fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+      }
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory], {
+        input: loadTransport(jest.fn()).createHelperScript(), encoding: 'utf8', timeout: 5000,
+        env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` }
+      });
+      expect(child.status).toBe(launchFails ? 1 : 0);
+      expect(fs.readFileSync(path.join(target, 'Contents', 'Info.plist'), 'utf8')).toBe(launchFails ? 'old' : 'new');
+      expect(fs.existsSync(`${target}.previous`)).toBe(false);
+      expect(fs.existsSync(`${target}.new`)).toBe(false);
+      expect(fs.readFileSync(path.join(directory, 'update-helper.log'), 'utf8')).toContain(launchFails ? '恢复旧版本' : 'update completed');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
   test('API rate limits fall back to a validated public desktop release', async () => {
     const metadata = {
       version: '2.0.1', tag: 'desktop-v2.0.1',
