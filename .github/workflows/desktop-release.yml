@@ -16,6 +16,9 @@ jobs:
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
+        with:
+          # 需要完整 tag 历史，用于判断 Live2D 模型层是否变更
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -58,6 +61,43 @@ jobs:
           rm -rf dist
           npx electron-builder --mac --x64 --arm64 --publish never
 
+      - name: Build delta packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="$GITHUB_REF_NAME"
+          PREV_TAG="$(git tag --list 'desktop-v*' --sort=-v:refname | grep -vx "$CURRENT_TAG" | head -1 || true)"
+          # Live2D 模型层（约 300MB）版本间通常不变；未变更时增量包不携带，安装时从旧包恢复。
+          LIVE2D_CHANGED=true
+          if [[ -n "$PREV_TAG" && -z "$(git diff --name-only "$PREV_TAG" HEAD -- frontend/public/live2d)" ]]; then
+            LIVE2D_CHANGED=false
+          fi
+          ELECTRON_VERSION="$(node -p "require('electron/package.json').version")"
+          echo "PREV_TAG=${PREV_TAG:-<none>} LIVE2D_CHANGED=$LIVE2D_CHANGED ELECTRON_VERSION=$ELECTRON_VERSION"
+          {
+            echo "LIVE2D_CHANGED=$LIVE2D_CHANGED"
+            echo "ELECTRON_VERSION=$ELECTRON_VERSION"
+          } >> "$GITHUB_ENV"
+
+          find dist -maxdepth 3 -type d -name "Local Service Hub.app" | while read -r APP; do
+            LIPO_ARCHS="$(lipo -archs "$APP/Contents/MacOS/Local Service Hub")"
+            case "$LIPO_ARCHS" in
+              *arm64*) ARCH="arm64" ;;
+              *x86_64*) ARCH="x64" ;;
+              *) echo "无法识别的架构: $LIPO_ARCHS" >&2; exit 1 ;;
+            esac
+            STAGE="$PWD/.delta-stage-$ARCH"
+            rm -rf "$STAGE"
+            mkdir -p "$STAGE/Contents/Resources"
+            cp "$APP/Contents/Info.plist" "$STAGE/Contents/Info.plist"
+            ditto "$APP/Contents/Resources/app" "$STAGE/Contents/Resources/app"
+            if [[ "$LIVE2D_CHANGED" != "true" ]]; then
+              rm -rf "$STAGE/Contents/Resources/app/frontend/dist/live2d"
+            fi
+            ditto -c -k "$STAGE" "dist/Local-Service-Hub-${VERSION}-${ARCH}-delta.zip"
+            rm -rf "$STAGE"
+          done
+
       - name: Verify release assets
         shell: bash
         run: |
@@ -65,6 +105,7 @@ jobs:
           for ARCH in x64 arm64; do
             test -f "dist/Local-Service-Hub-${VERSION}-${ARCH}.zip"
             test -f "dist/Local-Service-Hub-${VERSION}-${ARCH}.dmg"
+            test -f "dist/Local-Service-Hub-${VERSION}-${ARCH}-delta.zip"
           done
           ls -lh dist/*.zip dist/*.dmg
 
@@ -113,8 +154,27 @@ jobs:
                 name,
                 arch,
                 type,
+                bytes: fs.statSync(file).size,
                 sha256,
                 url: `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(name)}`
+              });
+            }
+          }
+
+          const deltas = [];
+          if (process.env.ELECTRON_VERSION) {
+            for (const arch of ['x64', 'arm64']) {
+              const name = `Local-Service-Hub-${version}-${arch}-delta.zip`;
+              const file = path.join('dist', name);
+              const sha256 = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+              deltas.push({
+                name,
+                arch,
+                bytes: fs.statSync(file).size,
+                sha256,
+                url: `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(name)}`,
+                electronVersion: process.env.ELECTRON_VERSION,
+                includesLive2d: process.env.LIVE2D_CHANGED === 'true'
               });
             }
           }
@@ -125,7 +185,8 @@ jobs:
             publishedAt: release.publishedAt || new Date().toISOString(),
             releaseUrl: release.url || `https://github.com/${repository}/releases/tag/${tag}`,
             notes: release.body || '',
-            assets
+            assets,
+            deltas
           };
           fs.writeFileSync('latest.json', `${JSON.stringify(payload, null, 2)}\n`);
           console.log(fs.readFileSync('latest.json', 'utf8'));
