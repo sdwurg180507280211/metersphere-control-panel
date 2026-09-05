@@ -1,0 +1,134 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#desktop-v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Tag 版本 desktop-v$VERSION 与 package.json 版本 $PACKAGE_VERSION 不一致" >&2
+            exit 1
+          fi
+          if [[ ! -f build/icon.icns ]]; then
+            echo "缺少 build/icon.icns；正式 Desktop Release 必须包含 App 图标" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix frontend
+
+      - name: Verify desktop
+        run: npm run verify:desktop
+
+      - name: Build x64 and arm64 release assets
+        run: |
+          rm -rf dist
+          npx electron-builder --mac --x64 --arm64 --publish never
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ARCH in x64 arm64; do
+            test -f "dist/Local-Service-Hub-${VERSION}-${ARCH}.zip"
+            test -f "dist/Local-Service-Hub-${VERSION}-${ARCH}.dmg"
+          done
+          ls -lh dist/*.zip dist/*.dmg
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip dist/*.dmg --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/*.zip dist/*.dmg \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Local Service Hub v${VERSION}" \
+              --generate-notes
+          fi
+          gh release edit "$TAG" --latest --repo "$GITHUB_REPOSITORY"
+
+      - name: Generate latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body,url,publishedAt > release-info.json
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const crypto = require('crypto');
+
+          const version = process.env.VERSION;
+          const tag = process.env.GITHUB_REF_NAME;
+          const repository = process.env.GITHUB_REPOSITORY;
+          const release = JSON.parse(fs.readFileSync('release-info.json', 'utf8'));
+
+          const assets = [];
+          for (const arch of ['x64', 'arm64']) {
+            for (const type of ['zip', 'dmg']) {
+              const name = `Local-Service-Hub-${version}-${arch}.${type}`;
+              const file = path.join('dist', name);
+              const sha256 = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+              assets.push({
+                name,
+                arch,
+                type,
+                sha256,
+                url: `https://github.com/${repository}/releases/download/${tag}/${encodeURIComponent(name)}`
+              });
+            }
+          }
+
+          const payload = {
+            version,
+            tag,
+            publishedAt: release.publishedAt || new Date().toISOString(),
+            releaseUrl: release.url || `https://github.com/${repository}/releases/tag/${tag}`,
+            notes: release.body || '',
+            assets
+          };
+          fs.writeFileSync('latest.json', `${JSON.stringify(payload, null, 2)}\n`);
+          console.log(fs.readFileSync('latest.json', 'utf8'));
+          NODE
+
+      - name: Upload latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" latest.json --clobber --repo "$GITHUB_REPOSITORY"
