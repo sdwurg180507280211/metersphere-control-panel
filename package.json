@@ -1,6 +1,6 @@
 {
   "name": "metersphere-control-panel",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "macOS 本地服务启动与关闭控制中心",
   "author": "MeterSphere Team",
   "main": "electron.js",
