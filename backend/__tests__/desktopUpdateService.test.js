@@ -205,10 +205,18 @@ describe('Delta updates', () => {
 
   test('selects the delta asset when the installed Electron version matches', async () => {
     const result = await loadTransport(metadataFetch(), true).checkForUpdate({ currentVersion: '2.0.3', arch: 'x64' });
+    // prepareUpdate 依赖 asset.name 生成下载路径，缺失会直接抛 TypeError
     expect(result.asset).toMatchObject({
-      updateMode: 'delta', bytes: 4800000, includesLive2d: false, electronVersion: '28.3.3',
+      name: 'delta.zip', updateMode: 'delta', bytes: 4800000, includesLive2d: false, electronVersion: '28.3.3',
       url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/delta.zip`
     });
+  });
+
+  test('delta entries without a name fall back to the full zip', async () => {
+    const metadata = deltaMetadata();
+    delete metadata.deltas[0].name;
+    const result = await loadTransport(metadataFetch(metadata), true).checkForUpdate({ currentVersion: '2.0.3', arch: 'x64' });
+    expect(result.asset).toMatchObject({ updateMode: 'full', name: 'full.zip' });
   });
 
   test.each([

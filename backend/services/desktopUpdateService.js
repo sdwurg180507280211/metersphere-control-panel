@@ -214,12 +214,14 @@ function selectDesktopRelease(releases) {
 
 function normalizeDeltaEntry(entry, repository) {
   if (!entry || typeof entry !== 'object') return null;
+  if (typeof entry.name !== 'string' || !entry.name.trim()) return null;
   if (!/^[a-f0-9]{64}$/i.test(String(entry.sha256 || ''))) return null;
   if (!Number.isFinite(Number(entry.bytes)) || Number(entry.bytes) <= 0) return null;
   if (typeof entry.electronVersion !== 'string' || !entry.electronVersion.trim()) return null;
   if (entry.arch !== 'x64' && entry.arch !== 'arm64') return null;
   try {
     return {
+      name: entry.name.trim(),
       arch: entry.arch,
       url: ensureGitHubAssetUrl(entry.url, repository),
       sha256: String(entry.sha256).toLowerCase(),
@@ -431,6 +433,16 @@ async function prepareUpdate(update, options = {}) {
   const zipPath = path.join(updateDir, update.asset.name);
   const extractDir = path.join(updateDir, 'extracted');
 
+  // 清理历史版本残留的更新目录（全量 ZIP 每份数百 MB，不清理会持续占盘）
+  try {
+    for (const entryName of await fsp.readdir(baseDir)) {
+      if (entryName !== path.basename(updateDir)) {
+        await fsp.rm(path.join(baseDir, entryName), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // 目录不存在等情况直接忽略，目标目录随后一定会重建
+  }
   await fsp.rm(updateDir, { recursive: true, force: true });
   await fsp.mkdir(updateDir, { recursive: true });
 
