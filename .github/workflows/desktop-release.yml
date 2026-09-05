@@ -50,6 +50,9 @@ jobs:
       - name: Verify desktop
         run: npm run verify:desktop
 
+      - name: Test desktop updater networking
+        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js
+
       - name: Build x64 and arm64 release assets
         run: |
           rm -rf dist

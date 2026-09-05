@@ -2,7 +2,8 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
-const https = require('https');
+const { Readable, Transform } = require('stream');
+const { pipeline } = require('stream/promises');
 const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
@@ -46,64 +47,102 @@ function compareVersions(left, right) {
   return 0;
 }
 
-function requestText(url, options = {}, redirects = 0) {
+function electronFetch(url, options) {
+  const { net } = require('electron');
   return new Promise((resolve, reject) => {
-    let target;
-    try {
-      target = new URL(url);
-    } catch {
-      reject(new Error(`无效更新地址: ${url}`));
-      return;
-    }
-
-    if (target.protocol !== 'https:') {
-      reject(new Error('更新服务只允许 HTTPS'));
-      return;
-    }
-
-    const request = https.get(target, {
-      headers: {
-        'User-Agent': `Local-Service-Hub/${options.version || 'unknown'}`,
-        Accept: options.accept || 'application/vnd.github+json'
-      }
-    }, (response) => {
-      const status = response.statusCode || 0;
-      const location = response.headers.location;
-      if (status >= 300 && status < 400 && location) {
-        response.resume();
-        if (redirects >= MAX_REDIRECTS) {
-          reject(new Error('更新请求重定向次数过多'));
-          return;
-        }
-        const next = new URL(location, target).toString();
-        requestText(next, options, redirects + 1).then(resolve, reject);
-        return;
-      }
-
-      if (status < 200 || status >= 300) {
-        response.resume();
-        reject(new Error(`更新服务返回 HTTP ${status}`));
-        return;
-      }
-
-      const chunks = [];
-      let total = 0;
-      response.on('data', (chunk) => {
-        total += chunk.length;
-        if (total > MAX_JSON_BYTES) {
-          request.destroy(new Error('更新元数据过大'));
-          return;
-        }
-        chunks.push(chunk);
-      });
-      response.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-      response.on('error', reject);
-    });
-
-    request.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      request.destroy(new Error('连接更新服务超时'));
-    });
+    const request = net.request({ url, method: 'GET', redirect: 'manual', useSessionCookies: false });
+    for (const [name, value] of Object.entries(options.headers)) request.setHeader(name, value);
+    let responseStream;
+    const abort = () => {
+      responseStream?.destroy(options.signal.reason);
+      request.abort();
+      reject(options.signal.reason);
+    };
+    options.signal.addEventListener('abort', abort, { once: true });
+    request.on('close', () => options.signal.removeEventListener('abort', abort));
     request.on('error', reject);
+    request.on('redirect', (status, method, redirectUrl) => {
+      // Electron 28 net.fetch rejects manual redirects; expose them for validation.
+      resolve(new Response(null, { status, headers: { location: redirectUrl } }));
+      request.abort();
+    });
+    request.on('response', response => {
+      responseStream = response;
+      response.on('aborted', () => response.destroy(new Error('更新连接中断')));
+      const headers = new Headers();
+      for (const [name, values] of Object.entries(response.headers)) {
+        for (const value of Array.isArray(values) ? values : [values]) headers.append(name, value);
+      }
+      resolve(new Response(Readable.toWeb(response), { status: response.statusCode, headers }));
+    });
+    if (options.signal.aborted) abort();
+    else request.end();
+  });
+}
+
+async function withUpdateResponse(url, options, consume) {
+  // Electron's network stack honors macOS system proxies; Node HTTPS does not.
+  const fetchResponse = process.versions?.electron
+    ? electronFetch
+    : globalThis.fetch;
+  const controller = new AbortController();
+  const timeoutMessage = options.download ? '下载安装包超时' : '连接更新服务超时';
+  const timer = setTimeout(() => controller.abort(new Error(timeoutMessage)),
+    options.download ? DOWNLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  try {
+    let target = new URL(url);
+    for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+      if (target.protocol !== 'https:') throw new Error('更新服务只允许 HTTPS');
+      if (options.download && !ALLOWED_DOWNLOAD_HOSTS.has(target.hostname)) {
+        throw new Error(`不允许的下载主机: ${target.hostname}`);
+      }
+      const response = await fetchResponse(target.toString(), {
+        method: 'GET',
+        redirect: 'manual',
+        credentials: 'omit',
+        signal: controller.signal,
+        headers: {
+          'User-Agent': `Local-Service-Hub/${options.version || 'unknown'}`,
+          Accept: options.accept || 'application/vnd.github+json'
+        }
+      });
+      const location = response.headers.get('location');
+      if (response.status >= 300 && response.status < 400 && location) {
+        await response.body?.cancel();
+        if (redirects === MAX_REDIRECTS) throw new Error('更新请求重定向次数过多');
+        target = new URL(location, target);
+        continue;
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        const error = new Error(`更新服务返回 HTTP ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      try {
+        return await consume(response, controller.signal);
+      } finally {
+        if (response.body && !response.body.locked) await response.body.cancel().catch(() => {});
+      }
+    }
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timeoutMessage);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestText(url, options = {}) {
+  return withUpdateResponse(url, options, async (response) => {
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of Readable.fromWeb(response.body)) {
+      total += chunk.length;
+      if (total > MAX_JSON_BYTES) throw new Error('更新元数据过大');
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
   });
 }
 
@@ -130,86 +169,31 @@ function ensureGitHubAssetUrl(rawUrl, repository = DEFAULT_REPOSITORY) {
   return target.toString();
 }
 
-function downloadFile(url, destination, options = {}, redirects = 0) {
-  return new Promise((resolve, reject) => {
-    let target;
-    try {
-      target = new URL(url);
-    } catch {
-      reject(new Error('下载地址无效'));
-      return;
-    }
-
-    if (target.protocol !== 'https:' || !ALLOWED_DOWNLOAD_HOSTS.has(target.hostname)) {
-      reject(new Error(`不允许的下载主机: ${target.hostname}`));
-      return;
-    }
-
-    const request = https.get(target, {
-      headers: {
-        'User-Agent': `Local-Service-Hub/${options.version || 'unknown'}`,
-        Accept: 'application/octet-stream'
-      }
-    }, (response) => {
-      const status = response.statusCode || 0;
-      const location = response.headers.location;
-      if (status >= 300 && status < 400 && location) {
-        response.resume();
-        if (redirects >= MAX_REDIRECTS) {
-          reject(new Error('下载重定向次数过多'));
-          return;
-        }
-        const next = new URL(location, target).toString();
-        downloadFile(next, destination, options, redirects + 1).then(resolve, reject);
-        return;
-      }
-
-      if (status < 200 || status >= 300) {
-        response.resume();
-        reject(new Error(`下载安装包失败: HTTP ${status}`));
-        return;
-      }
-
-      const temporary = `${destination}.download`;
-      const output = fs.createWriteStream(temporary, { mode: 0o600 });
+async function downloadFile(url, destination, options = {}) {
+  const temporary = `${destination}.download`;
+  try {
+    return await withUpdateResponse(url, {
+      ...options, download: true, accept: 'application/octet-stream'
+    }, async (response, signal) => {
       const hash = crypto.createHash('sha256');
       let bytes = 0;
-      let settled = false;
-
-      const fail = async (error) => {
-        if (settled) return;
-        settled = true;
-        output.destroy();
-        response.destroy();
-        await fsp.rm(temporary, { force: true }).catch(() => {});
-        reject(error);
-      };
-
-      response.on('data', (chunk) => {
-        bytes += chunk.length;
-        hash.update(chunk);
-      });
-      response.on('error', fail);
-      output.on('error', fail);
-      output.on('finish', async () => {
-        if (settled) return;
-        settled = true;
-        try {
-          const sha256 = hash.digest('hex');
-          await fsp.rename(temporary, destination);
-          resolve({ path: destination, bytes, sha256 });
-        } catch (error) {
-          reject(error);
+      const digest = new Transform({
+        transform(chunk, encoding, callback) {
+          bytes += chunk.length;
+          hash.update(chunk);
+          callback(null, chunk);
         }
       });
-      response.pipe(output);
+      await pipeline(Readable.fromWeb(response.body), digest,
+        fs.createWriteStream(temporary, { mode: 0o600 }), { signal });
+      const sha256 = hash.digest('hex');
+      await fsp.rename(temporary, destination);
+      return { path: destination, bytes, sha256 };
     });
-
-    request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => {
-      request.destroy(new Error('下载安装包超时'));
-    });
-    request.on('error', reject);
-  });
+  } catch (error) {
+    await fsp.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 function selectDesktopRelease(releases) {
@@ -248,7 +232,29 @@ function selectAsset(metadata, arch) {
 async function fetchLatestMetadata(options = {}) {
   const repository = options.repository || DEFAULT_REPOSITORY;
   const releasesUrl = `https://api.github.com/repos/${repository}/releases?per_page=30`;
-  const releases = await requestJson(releasesUrl, { version: options.currentVersion });
+  let releases;
+  try {
+    releases = await requestJson(releasesUrl, { version: options.currentVersion });
+  } catch (error) {
+    if (error.status !== 403 && error.status !== 429) throw error;
+    // GitHub's public latest-release asset route does not consume API quota.
+    // Fail closed if another release channel is marked latest.
+    const metadata = await requestJson(`https://github.com/${repository}/releases/latest/download/latest.json`, {
+      version: options.currentVersion, accept: 'application/json'
+    });
+    if (!/^desktop-v\d+\.\d+\.\d+$/.test(String(metadata.tag || ''))) {
+      throw new Error('GitHub API 限流，最新公开 Release 不是正式 Desktop 版本');
+    }
+    const version = normalizeVersion(metadata.version).text;
+    if (metadata.tag !== `${RELEASE_TAG_PREFIX}${version}`) {
+      throw new Error('Release 版本与 latest.json 不一致');
+    }
+    const expectedPrefix = `https://github.com/${repository}/releases/download/${metadata.tag}/`;
+    if (!Array.isArray(metadata.assets) || !metadata.assets.length || metadata.assets.some(asset => (
+      !ensureGitHubAssetUrl(asset.url, repository).startsWith(expectedPrefix)
+    ))) throw new Error('Release 资产与 Desktop 标签不一致');
+    return { ...metadata, version, releaseUrl: `https://github.com/${repository}/releases/tag/${metadata.tag}` };
+  }
   const selected = selectDesktopRelease(releases);
   if (!selected) {
     return null;

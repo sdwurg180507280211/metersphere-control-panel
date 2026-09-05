@@ -110,6 +110,8 @@ http://127.0.0.1:3000
 npm run electron:build
 ```
 
+桌面版通过 GitHub 的 `desktop-v*` Release 在线更新，按 CPU 架构下载 ZIP 并校验 SHA256。修复后的更新器遵循 macOS 系统代理（如 `127.0.0.1:7890`），并支持 GitHub 匿名 API 限流时的公开 Release 后备读取。原始 `2.0.0` 在需要系统代理的网络中需手动安装修复版一次。发布与升级步骤见 [在线更新说明](docs/DESKTOP-UPDATE.md)。
+
 ## 配置文件
 
 控制面板配置默认存储在：
