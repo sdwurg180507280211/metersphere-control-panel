@@ -281,7 +281,14 @@ export default function DesktopShell() {
   }, [status])
 
   const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中'
-  const updateButtonTitle = update.notes ? update.notes.slice(0, 600) : undefined
+  const formatSize = (bytes) => (
+    bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`
+  )
+  const updateButtonTitle = [
+    update.asset?.updateMode === 'delta' ? '增量更新（模型层复用旧包）' : '完整更新',
+    update.asset?.bytes ? `约 ${formatSize(update.asset.bytes)}` : '',
+    update.notes ? update.notes.slice(0, 400) : ''
+  ].filter(Boolean).join(' · ') || undefined
 
   return (
     <div className="desktop-shell">

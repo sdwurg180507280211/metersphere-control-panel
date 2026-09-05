@@ -66,6 +66,18 @@ GitHub API 返回 403 / 429 时，尝试公开的 `releases/latest/download/late
 
 `desktop-v2.0.1` 已修复网络访问，但真实安装测试发现替换脚本生成时存在 `TARGET_APP is not defined` 错误；下载和校验成功后会安全报错，不替换旧 App。`2.0.0` / `2.0.1` 用户应手动安装 `2.0.2` 或后续版本一次。不要依赖旧版本自行修复更新器，也不要覆盖已发布的标签。
 
+## 增量更新（delta）
+
+从 `desktop-v2.0.3` 起，Release 会为每个架构额外生成增量包 `Local-Service-Hub-X.Y.Z-<arch>-delta.zip`，只包含应用代码层 `Contents/Resources/app`（约 5 MB）和新的 `Contents/Info.plist`，不包含 Electron 运行时（约 230 MB）和 Live2D 模型层（约 300 MB）。
+
+增量包的启用条件（任一不满足即自动回退全量 ZIP）：
+
+1. `latest.json` 的 `deltas` 中存在当前架构的条目。
+2. 条目的 `electronVersion` 与当前 App 的 Electron 运行时版本完全一致。
+3. URL / SHA256 / bytes 校验全部通过。
+
+安装时 helper 会先克隆当前安装包（APFS clonefile，近似瞬时），再替换其中的 `Contents/Resources/app` 并更新 `Info.plist`；`includesLive2d: false` 时模型层从旧安装包原样恢复。模型目录 `frontend/public/live2d` 有变更的版本，工作流会自动把模型层打进增量包（`includesLive2d: true`）。旧版更新器忽略 `deltas` 字段，行为不变；Electron 升级只能走全量 ZIP。
+
 ## 安全下载
 
 更新器：
