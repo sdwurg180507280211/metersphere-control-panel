@@ -1,0 +1,36 @@
+name: Desktop verify
+
+on:
+  push:
+    branches:
+      - desktop
+  pull_request:
+    branches:
+      - desktop
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm ci --prefix frontend
+
+      - name: Verify desktop
+        run: npm run verify:desktop
