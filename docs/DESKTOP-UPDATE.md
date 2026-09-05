@@ -68,7 +68,7 @@ GitHub API 返回 403 / 429 时，尝试公开的 `releases/latest/download/late
 
 ## 增量更新（delta）
 
-从 `desktop-v2.0.3` 起，Release 会为每个架构额外生成增量包 `Local-Service-Hub-X.Y.Z-<arch>-delta.zip`，只包含应用代码层 `Contents/Resources/app`（约 5 MB）和新的 `Contents/Info.plist`，不包含 Electron 运行时（约 230 MB）和 Live2D 模型层（约 300 MB）。
+从 `desktop-v2.0.3` 起，Release 会为每个架构额外生成增量包 `Local-Service-Hub-X.Y.Z-<arch>-delta.zip`，只包含应用代码层 `Contents/Resources/app`（约 5 MB）和新的 `Contents/Info.plist`，不包含 Electron 运行时（约 230 MB）。
 
 增量包的启用条件（任一不满足即自动回退全量 ZIP）：
 
@@ -76,7 +76,16 @@ GitHub API 返回 403 / 429 时，尝试公开的 `releases/latest/download/late
 2. 条目的 `electronVersion` 与当前 App 的 Electron 运行时版本完全一致。
 3. URL / SHA256 / bytes 校验全部通过。
 
-安装时 helper 会先克隆当前安装包（APFS clonefile，近似瞬时），再替换其中的 `Contents/Resources/app` 并更新 `Info.plist`；`includesLive2d: false` 时模型层从旧安装包原样恢复。模型目录 `frontend/public/live2d` 有变更的版本，工作流会自动把模型层打进增量包（`includesLive2d: true`）。旧版更新器忽略 `deltas` 字段，行为不变；Electron 升级只能走全量 ZIP。
+安装时 helper 会先克隆当前安装包（APFS clonefile，近似瞬时），再替换其中的 `Contents/Resources/app` 并更新 `Info.plist`。旧版更新器忽略 `deltas` 字段，行为不变；Electron 升级只能走全量 ZIP。
+
+## Live2D 模型层
+
+`frontend/public/live2d`（约 300 MB）不再打进安装包（`package.json` 的 `build.files` 排除），仅保留在仓库与开发模式中。生产包内 waifu 功能依赖 `waifu.enabled` 配置开启，模型缺失时插件激活会失败并被优雅忽略，面板其余功能不受影响。
+
+过渡安排：
+
+- `desktop-v2.0.4`：模型层移出安装包的第一个版本，只发布全量包（体积同步大幅缩小）。禁用增量是因为 `2.0.3` 安装的更新器在增量安装时会把模型层从旧包恢复回来。
+- `desktop-v2.0.5` 起：恢复增量发布。此前安装包含模型层的客户端直接全量更新一次即可移除模型。
 
 ## 安全下载
 
