@@ -12,3 +12,6 @@ config.json
 dist/
 .codex-tmp/
 .claude/
+
+# Vite temp files
+frontend/*.timestamp-*.mjs
