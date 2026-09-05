@@ -13,10 +13,6 @@ jobs:
     runs-on: macos-latest
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # 2.0.4 过渡版本：2.0.3 及更早的安装包仍带 Live2D 模型层，其增量更新会把模型从旧包恢复回来。
-      # 2.0.4 起模型层移出安装包，本版本只发布全量包（体积已大幅缩小）。
-      # 发布 2.0.5 前删除此行，恢复增量发布。
-      DISABLE_DELTA: 'true'
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
