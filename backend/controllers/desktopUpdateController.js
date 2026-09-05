@@ -100,9 +100,11 @@ const desktopUpdateController = {
       const prepared = await desktopUpdateService.prepareUpdate(update);
       await desktopUpdateService.launchInstallHelper({
         targetAppPath: getTargetAppPath(),
-        stagedAppPath: prepared.stagedAppPath,
+        stagedAppPath: prepared.stagedPath,
         updateDir: prepared.updateDir,
-        currentPid: process.pid
+        currentPid: process.pid,
+        mode: prepared.mode,
+        includeLive2d: prepared.includesLive2d === true
       });
 
       res.json({

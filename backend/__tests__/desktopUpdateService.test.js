@@ -180,3 +180,165 @@ describe('Desktop updater network transport', () => {
     }
   });
 });
+
+describe('Delta updates', () => {
+  const REPOSITORY = 'sdwurg180507280211/metersphere-control-panel';
+  const RELEASES_RESPONSE = () => new Response(JSON.stringify([{
+    tag_name: 'desktop-v2.0.4', draft: false, prerelease: false,
+    assets: [{ name: 'latest.json', browser_download_url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/latest.json` }]
+  }]));
+  const deltaMetadata = (overrides = {}) => ({
+    version: '2.0.4', tag: 'desktop-v2.0.4',
+    assets: [
+      { name: 'full.zip', arch: 'x64', type: 'zip', bytes: 342000000, sha256: 'b'.repeat(64), url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/full.zip` },
+      { name: 'full-arm64.zip', arch: 'arm64', type: 'zip', bytes: 330000000, sha256: 'c'.repeat(64), url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/full-arm64.zip` }
+    ],
+    deltas: [{
+      name: 'delta.zip', arch: 'x64', bytes: 4800000, sha256: 'd'.repeat(64),
+      url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/delta.zip`,
+      electronVersion: '28.3.3', includesLive2d: false, ...overrides
+    }]
+  });
+  const metadataFetch = (metadata = deltaMetadata()) => jest.fn()
+    .mockResolvedValueOnce(RELEASES_RESPONSE())
+    .mockResolvedValueOnce(new Response(JSON.stringify(metadata)));
+
+  test('selects the delta asset when the installed Electron version matches', async () => {
+    const result = await loadTransport(metadataFetch(), true).checkForUpdate({ currentVersion: '2.0.3', arch: 'x64' });
+    expect(result.asset).toMatchObject({
+      updateMode: 'delta', bytes: 4800000, includesLive2d: false, electronVersion: '28.3.3',
+      url: `https://github.com/${REPOSITORY}/releases/download/desktop-v2.0.4/delta.zip`
+    });
+  });
+
+  test.each([
+    ['Electron 版本不一致', deltaMetadata({ electronVersion: '99.0.0' })],
+    ['latest.json 缺少 deltas 字段', { ...deltaMetadata(), deltas: undefined }],
+    ['增量包 SHA256 非法', deltaMetadata({ sha256: 'zz' })]
+  ])('增量不可用时回退全量包（%s）', async (_name, metadata) => {
+    const result = await loadTransport(metadataFetch(metadata), true).checkForUpdate({ currentVersion: '2.0.3', arch: 'x64' });
+    expect(result.asset).toMatchObject({ updateMode: 'full', name: 'full.zip' });
+  });
+
+  test('plain Node runtime（开发模式）never selects a delta', async () => {
+    const result = await loadTransport(metadataFetch()).checkForUpdate({ currentVersion: '2.0.3', arch: 'x64' });
+    expect(result.asset).toMatchObject({ updateMode: 'full' });
+  });
+
+  test('installer script contains the delta branch and stays valid Bash', () => {
+    const script = loadTransport(jest.fn()).createHelperScript();
+    expect(script).toContain('MODE="${5:-full}"');
+    expect(script).toContain('cp -cR "$TARGET_APP" "$NEW_APP"');
+    expect(script).toContain('INCLUDE_LIVE2D');
+    const checked = spawnSync('/bin/bash', ['-n'], { input: script, encoding: 'utf8' });
+    expect(checked.status).toBe(0);
+  });
+
+  const writeStubBin = (bin, commands) => {
+    fs.mkdirSync(bin, { recursive: true });
+    for (const [name, body] of Object.entries(commands)) {
+      fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    }
+  };
+
+  test.each([false, true])('delta helper merges app layer and restores live2d (staged includes live2d: %s)', stagedHasLive2d => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-delta-test-'));
+    const target = path.join(directory, 'Local Service Hub.app');
+    const staged = path.join(directory, 'delta-root');
+    const bin = path.join(directory, 'bin');
+    try {
+      fs.mkdirSync(path.join(target, 'Contents', 'MacOS'), { recursive: true });
+      fs.writeFileSync(path.join(target, 'Contents', 'Info.plist'), 'old');
+      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      const targetApp = path.join(target, 'Contents', 'Resources', 'app');
+      fs.mkdirSync(path.join(targetApp, 'frontend', 'dist', 'live2d'), { recursive: true });
+      fs.writeFileSync(path.join(targetApp, 'package.json'), '{"version":"2.0.3"}');
+      fs.writeFileSync(path.join(targetApp, 'keep.txt'), 'keep');
+      fs.writeFileSync(path.join(targetApp, 'remove-me.txt'), 'stale');
+      fs.writeFileSync(path.join(targetApp, 'frontend', 'dist', 'live2d', 'old-model.txt'), 'old model');
+
+      fs.mkdirSync(path.join(staged, 'Contents', 'MacOS'), { recursive: true });
+      fs.writeFileSync(path.join(staged, 'Contents', 'Info.plist'), 'new');
+      fs.writeFileSync(path.join(staged, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      const stagedApp = path.join(staged, 'Contents', 'Resources', 'app');
+      fs.mkdirSync(stagedApp, { recursive: true });
+      fs.writeFileSync(path.join(stagedApp, 'package.json'), '{"version":"2.0.4"}');
+      fs.writeFileSync(path.join(stagedApp, 'keep.txt'), 'keep-new');
+      fs.writeFileSync(path.join(stagedApp, 'added.txt'), 'added');
+      if (stagedHasLive2d) {
+        fs.mkdirSync(path.join(stagedApp, 'frontend', 'dist', 'live2d'), { recursive: true });
+        fs.writeFileSync(path.join(stagedApp, 'frontend', 'dist', 'live2d', 'old-model.txt'), 'refreshed model');
+      }
+
+      writeStubBin(bin, {
+        // 近似 ditto 合并语义：目标存在时按内容合并，否则整目录复制
+        ditto: 'if [ -d "$2" ]; then /bin/cp -R "$1/." "$2/"; else /bin/cp -R "$1" "$2"; fi',
+        open: 'exit 0',
+        pgrep: 'exit 0',
+        sleep: 'exit 0'
+      });
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta', stagedHasLive2d ? 'true' : 'false'], {
+        input: loadTransport(jest.fn()).createHelperScript(), encoding: 'utf8', timeout: 10000,
+        env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` }
+      });
+
+      expect(child.status).toBe(0);
+      expect(fs.readFileSync(path.join(target, 'Contents', 'Info.plist'), 'utf8')).toBe('new');
+      const newAppDir = path.join(target, 'Contents', 'Resources', 'app');
+      expect(fs.existsSync(path.join(newAppDir, 'remove-me.txt'))).toBe(false);
+      expect(fs.readFileSync(path.join(newAppDir, 'added.txt'), 'utf8')).toBe('added');
+      expect(fs.readFileSync(path.join(newAppDir, 'keep.txt'), 'utf8')).toBe('keep-new');
+      const live2dDir = path.join(newAppDir, 'frontend', 'dist', 'live2d');
+      if (stagedHasLive2d) {
+        expect(fs.readFileSync(path.join(live2dDir, 'old-model.txt'), 'utf8')).toBe('refreshed model');
+      } else {
+        expect(fs.readFileSync(path.join(live2dDir, 'old-model.txt'), 'utf8')).toBe('old model');
+      }
+      expect(fs.existsSync(`${target}.previous`)).toBe(false);
+      expect(fs.existsSync(`${target}.new`)).toBe(false);
+      expect(fs.readFileSync(path.join(directory, 'update-helper.log'), 'utf8')).toContain('mode=delta');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('delta helper rolls back to the previous bundle when launch fails', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-delta-test-'));
+    const target = path.join(directory, 'Local Service Hub.app');
+    const staged = path.join(directory, 'delta-root');
+    const bin = path.join(directory, 'bin');
+    try {
+      fs.mkdirSync(path.join(target, 'Contents', 'MacOS'), { recursive: true });
+      fs.writeFileSync(path.join(target, 'Contents', 'Info.plist'), 'old');
+      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      const targetApp = path.join(target, 'Contents', 'Resources', 'app');
+      fs.mkdirSync(path.join(targetApp, 'frontend', 'dist', 'live2d'), { recursive: true });
+      fs.writeFileSync(path.join(targetApp, 'package.json'), '{"version":"2.0.3"}');
+      fs.writeFileSync(path.join(targetApp, 'frontend', 'dist', 'live2d', 'old-model.txt'), 'old model');
+
+      fs.mkdirSync(path.join(staged, 'Contents', 'Resources', 'app'), { recursive: true });
+      fs.writeFileSync(path.join(staged, 'Contents', 'Info.plist'), 'new');
+      fs.writeFileSync(path.join(staged, 'Contents', 'Resources', 'app', 'package.json'), '{"version":"2.0.4"}');
+
+      writeStubBin(bin, {
+        ditto: 'if [ -d "$2" ]; then /bin/cp -R "$1/." "$2/"; else /bin/cp -R "$1" "$2"; fi',
+        open: 'exit 1',
+        pgrep: 'exit 0',
+        sleep: 'exit 0'
+      });
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta', 'false'], {
+        input: loadTransport(jest.fn()).createHelperScript(), encoding: 'utf8', timeout: 10000,
+        env: { ...process.env, PATH: `${bin}:/usr/bin:/bin` }
+      });
+
+      expect(child.status).toBe(1);
+      expect(fs.readFileSync(path.join(target, 'Contents', 'Info.plist'), 'utf8')).toBe('old');
+      expect(fs.existsSync(path.join(target, 'Contents', 'Resources', 'app', 'frontend', 'dist', 'live2d', 'old-model.txt'))).toBe(true);
+      expect(fs.existsSync(`${target}.previous`)).toBe(false);
+      expect(fs.existsSync(`${target}.new`)).toBe(false);
+      expect(fs.readFileSync(path.join(directory, 'update-helper.log'), 'utf8')).toContain('恢复旧版本');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});

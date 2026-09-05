@@ -22,6 +22,8 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com'
 ]);
+// Live2D 模型（约 300MB）视为不可变资源层：增量包默认不携带，安装时从旧包恢复。
+const LIVE2D_RELATIVE_DIR = 'frontend/dist/live2d';
 
 function normalizeVersion(value) {
   const normalized = String(value || '')
@@ -210,7 +212,28 @@ function selectDesktopRelease(releases) {
     .sort((left, right) => compareVersions(right.version, left.version))[0] || null;
 }
 
-function selectAsset(metadata, arch) {
+function normalizeDeltaEntry(entry, repository) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (!/^[a-f0-9]{64}$/i.test(String(entry.sha256 || ''))) return null;
+  if (!Number.isFinite(Number(entry.bytes)) || Number(entry.bytes) <= 0) return null;
+  if (typeof entry.electronVersion !== 'string' || !entry.electronVersion.trim()) return null;
+  if (entry.arch !== 'x64' && entry.arch !== 'arm64') return null;
+  try {
+    return {
+      arch: entry.arch,
+      url: ensureGitHubAssetUrl(entry.url, repository),
+      sha256: String(entry.sha256).toLowerCase(),
+      bytes: Number(entry.bytes),
+      electronVersion: entry.electronVersion.trim(),
+      includesLive2d: entry.includesLive2d === true,
+      updateMode: 'delta'
+    };
+  } catch {
+    return null;
+  }
+}
+
+function selectAsset(metadata, arch, { electronVersion = null, repository } = {}) {
   const normalizedArch = arch === 'x64' ? 'x64' : arch === 'arm64' ? 'arm64' : null;
   if (!normalizedArch) throw new Error(`暂不支持当前架构: ${arch}`);
 
@@ -220,13 +243,24 @@ function selectAsset(metadata, arch) {
   if (!asset?.name || !asset?.url || !/^[a-f0-9]{64}$/i.test(String(asset.sha256 || ''))) {
     throw new Error(`Release 缺少 ${normalizedArch} ZIP 或 SHA256`);
   }
-  return {
+  const fullAsset = {
     name: String(asset.name),
-    url: ensureGitHubAssetUrl(asset.url),
+    url: ensureGitHubAssetUrl(asset.url, repository),
     sha256: String(asset.sha256).toLowerCase(),
     arch: normalizedArch,
-    type: 'zip'
+    type: 'zip',
+    bytes: Number(asset.bytes) > 0 ? Number(asset.bytes) : null,
+    updateMode: 'full'
   };
+
+  if (!electronVersion) return fullAsset;
+
+  // 增量包只替换应用代码层，Electron 运行时必须与构建时版本完全一致才允许使用。
+  const delta = (Array.isArray(metadata?.deltas) ? metadata.deltas : [])
+    .map((entry) => normalizeDeltaEntry(entry, repository))
+    .find((entry) => entry?.arch === normalizedArch && entry.electronVersion === electronVersion);
+
+  return delta || fullAsset;
 }
 
 async function fetchLatestMetadata(options = {}) {
@@ -300,7 +334,10 @@ async function checkForUpdate(options = {}) {
     };
   }
 
-  const asset = selectAsset(metadata, options.arch || process.arch);
+  const asset = selectAsset(metadata, options.arch || process.arch, {
+    electronVersion: process.versions?.electron || null,
+    repository: options.repository
+  });
   return {
     currentVersion,
     latestVersion: metadata.version,
@@ -328,17 +365,57 @@ async function findAppBundle(directory, depth = 0) {
   return null;
 }
 
-async function readBundleVersion(appPath) {
+async function readPlistVersion(appPath) {
   const plist = path.join(appPath, 'Contents', 'Info.plist');
-  const executable = path.join(appPath, 'Contents', 'MacOS', APP_NAME);
   await fsp.access(plist, fs.constants.R_OK);
-  await fsp.access(executable, fs.constants.X_OK);
   const { stdout } = await execFileAsync('/usr/libexec/PlistBuddy', [
     '-c',
     'Print :CFBundleShortVersionString',
     plist
   ]);
   return normalizeVersion(stdout.trim()).text;
+}
+
+async function readBundleVersion(appPath) {
+  const executable = path.join(appPath, 'Contents', 'MacOS', APP_NAME);
+  await fsp.access(executable, fs.constants.X_OK);
+  return readPlistVersion(appPath);
+}
+
+async function validateFullStage(extractDir, expectedVersion) {
+  const stagedAppPath = await findAppBundle(extractDir);
+  if (!stagedAppPath) {
+    throw new Error('更新包中未找到 Local Service Hub.app');
+  }
+
+  const bundleVersion = await readBundleVersion(stagedAppPath);
+  if (bundleVersion !== expectedVersion) {
+    throw new Error(`更新包版本不匹配: ${bundleVersion} / ${expectedVersion}`);
+  }
+
+  return { stagedPath: stagedAppPath, includesLive2d: null };
+}
+
+async function validateDeltaStage(extractDir, expectedVersion) {
+  const bundleVersion = await readPlistVersion(extractDir);
+  if (bundleVersion !== expectedVersion) {
+    throw new Error(`增量包版本不匹配: ${bundleVersion} / ${expectedVersion}`);
+  }
+
+  const appManifestPath = path.join(extractDir, 'Contents', 'Resources', 'app', 'package.json');
+  let appManifest;
+  try {
+    appManifest = JSON.parse(await fsp.readFile(appManifestPath, 'utf8'));
+  } catch {
+    throw new Error('增量包缺少应用清单 package.json');
+  }
+  if (normalizeVersion(String(appManifest?.version || '')).text !== expectedVersion) {
+    throw new Error('增量包内应用版本与 Release 不一致');
+  }
+
+  const live2dDir = path.join(extractDir, 'Contents', 'Resources', 'app', LIVE2D_RELATIVE_DIR);
+  const includesLive2d = await fsp.access(live2dDir, fs.constants.R_OK).then(() => true, () => false);
+  return { stagedPath: extractDir, includesLive2d };
 }
 
 async function prepareUpdate(update, options = {}) {
@@ -367,20 +444,17 @@ async function prepareUpdate(update, options = {}) {
 
   await fsp.mkdir(extractDir, { recursive: true });
   await execFileAsync('/usr/bin/ditto', ['-x', '-k', zipPath, extractDir]);
-  const stagedAppPath = await findAppBundle(extractDir);
-  if (!stagedAppPath) {
-    throw new Error('更新包中未找到 Local Service Hub.app');
-  }
-
-  const bundleVersion = await readBundleVersion(stagedAppPath);
-  if (bundleVersion !== normalizeVersion(update.latestVersion).text) {
-    throw new Error(`更新包版本不匹配: ${bundleVersion} / ${update.latestVersion}`);
-  }
+  const expectedVersion = normalizeVersion(update.latestVersion).text;
+  const stage = update.asset.updateMode === 'delta'
+    ? await validateDeltaStage(extractDir, expectedVersion)
+    : await validateFullStage(extractDir, expectedVersion);
 
   return {
     updateDir,
-    stagedAppPath,
-    version: bundleVersion,
+    stagedPath: stage.stagedPath,
+    mode: update.asset.updateMode === 'delta' ? 'delta' : 'full',
+    includesLive2d: stage.includesLive2d,
+    version: expectedVersion,
     sha256: downloaded.sha256,
     bytes: downloaded.bytes
   };
@@ -394,14 +468,20 @@ CURRENT_PID="$1"
 TARGET_APP="$2"
 STAGED_APP="$3"
 UPDATE_DIR="$4"
+MODE="\${5:-full}"
+INCLUDE_LIVE2D="\${6:-false}"
 APP_NAME="${APP_NAME}"
 TARGET_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
 NEW_APP="$TARGET_APP.new"
 BACKUP_APP="$TARGET_APP.previous"
+STAGED_APP_DIR="$STAGED_APP/Contents/Resources/app"
+TARGET_APP_DIR="$TARGET_APP/Contents/Resources/app"
+NEW_APP_DIR="$NEW_APP/Contents/Resources/app"
+LIVE2D_DIR="frontend/dist/live2d"
 LOG_FILE="$UPDATE_DIR/update-helper.log"
 
 exec >>"$LOG_FILE" 2>&1
-printf '[%s] updater started\\n' "$(date '+%Y-%m-%d %H:%M:%S')"
+printf '[%s] updater started (mode=%s)\\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$MODE"
 
 for _ in {1..150}; do
   if ! kill -0 "$CURRENT_PID" >/dev/null 2>&1; then
@@ -416,8 +496,27 @@ if kill -0 "$CURRENT_PID" >/dev/null 2>&1; then
 fi
 
 rm -rf "$NEW_APP"
-ditto "$STAGED_APP" "$NEW_APP"
-test -f "$NEW_APP/Contents/Info.plist"
+
+if [[ "$MODE" == 'delta' ]]; then
+  test -f "$STAGED_APP/Contents/Info.plist"
+  test -f "$STAGED_APP_DIR/package.json"
+  # 增量模式：克隆现有安装包（APFS 上近乎瞬时），只替换应用代码层。
+  if ! cp -cR "$TARGET_APP" "$NEW_APP" 2>/dev/null; then
+    rm -rf "$NEW_APP"
+    cp -R "$TARGET_APP" "$NEW_APP"
+  fi
+  rm -rf "$NEW_APP_DIR"
+  ditto "$STAGED_APP_DIR" "$NEW_APP_DIR"
+  cp -f "$STAGED_APP/Contents/Info.plist" "$NEW_APP/Contents/Info.plist"
+  # 模型层不在增量包内时从旧包恢复；增量包自带时以增量包为准。
+  if [[ "$INCLUDE_LIVE2D" != 'true' && -d "$TARGET_APP_DIR/$LIVE2D_DIR" ]]; then
+    mkdir -p "$NEW_APP_DIR/$LIVE2D_DIR"
+    ditto "$TARGET_APP_DIR/$LIVE2D_DIR" "$NEW_APP_DIR/$LIVE2D_DIR"
+  fi
+else
+  ditto "$STAGED_APP" "$NEW_APP"
+  test -f "$NEW_APP/Contents/Info.plist"
+fi
 test -x "$NEW_APP/Contents/MacOS/$APP_NAME"
 
 rm -rf "$BACKUP_APP"
@@ -427,6 +526,7 @@ fi
 
 rollback() {
   echo '新版本启动失败，恢复旧版本'
+  rm -rf "$NEW_APP"
   rm -rf "$TARGET_APP"
   if [[ -d "$BACKUP_APP" ]]; then
     mv "$BACKUP_APP" "$TARGET_APP"
@@ -475,6 +575,8 @@ async function launchInstallHelper(options = {}) {
   const stagedAppPath = path.resolve(String(options.stagedAppPath || ''));
   const updateDir = path.resolve(String(options.updateDir || ''));
   const currentPid = Number(options.currentPid);
+  const mode = options.mode === 'delta' ? 'delta' : 'full';
+  const includeLive2d = options.includeLive2d === true;
 
   if (!targetAppPath.endsWith(`/${APP_NAME}.app`) || !Number.isInteger(currentPid) || currentPid <= 0) {
     throw new Error('更新安装参数无效');
@@ -491,7 +593,9 @@ async function launchInstallHelper(options = {}) {
     String(currentPid),
     targetAppPath,
     stagedAppPath,
-    updateDir
+    updateDir,
+    mode,
+    includeLive2d ? 'true' : 'false'
   ], {
     detached: true,
     stdio: 'ignore'
