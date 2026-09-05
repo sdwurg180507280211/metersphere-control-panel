@@ -5,6 +5,7 @@ const vm = require('vm');
 const crypto = require('crypto');
 const { EventEmitter } = require('events');
 const { Readable } = require('stream');
+const { ReadableStream } = require('stream/web');
 
 function loadTransport(fetchMock, electron = false, timers = {}) {
   const filename = path.resolve(__dirname, '../services/desktopUpdateService.js');
@@ -84,6 +85,29 @@ describe('Desktop updater network transport', () => {
   test('rejects HTTP errors and oversized metadata', async () => {
     await expect(loadTransport(async () => new Response('', { status: 503 })).requestText('https://github.com/test')).rejects.toThrow('503');
     await expect(loadTransport(async () => new Response('x'.repeat(2 * 1024 * 1024 + 1))).requestText('https://github.com/test')).rejects.toThrow('元数据过大');
+  });
+
+  test('network failures do not silently switch release sources', async () => {
+    const fetchMock = jest.fn(async () => new Response('', { status: 500 }));
+    await expect(loadTransport(fetchMock).checkForUpdate({ currentVersion: '2.0.0' })).rejects.toThrow('500');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('failed download streams clean up partial files', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-update-test-'));
+    const destination = path.join(directory, 'failed.zip');
+    try {
+      let chunks = 0;
+      const body = new ReadableStream({ pull(controller) {
+        if (chunks++ === 0) controller.enqueue(Buffer.from('partial'));
+        else controller.error(new Error('connection lost'));
+      } });
+      await expect(loadTransport(async () => new Response(body)).downloadFile('https://github.com/test', destination)).rejects.toThrow('connection lost');
+      expect(fs.existsSync(destination)).toBe(false);
+      expect(fs.existsSync(`${destination}.download`)).toBe(false);
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test('aborts requests on the total deadline', async () => {
