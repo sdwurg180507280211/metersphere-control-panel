@@ -5,18 +5,24 @@ const express = require('express');
 const router = express.Router();
 const serviceController = require('../controllers/serviceController');
 const desktopAppController = require('../controllers/desktopAppController');
+const desktopUpdateController = require('../controllers/desktopUpdateController');
 
 // 服务目录与状态
 router.get('/catalog', serviceController.getCatalog);
 router.get('/status', serviceController.getAllStatus);
 
-// Desktop 小窗口本地应用：只执行 config.json 中已保存的启动/关闭命令。
+// Desktop 本地应用：只执行 config.json 中已保存的启动/关闭命令。
 router.get('/desktop-apps/catalog', desktopAppController.getCatalog);
 router.get('/desktop-apps/status', desktopAppController.getAllStatus);
 router.post('/desktop-apps', desktopAppController.save);
 router.delete('/desktop-apps/:id', desktopAppController.remove);
 router.post('/desktop-apps/:id/start', desktopAppController.start);
 router.post('/desktop-apps/:id/stop', desktopAppController.stop);
+
+// Desktop 在线更新。
+router.get('/desktop-update/info', desktopUpdateController.info);
+router.get('/desktop-update/check', desktopUpdateController.check);
+router.post('/desktop-update/install', desktopUpdateController.install);
 
 // 基础设施状态
 router.get('/infra/status', serviceController.getInfraStatus);
