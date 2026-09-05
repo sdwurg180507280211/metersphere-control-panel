@@ -4,6 +4,7 @@ import DesktopAppEditor from './DesktopAppEditor'
 import './DesktopShell.css'
 
 const POLL_MS = 3000
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
 const MANUAL_RUNNING_KEY = 'local-service-hub.manual-running'
 
 const PHASE_META = {
@@ -116,6 +117,16 @@ export default function DesktopShell() {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [editor, setEditor] = useState(null)
+  const [update, setUpdate] = useState({
+    currentVersion: '',
+    latestVersion: null,
+    updateAvailable: false,
+    installSupported: false,
+    checking: false,
+    installing: false,
+    checked: false,
+    notes: ''
+  })
 
   const refresh = useCallback(async (silent = false) => {
     try {
@@ -133,6 +144,37 @@ export default function DesktopShell() {
     }
   }, [])
 
+  const checkUpdate = useCallback(async (silent = false) => {
+    setUpdate((current) => ({ ...current, checking: true }))
+    try {
+      const data = await requestJson('/api/services/desktop-update/check')
+      setUpdate((current) => ({
+        ...current,
+        ...data,
+        checking: false,
+        checked: true
+      }))
+      if (!silent) {
+        toast.success(data.updateAvailable ? `发现新版本 v${data.latestVersion}` : '当前已经是最新版本')
+      }
+    } catch (error) {
+      setUpdate((current) => ({ ...current, checking: false, checked: true }))
+      if (!silent) toast.error(error.message || '检查更新失败')
+    }
+  }, [])
+
+  const installUpdate = useCallback(async () => {
+    if (!update.updateAvailable || update.installing) return
+    setUpdate((current) => ({ ...current, installing: true }))
+    try {
+      const data = await requestJson('/api/services/desktop-update/install', { method: 'POST' })
+      toast.success(`v${data.latestVersion} 已下载并校验，正在重启安装…`, { duration: 5000 })
+    } catch (error) {
+      setUpdate((current) => ({ ...current, installing: false }))
+      toast.error(error.message || '安装更新失败')
+    }
+  }, [update.installing, update.updateAvailable])
+
   useEffect(() => {
     const previousTitle = document.title
     document.title = 'Local Service Hub'
@@ -146,6 +188,24 @@ export default function DesktopShell() {
     const timer = setInterval(() => refresh(true), POLL_MS)
     return () => clearInterval(timer)
   }, [refresh])
+
+  useEffect(() => {
+    let cancelled = false
+    requestJson('/api/services/desktop-update/info')
+      .then((data) => {
+        if (cancelled) return
+        setUpdate((current) => ({ ...current, ...data }))
+      })
+      .catch(() => {})
+
+    const startupTimer = setTimeout(() => checkUpdate(true), 1500)
+    const interval = setInterval(() => checkUpdate(true), UPDATE_CHECK_MS)
+    return () => {
+      cancelled = true
+      clearTimeout(startupTimer)
+      clearInterval(interval)
+    }
+  }, [checkUpdate])
 
   useEffect(() => {
     if (catalog.length === 0) return
@@ -219,6 +279,9 @@ export default function DesktopShell() {
       toast.error(error.message || '打开服务地址失败')
     }
   }, [status])
+
+  const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中'
+  const updateButtonTitle = update.notes ? update.notes.slice(0, 600) : undefined
 
   return (
     <div className="desktop-shell">
@@ -312,10 +375,26 @@ export default function DesktopShell() {
       </main>
 
       <footer className="desktop-app-footer">
-        <span>Local Service Hub · macOS</span>
-        <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>
-          打开完整控制面板
-        </button>
+        <span>Local Service Hub · {versionLabel}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {update.installSupported && update.updateAvailable ? (
+            <button
+              type="button"
+              onClick={installUpdate}
+              disabled={update.installing}
+              title={updateButtonTitle}
+            >
+              {update.installing ? '正在下载并安装…' : `更新到 v${update.latestVersion}`}
+            </button>
+          ) : update.installSupported ? (
+            <button type="button" onClick={() => checkUpdate(false)} disabled={update.checking}>
+              {update.checking ? '检查中…' : update.checked ? '已是最新' : '检查更新'}
+            </button>
+          ) : null}
+          <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>
+            打开完整控制面板
+          </button>
+        </div>
       </footer>
 
       {editor && (
