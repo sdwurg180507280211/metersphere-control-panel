@@ -1,0 +1,50 @@
+name: Electron 44 lockfile bootstrap
+
+on:
+  push:
+    branches:
+      - desktop-electron44-staging
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Regenerate Electron lock entries
+        run: npm install --package-lock-only --ignore-scripts --save-dev --save-exact electron@44.3.0
+
+      - name: Validate lockfile with npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Assert Electron runtime lock
+        run: |
+          node <<'NODE'
+          const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
+          const root = lock.packages?.[''];
+          const electron = lock.packages?.['node_modules/electron'];
+          if (pkg.devDependencies.electron !== '44.3.0') throw new Error('package.json Electron is not 44.3.0');
+          if (root?.devDependencies?.electron !== '44.3.0') throw new Error('root lock Electron is not 44.3.0');
+          if (electron?.version !== '44.3.0') throw new Error(`locked Electron is ${electron?.version}`);
+          console.log(`lockfile validated: Electron ${electron.version}`);
+          NODE
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron44-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 1
