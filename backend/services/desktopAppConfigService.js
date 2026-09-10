@@ -3,25 +3,27 @@ const path = require('path');
 const crypto = require('crypto');
 const { CONFIG_PATH, loadConfigFromFile } = require('../config');
 const { createAppError } = require('../utils/errors');
+const { ensureParentDirectory, secureFile, copyPrivateFile, writePrivateText } = require('../utils/privateFile');
 
 const APP_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 
 function readConfig() {
+  secureFile(CONFIG_PATH);
   return loadConfigFromFile(CONFIG_PATH) || {};
 }
 
 function writeConfig(rawConfig) {
-  const directory = path.dirname(CONFIG_PATH);
-  fs.mkdirSync(directory, { recursive: true });
+  ensureParentDirectory(CONFIG_PATH);
   const tempPath = `${CONFIG_PATH}.desktop.tmp`;
   const backupPath = `${CONFIG_PATH}.bak`;
 
   if (fs.existsSync(CONFIG_PATH)) {
-    fs.copyFileSync(CONFIG_PATH, backupPath);
+    copyPrivateFile(CONFIG_PATH, backupPath);
   }
 
-  fs.writeFileSync(tempPath, `${JSON.stringify(rawConfig, null, 2)}\n`, 'utf8');
+  writePrivateText(tempPath, `${JSON.stringify(rawConfig, null, 2)}\n`);
   fs.renameSync(tempPath, CONFIG_PATH);
+  secureFile(CONFIG_PATH);
 }
 
 function getDefinitions(raw = readConfig()) {
@@ -68,24 +70,14 @@ function normalizeDefinition(input = {}, definitions = {}) {
   const stopCommand = String(input.stopCommand || '').trim();
   const statusPort = normalizePort(input.statusPort);
 
-  if (!name) {
-    throw createAppError(400, 'DESKTOP_APP_NAME_MISSING', '请填写服务名称');
-  }
-  if (!startCommand) {
-    throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', '请填写启动命令');
-  }
-  if (!stopCommand) {
-    throw createAppError(400, 'DESKTOP_APP_STOP_COMMAND_MISSING', '请填写关闭命令');
-  }
+  if (!name) throw createAppError(400, 'DESKTOP_APP_NAME_MISSING', '请填写服务名称');
+  if (!startCommand) throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', '请填写启动命令');
+  if (!stopCommand) throw createAppError(400, 'DESKTOP_APP_STOP_COMMAND_MISSING', '请填写关闭命令');
 
   let id = String(input.id || '').trim().toLowerCase();
   if (id) {
-    if (!APP_ID_PATTERN.test(id)) {
-      throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '本地应用 ID 格式无效');
-    }
-    if (!definitions[id]) {
-      throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
-    }
+    if (!APP_ID_PATTERN.test(id)) throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '本地应用 ID 格式无效');
+    if (!definitions[id]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
   } else {
     id = createUniqueId(name, definitions);
   }
@@ -116,7 +108,6 @@ function saveApp(input) {
   const raw = readConfig();
   const definitions = getDefinitions(raw);
   const { id, definition } = normalizeDefinition(input, definitions);
-
   raw.desktopApplications = definitions;
   raw.desktopApplications[id] = definition;
   writeConfig(raw);
@@ -127,11 +118,7 @@ function removeApp(id) {
   const appId = String(id || '').trim().toLowerCase();
   const raw = readConfig();
   const definitions = getDefinitions(raw);
-
-  if (!definitions[appId]) {
-    throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${appId}`, { appId });
-  }
-
+  if (!definitions[appId]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${appId}`, { appId });
   delete definitions[appId];
   if (Object.keys(definitions).length > 0) raw.desktopApplications = definitions;
   else delete raw.desktopApplications;
@@ -143,9 +130,4 @@ function hasApp(id) {
   return Boolean(getDefinitions()[String(id || '').trim().toLowerCase()]);
 }
 
-module.exports = {
-  getApps,
-  saveApp,
-  removeApp,
-  hasApp
-};
+module.exports = { getApps, saveApp, removeApp, hasApp };

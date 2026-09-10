@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 
 const TOKEN = process.env.MS_LOCAL_TOKEN || crypto.randomBytes(24).toString('hex');
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function safeEqual(a, b) {
   const left = Buffer.from(String(a || ''));
@@ -52,10 +53,52 @@ function isLoopbackAddress(value = '') {
   return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost';
 }
 
+function getHostName(hostHeader = '') {
+  const value = String(hostHeader || '').trim();
+  if (!value) return '';
+  try {
+    return normalizeIp(new URL(`http://${value}`).hostname);
+  } catch {
+    return normalizeIp(value.replace(/:\d+$/, ''));
+  }
+}
+
 function isLoopbackRequest(req) {
   const remoteAddress = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
-  const host = String(req.headers.host || '').split(':')[0];
+  const host = getHostName(req.headers.host);
   return isLoopbackAddress(remoteAddress) && (!host || isLoopbackAddress(host));
+}
+
+function isTrustedLocalOrigin(origin) {
+  const value = String(origin || '').trim();
+  if (!value || value === 'null') return false;
+  try {
+    const target = new URL(value);
+    return (target.protocol === 'http:' || target.protocol === 'https:')
+      && isLoopbackAddress(target.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function verifyOrigin(req) {
+  const method = String(req.method || 'GET').toUpperCase();
+  if (SAFE_METHODS.has(method) || !isLoopbackRequest(req)) {
+    return true;
+  }
+
+  const fetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
+  if (fetchSite === 'cross-site') {
+    return false;
+  }
+
+  const origin = req.headers.origin;
+  if (origin === undefined || origin === null || String(origin).trim() === '') {
+    // curl/CLI/本地脚本通常没有 Origin；loopback 限制仍然成立。
+    return true;
+  }
+
+  return isTrustedLocalOrigin(origin);
 }
 
 function requiresToken(req) {
@@ -77,6 +120,8 @@ module.exports = {
   extractToken,
   verifyToken,
   verifyRequest,
+  verifyOrigin,
   requiresToken,
-  isLoopbackRequest
+  isLoopbackRequest,
+  isTrustedLocalOrigin
 };

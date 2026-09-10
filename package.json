@@ -13,7 +13,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "electron:dev": "ELECTRON_START_URL=http://localhost:3001 MS_ELECTRON_EXTERNAL_BACKEND=1 electron .",
     "build": "cd frontend && npm run build",
-    "verify:desktop": "node --check electron.js && node --check electron-preload.js && node --check backend/controllers/desktopUpdateController.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/desktopUpdateService.js && node --check backend/services/backendShutdownService.js && node --check scripts/prepare-desktop-release.js && bash -n scripts/install-local-app.sh && npm run build",
+    "verify:desktop": "node --check electron.js && node --check electron-security.js && node --check electron-preload.js && node --check backend/middleware/localAuth.js && node --check backend/controllers/desktopUpdateController.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/desktopUpdateGuardService.js && node --check backend/services/desktopUpdateService.js && node --check backend/services/backendShutdownService.js && node --check backend/utils/privateFile.js && node --check scripts/prepare-desktop-release.js && bash -n scripts/install-local-app.sh && npm run build",
     "electron:app": "npm run build && electron-builder --mac --dir",
     "electron:build": "npm run electron:app",
     "pack": "npm run electron:app",
@@ -48,6 +48,7 @@
     "asar": false,
     "files": [
       "electron.js",
+      "electron-security.js",
       "electron-preload.js",
       "backend/**/*",
       "frontend/dist/**/*",
@@ -62,16 +63,9 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "target": [
-        "dmg",
-        "zip"
-      ]
+      "target": ["dmg", "zip"]
     },
-    "dmg": {
-      "title": "Local Service Hub"
-    },
-    "directories": {
-      "buildResources": "build"
-    }
+    "dmg": { "title": "Local Service Hub" },
+    "directories": { "buildResources": "build" }
   }
 }

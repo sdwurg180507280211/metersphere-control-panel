@@ -35,5 +35,5 @@ jobs:
       - name: Verify desktop
         run: npm run verify:desktop
 
-      - name: Test desktop updater networking
-        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js
+      - name: Test desktop updater and hardening
+        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js

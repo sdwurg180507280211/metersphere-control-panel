@@ -1,5 +1,6 @@
 const path = require('path');
 const desktopUpdateService = require('../services/desktopUpdateService');
+const desktopUpdateGuardService = require('../services/desktopUpdateGuardService');
 const { createAppError, sendError } = require('../utils/errors');
 const packageJson = require('../../package.json');
 
@@ -74,11 +75,7 @@ const desktopUpdateController = {
         }
       });
     } catch (error) {
-      sendError(res, createAppError(
-        502,
-        'DESKTOP_UPDATE_CHECK_FAILED',
-        `检查更新失败: ${error.message}`
-      ));
+      sendError(res, createAppError(502, 'DESKTOP_UPDATE_CHECK_FAILED', `检查更新失败: ${error.message}`));
     }
   },
 
@@ -89,6 +86,8 @@ const desktopUpdateController = {
         throw createAppError(400, 'DESKTOP_UPDATE_NOT_PACKAGED', '在线安装只支持已打包的 macOS App');
       }
 
+      await desktopUpdateGuardService.assertUpdateAllowed();
+
       const update = await desktopUpdateService.checkForUpdate({
         currentVersion: runtime.version,
         arch: runtime.arch
@@ -98,6 +97,8 @@ const desktopUpdateController = {
       }
 
       const prepared = await desktopUpdateService.prepareUpdate(update);
+      await desktopUpdateGuardService.assertUpdateAllowed();
+
       await desktopUpdateService.launchInstallHelper({
         targetAppPath: getTargetAppPath(),
         stagedAppPath: prepared.stagedPath,
@@ -126,11 +127,7 @@ const desktopUpdateController = {
         sendError(res, error);
         return;
       }
-      sendError(res, createAppError(
-        500,
-        'DESKTOP_UPDATE_INSTALL_FAILED',
-        `安装更新失败: ${error.message}`
-      ));
+      sendError(res, createAppError(500, 'DESKTOP_UPDATE_INSTALL_FAILED', `安装更新失败: ${error.message}`));
     }
   }
 };
