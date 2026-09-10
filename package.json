@@ -1,6 +1,6 @@
 {
   "name": "metersphere-control-panel",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "macOS 本地服务启动与关闭控制中心",
   "author": "MeterSphere Team",
   "main": "electron.js",
@@ -70,9 +70,16 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
-    "dmg": { "title": "Local Service Hub" },
-    "directories": { "buildResources": "build" }
+    "dmg": {
+      "title": "Local Service Hub"
+    },
+    "directories": {
+      "buildResources": "build"
+    }
   }
 }
