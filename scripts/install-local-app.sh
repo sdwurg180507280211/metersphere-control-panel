@@ -44,6 +44,16 @@ rollback_install() {
   fi
 }
 
+read_packaged_electron_version() {
+  local app_path="$1"
+  local framework_plist
+  framework_plist="$(find "$app_path/Contents/Frameworks/Electron Framework.framework" -path '*/Resources/Info.plist' -type f -print -quit 2>/dev/null || true)"
+  if [[ -z "$framework_plist" || ! -f "$framework_plist" ]]; then
+    return 1
+  fi
+  /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$framework_plist" 2>/dev/null
+}
+
 trap on_exit EXIT
 
 echo "[1/6] 校验桌面端代码与前端构建"
@@ -63,6 +73,20 @@ if [[ ! -x "$SOURCE_EXECUTABLE" || ! -f "${SOURCE_APP}/Contents/Info.plist" ]]; 
   echo "错误：构建产物不完整，缺少可执行文件或 Info.plist。" >&2
   exit 1
 fi
+
+EXPECTED_ELECTRON_VERSION="$(node -p "require('./package.json').build.electronVersion")"
+ACTUAL_ELECTRON_VERSION="$(read_packaged_electron_version "$SOURCE_APP" || true)"
+if [[ -z "$ACTUAL_ELECTRON_VERSION" ]]; then
+  echo "错误：无法读取新 App 的 Electron Framework 版本，旧版本未被替换。" >&2
+  exit 1
+fi
+if [[ "$ACTUAL_ELECTRON_VERSION" != "$EXPECTED_ELECTRON_VERSION" ]]; then
+  echo "错误：Electron 运行时版本不一致，期望 $EXPECTED_ELECTRON_VERSION，实际 $ACTUAL_ELECTRON_VERSION。" >&2
+  echo "旧版本未被替换。" >&2
+  exit 1
+fi
+
+echo "      Electron runtime: ${ACTUAL_ELECTRON_VERSION}"
 
 echo "[3/6] 预复制新版本"
 mkdir -p "$INSTALL_DIR"

@@ -4,6 +4,9 @@
   "description": "macOS 本地服务启动与关闭控制中心",
   "author": "MeterSphere Team",
   "main": "electron.js",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "predev": "node scripts/clean-port.js 3000 5000 && node scripts/clean-port.js 3001 5000",
@@ -13,10 +16,13 @@
     "dev:frontend": "cd frontend && npm run dev",
     "electron:dev": "ELECTRON_START_URL=http://localhost:3001 MS_ELECTRON_EXTERNAL_BACKEND=1 electron .",
     "build": "cd frontend && npm run build",
-    "verify:desktop": "node --check electron.js && node --check electron-security.js && node --check electron-preload.js && node --check backend/middleware/localAuth.js && node --check backend/controllers/desktopUpdateController.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/desktopUpdateGuardService.js && node --check backend/services/desktopUpdateService.js && node --check backend/services/backendShutdownService.js && node --check backend/utils/privateFile.js && node --check scripts/prepare-desktop-release.js && bash -n scripts/install-local-app.sh && npm run build",
+    "verify:electron-runtime": "node scripts/verify-electron-runtime.js",
+    "verify:desktop": "npm run verify:electron-runtime && node --check electron.js && node --check electron-security.js && node --check electron-preload.js && node --check backend/middleware/localAuth.js && node --check backend/controllers/desktopUpdateController.js && node --check backend/services/desktopAppService.js && node --check backend/services/desktopAppConfigService.js && node --check backend/services/desktopUpdateGuardService.js && node --check backend/services/desktopUpdateService.js && node --check backend/services/backendShutdownService.js && node --check backend/utils/privateFile.js && node --check scripts/prepare-desktop-release.js && node --check scripts/verify-electron-runtime.js && bash -n scripts/install-local-app.sh && npm run build",
+    "preelectron:app": "npm run verify:electron-runtime",
     "electron:app": "npm run build && electron-builder --mac --dir",
     "electron:build": "npm run electron:app",
     "pack": "npm run electron:app",
+    "predist": "npm run verify:electron-runtime",
     "dist": "npm run build && electron-builder --mac",
     "install:local": "bash scripts/install-local-app.sh",
     "desktop:version": "node scripts/prepare-desktop-release.js",
@@ -44,6 +50,7 @@
   "build": {
     "appId": "com.localservicehub.desktop",
     "productName": "Local Service Hub",
+    "electronVersion": "44.3.0",
     "artifactName": "Local-Service-Hub-${version}-${arch}.${ext}",
     "asar": false,
     "files": [

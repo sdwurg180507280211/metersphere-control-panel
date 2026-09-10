@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.12.0'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -35,5 +35,5 @@ jobs:
       - name: Verify desktop
         run: npm run verify:desktop
 
-      - name: Test desktop updater and hardening
-        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js
+      - name: Test desktop updater, hardening and runtime policy
+        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js

@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '22.12.0'
           cache: npm
           cache-dependency-path: |
             package-lock.json
@@ -53,13 +53,45 @@ jobs:
       - name: Verify desktop
         run: npm run verify:desktop
 
-      - name: Test desktop updater networking
-        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js
+      - name: Test desktop updater, hardening and runtime policy
+        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js
 
       - name: Build x64 and arm64 release assets
         run: |
           rm -rf dist
           npx electron-builder --mac --x64 --arm64 --publish never
+
+      - name: Verify packaged Electron runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ELECTRON_VERSION="$(node -p "require('./package.json').build.electronVersion")"
+          if [[ -z "$ELECTRON_VERSION" || "$ELECTRON_VERSION" == "undefined" ]]; then
+            echo "缺少 build.electronVersion，无法确认正式 App 的 Electron 运行时" >&2
+            exit 1
+          fi
+
+          APP_COUNT=0
+          while IFS= read -r APP; do
+            APP_COUNT=$((APP_COUNT + 1))
+            FRAMEWORK_PLIST="$(find "$APP/Contents/Frameworks/Electron Framework.framework" -path '*/Resources/Info.plist' -type f -print -quit)"
+            if [[ -z "$FRAMEWORK_PLIST" || ! -f "$FRAMEWORK_PLIST" ]]; then
+              echo "无法读取 Electron Framework Info.plist: $APP" >&2
+              exit 1
+            fi
+            ACTUAL_ELECTRON_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$FRAMEWORK_PLIST")"
+            if [[ "$ACTUAL_ELECTRON_VERSION" != "$ELECTRON_VERSION" ]]; then
+              echo "Electron 运行时版本不一致: $APP 期望=$ELECTRON_VERSION 实际=$ACTUAL_ELECTRON_VERSION" >&2
+              exit 1
+            fi
+            echo "验证通过: $APP -> Electron $ACTUAL_ELECTRON_VERSION"
+          done < <(find dist -maxdepth 3 -type d -name "Local Service Hub.app" -print)
+
+          if [[ "$APP_COUNT" -ne 2 ]]; then
+            echo "期望得到 x64/arm64 两个 App，实际找到 $APP_COUNT 个" >&2
+            exit 1
+          fi
+          echo "ELECTRON_VERSION=$ELECTRON_VERSION" >> "$GITHUB_ENV"
 
       - name: Build delta packages
         if: env.DISABLE_DELTA != 'true'
@@ -73,11 +105,10 @@ jobs:
           if [[ -n "$PREV_TAG" && -z "$(git diff --name-only "$PREV_TAG" HEAD -- frontend/public/live2d)" ]]; then
             LIVE2D_CHANGED=false
           fi
-          ELECTRON_VERSION="$(node -p "require('electron/package.json').version")"
           echo "PREV_TAG=${PREV_TAG:-<none>} LIVE2D_CHANGED=$LIVE2D_CHANGED ELECTRON_VERSION=$ELECTRON_VERSION"
           {
             echo "LIVE2D_CHANGED=$LIVE2D_CHANGED"
-            echo "ELECTRON_VERSION=$ELECTRON_VERSION"
+            echo "DELTA_AVAILABLE=true"
           } >> "$GITHUB_ENV"
 
           find dist -maxdepth 3 -type d -name "Local Service Hub.app" | while read -r APP; do
@@ -165,7 +196,7 @@ jobs:
           }
 
           const deltas = [];
-          if (process.env.ELECTRON_VERSION) {
+          if (process.env.DELTA_AVAILABLE === 'true') {
             for (const arch of ['x64', 'arm64']) {
               const name = `Local-Service-Hub-${version}-${arch}-delta.zip`;
               const file = path.join('dist', name);
