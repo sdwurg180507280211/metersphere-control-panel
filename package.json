@@ -61,7 +61,6 @@
       "frontend/dist/**/*",
       "package.json",
       "!frontend/src",
-      "!frontend/dist/live2d",
       "!scripts",
       "!docs",
       "!**/*.md",

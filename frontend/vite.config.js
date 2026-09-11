@@ -26,13 +26,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'live2d-vendor': ['pixi.js', 'pixi-live2d-display']
-        }
-      }
-    }
+    emptyOutDir: true
   }
 })

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState, lazy, Suspense } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useServiceStore, useBuildStore, useLogStore, usePackageStore, useConfigStore } from './store/useAppStore'
@@ -12,14 +12,7 @@ import SqlTab from './components/SqlTab'
 import ConnectionStatus from './components/ConnectionStatus'
 import KeyboardShortcuts from './components/KeyboardShortcuts'
 import TabTransition from './components/TabTransition'
-import { isPluginEnabled, getPlugin } from './plugins/registry'
-import './plugins/live2d/index' // registers the plugin (no code loaded yet)
 import './styles/App.css'
-
-// Lazy-loaded Live2D components — only fetched when the plugin is activated
-const LazyWaifuRoot = lazy(() =>
-  import('./plugins/live2d/ui/WaifuRoot.jsx').then((m) => ({ default: m.default }))
-)
 
 const TAB_ITEMS = [
   {
@@ -67,16 +60,6 @@ const TAB_ITEMS = [
 function App() {
   const { activeTab, setActiveTab, syncHash } = useUiStore()
   const searchInputRef = useRef(null)
-  const selectorRef = useRef(null)
-  const [currentWaifuModel, setCurrentWaifuModel] = useState('rice')
-  const [waifuReady, setWaifuReady] = useState(false)
-  const dragStateRef = useRef({
-    isDragging: false,
-    startX: 0,
-    startY: 0,
-    startLeft: 0,
-    startTop: 0
-  })
 
   const { fetchServices, fetchCatalog } = useServiceStore()
   const { fetchModules, fetchActiveBuilds } = useBuildStore()
@@ -88,32 +71,10 @@ function App() {
   const dirtyFields = useConfigStore((s) => s.dirtyFields)
   const saving = useConfigStore((s) => s.saving)
   const applying = useConfigStore((s) => s.applying)
-  const resolved = useConfigStore((s) => s.resolved)
   const hasUnsavedConfigChanges = dirtyFields.length > 0 && !saving && !applying
   const activeTabMeta = TAB_ITEMS.find((item) => item.id === activeTab) || TAB_ITEMS[0]
 
   useWebSocket()
-
-  // Activate/deactivate Live2D plugin based on config
-  useEffect(() => {
-    const live2dPlugin = getPlugin('live2d')
-    if (!live2dPlugin) return
-
-    const waifuEnabled = resolved?.waifu?.enabled === true
-    if (waifuEnabled && !live2dPlugin.enabled) {
-      live2dPlugin.activate().then(() => {
-        setWaifuReady(true)
-        if (live2dPlugin.DEFAULT_WAIFU_MODEL_ID) {
-          setCurrentWaifuModel(live2dPlugin.DEFAULT_WAIFU_MODEL_ID)
-        }
-      }).catch((err) => {
-        console.warn('Live2D plugin activation failed:', err)
-      })
-    } else if (!waifuEnabled && live2dPlugin.enabled) {
-      live2dPlugin.deactivate()
-      setWaifuReady(false)
-    }
-  }, [resolved?.waifu?.enabled])
 
   // 处理浏览器 Hash 变化 (前进/后退)
   useEffect(() => {
@@ -208,65 +169,6 @@ function App() {
     window.dispatchEvent(new CustomEvent('focusSearch', { detail: activeTab }))
   }, [activeTab])
 
-  // 模型选择器拖拽逻辑
-  useEffect(() => {
-    if (!waifuReady) return
-
-    const selectorDiv = selectorRef.current
-    if (!selectorDiv) return
-
-    const onDragStart = (e) => {
-      // 如果点击的是 select 元素本身，不触发拖拽
-      if (e.target.tagName === 'SELECT') return
-
-      e.stopPropagation()
-      const state = dragStateRef.current
-      state.isDragging = true
-      state.startX = e.clientX
-      state.startY = e.clientY
-
-      const rect = selectorDiv.getBoundingClientRect()
-      state.startLeft = rect.left
-      state.startTop = rect.top
-
-      // 移除 right/bottom，改用 left/top 定位
-      selectorDiv.style.right = 'auto'
-      selectorDiv.style.bottom = 'auto'
-      selectorDiv.style.left = rect.left + 'px'
-      selectorDiv.style.top = rect.top + 'px'
-
-      document.addEventListener('mousemove', onDragMove)
-      document.addEventListener('mouseup', onDragEnd)
-    }
-
-    const onDragMove = (e) => {
-      const state = dragStateRef.current
-      if (!state.isDragging) return
-
-      const dx = e.clientX - state.startX
-      const dy = e.clientY - state.startY
-
-      selectorDiv.style.left = (state.startLeft + dx) + 'px'
-      selectorDiv.style.top = (state.startTop + dy) + 'px'
-    }
-
-    const onDragEnd = () => {
-      dragStateRef.current.isDragging = false
-      document.removeEventListener('mousemove', onDragMove)
-      document.removeEventListener('mouseup', onDragEnd)
-    }
-
-    selectorDiv.addEventListener('mousedown', onDragStart)
-
-    return () => {
-      selectorDiv.removeEventListener('mousedown', onDragStart)
-      document.removeEventListener('mousemove', onDragMove)
-      document.removeEventListener('mouseup', onDragEnd)
-    }
-  }, [waifuReady])
-
-  const waifuModels = getPlugin('live2d')?.WAIFU_MODELS || {}
-
   return (
     <div className="app">
       <Toaster
@@ -333,37 +235,6 @@ function App() {
         onClearLogs={handleClearLogs}
         onFocusSearch={handleFocusSearch}
       />
-
-      {/* 看板娘模型切换下拉框 - 支持拖拽 */}
-      {waifuReady && (
-        <div ref={selectorRef} className="waifu-model-selector">
-          <div className="selector-wrapper">
-            <select
-              className="waifu-select"
-              value={currentWaifuModel}
-              onChange={(e) => {
-                setCurrentWaifuModel(e.target.value)
-                if (window.switchWaifuModel) {
-                  window.switchWaifuModel(e.target.value)
-                }
-              }}
-              title="切换看板娘"
-            >
-              {Object.values(waifuModels).map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {waifuReady && (
-        <Suspense fallback={null}>
-          <LazyWaifuRoot />
-        </Suspense>
-      )}
     </div>
   )
 }

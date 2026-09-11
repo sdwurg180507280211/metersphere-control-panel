@@ -170,20 +170,6 @@ function normalizeTunnelConfig(rawConfig = {}) {
   };
 }
 
-function normalizeWaifuConfig(rawConfig = {}) {
-  const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
-    ? rawConfig
-    : {};
-
-  return {
-    enabled: normalizeBoolean(config.enabled, false),
-    apiKey: normalizeString(config.apiKey, ''),
-    baseUrl: normalizeString(config.baseUrl, ''),
-    model: normalizeString(config.model, 'qwen3.5-plus'),
-    systemPrompt: normalizeString(config.systemPrompt, '')
-  };
-}
-
 function normalizeClaudeCodeConfig(rawConfig = {}) {
   const config = rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)
     ? rawConfig
@@ -281,7 +267,6 @@ function normalizeEditableConfig(rawConfig = {}) {
       redisson: normalizeString(config.properties?.redisson, DEFAULT_PROPERTIES_REDISSON || '/opt/metersphere/conf/redisson.yml')
     },
     tunnel: normalizeTunnelConfig(config.tunnel || {}),
-    waifu: normalizeWaifuConfig(config.waifu || {}),
     claudeCode: normalizeClaudeCodeConfig(config.claudeCode || {}),
     sshTunnel: normalizeSshTunnelConfig(config.sshTunnel || {}, config.tunnel || {}),
     package: normalizePackageConfig(config.package || {}),
@@ -393,7 +378,6 @@ function buildResolvedConfig(editableConfig = {}, options = {}) {
     jvmOptions: editable.jvmOptions,
     tunnel: editable.tunnel,
     properties: editable.properties,
-    waifu: editable.waifu,
     claudeCode: editable.claudeCode,
     sshTunnel: editable.sshTunnel,
     package: editable.package,
@@ -445,7 +429,6 @@ module.exports = {
   loadConfigFromFile,
   normalizeEditableConfig,
   normalizeTunnelConfig,
-  normalizeWaifuConfig,
   normalizeClaudeCodeConfig,
   normalizePackageConfig,
   normalizeServiceDefinition,
