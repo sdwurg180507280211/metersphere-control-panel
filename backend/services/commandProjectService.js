@@ -1,21 +1,21 @@
 const net = require('net');
 const { spawn, execFile } = require('child_process');
-const desktopAppConfigService = require('./desktopAppConfigService');
+const commandProjectConfigService = require('./commandProjectConfigService');
 const { createAppError } = require('../utils/errors');
 
 const STOP_COMMAND_TIMEOUT_MS = 15000;
 const STATUS_WAIT_MS = 5000;
 
 function getCatalog() {
-  return desktopAppConfigService.getApps();
+  return commandProjectConfigService.getProjects();
 }
 
-function getApp(id) {
-  const app = getCatalog().find((item) => item.id === id);
-  if (!app) {
+function getProject(id) {
+  const project = getCatalog().find((item) => item.id === id);
+  if (!project) {
     throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
   }
-  return app;
+  return project;
 }
 
 function checkPort(host, port, timeoutMs = 500) {
@@ -44,8 +44,8 @@ function getShellInvocation(command) {
 }
 
 async function getStatus(id) {
-  const app = getApp(id);
-  if (!app.statusPort) {
+  const project = getProject(id);
+  if (!project.statusPort) {
     return {
       id,
       running: null,
@@ -55,19 +55,19 @@ async function getStatus(id) {
     };
   }
 
-  const running = await checkPort('127.0.0.1', app.statusPort);
+  const running = await checkPort('127.0.0.1', project.statusPort);
   return {
     id,
     running,
     statusKnown: true,
     phase: running ? 'running' : 'stopped',
-    port: app.statusPort
+    port: project.statusPort
   };
 }
 
 async function getAllStatus() {
-  const apps = getCatalog();
-  const entries = await Promise.all(apps.map(async (app) => [app.id, await getStatus(app.id)]));
+  const projects = getCatalog();
+  const entries = await Promise.all(projects.map(async (project) => [project.id, await getStatus(project.id)]));
   return Object.fromEntries(entries);
 }
 
@@ -125,28 +125,28 @@ async function waitForPort(port, expectedOpen, timeoutMs = STATUS_WAIT_MS) {
 }
 
 async function start(id) {
-  const app = getApp(id);
-  if (!app.startCommand) {
-    throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', `${app.name} 未配置启动命令`);
+  const project = getProject(id);
+  if (!project.startCommand) {
+    throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', `${project.name} 未配置启动命令`);
   }
 
   const current = await getStatus(id);
   if (current.running === true) return current;
 
   try {
-    await runDetached(app.startCommand);
+    await runDetached(project.startCommand);
   } catch (error) {
-    throw createAppError(500, 'DESKTOP_APP_START_FAILED', `${app.name} 启动命令执行失败: ${error.message}`);
+    throw createAppError(500, 'DESKTOP_APP_START_FAILED', `${project.name} 启动命令执行失败: ${error.message}`);
   }
 
-  if (app.statusPort) {
-    const running = await waitForPort(app.statusPort, true);
+  if (project.statusPort) {
+    const running = await waitForPort(project.statusPort, true);
     return {
       id,
       running,
       statusKnown: true,
       phase: running ? 'running' : 'starting',
-      port: app.statusPort
+      port: project.statusPort
     };
   }
 
@@ -160,24 +160,24 @@ async function start(id) {
 }
 
 async function stop(id) {
-  const app = getApp(id);
-  if (!app.stopCommand) {
-    throw createAppError(400, 'DESKTOP_APP_STOP_COMMAND_MISSING', `${app.name} 未配置关闭命令`);
+  const project = getProject(id);
+  if (!project.stopCommand) {
+    throw createAppError(400, 'DESKTOP_APP_STOP_COMMAND_MISSING', `${project.name} 未配置关闭命令`);
   }
 
   const current = await getStatus(id);
   if (current.running === false) return current;
 
-  await runAndWait(app.stopCommand);
+  await runAndWait(project.stopCommand);
 
-  if (app.statusPort) {
-    const running = await waitForPort(app.statusPort, false);
+  if (project.statusPort) {
+    const running = await waitForPort(project.statusPort, false);
     return {
       id,
       running,
       statusKnown: true,
       phase: running ? 'stopping' : 'stopped',
-      port: app.statusPort
+      port: project.statusPort
     };
   }
 

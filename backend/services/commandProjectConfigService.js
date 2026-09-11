@@ -5,7 +5,7 @@ const { CONFIG_PATH, loadConfigFromFile } = require('../config');
 const { createAppError } = require('../utils/errors');
 const { ensureParentDirectory, secureFile, copyPrivateFile, writePrivateText } = require('../utils/privateFile');
 
-const APP_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const PROJECT_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const COMMAND_PROJECT_TYPE = 'command';
 
 function isObjectRecord(value) {
@@ -35,7 +35,7 @@ function writeConfig(rawConfig) {
   secureFile(CONFIG_PATH);
 }
 
-function getProjects(raw) {
+function getPersistedProjects(raw) {
   return isObjectRecord(raw.projects) ? raw.projects : {};
 }
 
@@ -54,7 +54,7 @@ function toCommandDefinition(rawDefinition = {}) {
 function getCommandDefinitions(raw = readConfig()) {
   if (hasOwn(raw, 'projects')) {
     return Object.fromEntries(
-      Object.entries(getProjects(raw)).filter(([, definition]) => (
+      Object.entries(getPersistedProjects(raw)).filter(([, definition]) => (
         isObjectRecord(definition) && definition.type === COMMAND_PROJECT_TYPE
       ))
     );
@@ -67,7 +67,7 @@ function getCommandDefinitions(raw = readConfig()) {
 
 function materializeProjects(raw) {
   const projects = hasOwn(raw, 'projects')
-    ? { ...getProjects(raw) }
+    ? { ...getPersistedProjects(raw) }
     : Object.fromEntries(
       Object.entries(getLegacyDefinitions(raw)).map(([id, definition]) => [id, toCommandDefinition(definition)])
     );
@@ -127,7 +127,7 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
 
   let id = String(input.id || '').trim().toLowerCase();
   if (id) {
-    if (!APP_ID_PATTERN.test(id)) throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '本地应用 ID 格式无效');
+    if (!PROJECT_ID_PATTERN.test(id)) throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '本地应用 ID 格式无效');
     if (!definitions[id]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
   } else {
     id = createUniqueId(name, reservedDefinitions);
@@ -145,7 +145,7 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
   };
 }
 
-function getApps() {
+function getProjects() {
   const definitions = getCommandDefinitions();
   return Object.entries(definitions).map(([id, raw = {}]) => ({
     id,
@@ -157,7 +157,7 @@ function getApps() {
   }));
 }
 
-function saveApp(input) {
+function saveProject(input) {
   const raw = readConfig();
   const definitions = getCommandDefinitions(raw);
   const projects = materializeProjects(raw);
@@ -167,21 +167,28 @@ function saveApp(input) {
   return { id, ...definition };
 }
 
-function removeApp(id) {
-  const appId = String(id || '').trim().toLowerCase();
+function removeProject(id) {
+  const projectId = String(id || '').trim().toLowerCase();
   const raw = readConfig();
   const definitions = getCommandDefinitions(raw);
-  if (!definitions[appId]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${appId}`, { appId });
+  if (!definitions[projectId]) {
+    throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${projectId}`, { appId: projectId });
+  }
 
   const projects = materializeProjects(raw);
-  delete projects[appId];
+  delete projects[projectId];
   raw.projects = projects;
   writeConfig(raw);
-  return { id: appId };
+  return { id: projectId };
 }
 
-function hasApp(id) {
+function hasProject(id) {
   return Boolean(getCommandDefinitions()[String(id || '').trim().toLowerCase()]);
 }
 
-module.exports = { getApps, saveApp, removeApp, hasApp };
+module.exports = {
+  getProjects,
+  saveProject,
+  removeProject,
+  hasProject
+};

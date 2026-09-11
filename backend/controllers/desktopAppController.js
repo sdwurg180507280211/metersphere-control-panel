@@ -1,11 +1,11 @@
-const desktopAppService = require('../services/desktopAppService');
-const desktopAppConfigService = require('../services/desktopAppConfigService');
+const commandProjectService = require('../services/commandProjectService');
+const commandProjectConfigService = require('../services/commandProjectConfigService');
 const { createAppError, sendError } = require('../utils/errors');
 
 const desktopAppController = {
   getCatalog(req, res) {
     try {
-      res.json({ success: true, data: desktopAppService.getCatalog() });
+      res.json({ success: true, data: commandProjectService.getCatalog() });
     } catch (error) {
       sendError(res, error);
     }
@@ -13,7 +13,7 @@ const desktopAppController = {
 
   async getAllStatus(req, res) {
     try {
-      res.json({ success: true, data: await desktopAppService.getAllStatus() });
+      res.json({ success: true, data: await commandProjectService.getAllStatus() });
     } catch (error) {
       sendError(res, error);
     }
@@ -21,7 +21,7 @@ const desktopAppController = {
 
   save(req, res) {
     try {
-      const saved = desktopAppConfigService.saveApp(req.body || {});
+      const saved = commandProjectConfigService.saveProject(req.body || {});
       res.json({ success: true, data: saved, message: '本地应用配置已保存' });
     } catch (error) {
       sendError(res, error);
@@ -31,8 +31,8 @@ const desktopAppController = {
   async remove(req, res) {
     try {
       const { id } = req.params;
-      if (desktopAppConfigService.hasApp(id)) {
-        const status = await desktopAppService.getStatus(id);
+      if (commandProjectConfigService.hasProject(id)) {
+        const status = await commandProjectService.getStatus(id);
         if (status.running === true) {
           throw createAppError(409, 'DESKTOP_APP_RUNNING', '请先关闭服务再删除配置', {
             appId: id,
@@ -40,7 +40,7 @@ const desktopAppController = {
           });
         }
       }
-      const removed = desktopAppConfigService.removeApp(id);
+      const removed = commandProjectConfigService.removeProject(id);
       res.json({ success: true, data: removed, message: '本地应用已删除' });
     } catch (error) {
       sendError(res, error);
@@ -49,7 +49,7 @@ const desktopAppController = {
 
   async start(req, res) {
     try {
-      res.json({ success: true, data: await desktopAppService.start(req.params.id) });
+      res.json({ success: true, data: await commandProjectService.start(req.params.id) });
     } catch (error) {
       sendError(res, error);
     }
@@ -57,7 +57,7 @@ const desktopAppController = {
 
   async stop(req, res) {
     try {
-      res.json({ success: true, data: await desktopAppService.stop(req.params.id) });
+      res.json({ success: true, data: await commandProjectService.stop(req.params.id) });
     } catch (error) {
       sendError(res, error);
     }

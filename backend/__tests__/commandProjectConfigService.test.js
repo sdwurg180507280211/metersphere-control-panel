@@ -14,7 +14,7 @@ function readConfig(configPath) {
 }
 
 function loadServices(initialConfig) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-project-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'command-project-config-'));
   const configPath = path.join(root, 'config.json');
   tempRoots.push(root);
   writeConfig(configPath, initialConfig);
@@ -22,8 +22,8 @@ function loadServices(initialConfig) {
   jest.resetModules();
   return {
     configPath,
-    configService: require('../services/desktopAppConfigService'),
-    runtimeService: require('../services/desktopAppService')
+    configService: require('../services/commandProjectConfigService'),
+    runtimeService: require('../services/commandProjectService')
   };
 }
 
@@ -36,7 +36,7 @@ afterEach(() => {
   }
 });
 
-describe('Command project config migration', () => {
+describe('Command Project config migration', () => {
   test('reads legacy desktopApplications without mutating the file', () => {
     const initial = {
       projectRoot: '/tmp/metersphere',
@@ -51,7 +51,7 @@ describe('Command project config migration', () => {
     };
     const { configPath, configService } = loadServices(initial);
 
-    expect(configService.getApps()).toEqual([{
+    expect(configService.getProjects()).toEqual([{
       id: 'deepseek',
       type: 'command',
       name: 'DeepSeek Harness',
@@ -78,10 +78,10 @@ describe('Command project config migration', () => {
       }
     });
 
-    expect(configService.getApps()).toEqual([
+    expect(configService.getProjects()).toEqual([
       expect.objectContaining({ id: 'deepseek', type: 'command', statusPort: null })
     ]);
-    expect(configService.hasApp('advanced')).toBe(false);
+    expect(configService.hasProject('advanced')).toBe(false);
   });
 
   test('projects is the source of truth when both schemas exist', () => {
@@ -103,8 +103,8 @@ describe('Command project config migration', () => {
       }
     });
 
-    expect(configService.getApps().map((item) => item.id)).toEqual(['current']);
-    expect(configService.hasApp('legacy')).toBe(false);
+    expect(configService.getProjects().map((item) => item.id)).toEqual(['current']);
+    expect(configService.hasProject('legacy')).toBe(false);
   });
 
   test('adding a project migrates every legacy command project into projects', () => {
@@ -120,7 +120,7 @@ describe('Command project config migration', () => {
       }
     });
 
-    const saved = configService.saveApp({
+    const saved = configService.saveProject({
       name: 'Node API',
       startCommand: 'node server.js',
       stopCommand: 'pkill -f server.js',
@@ -146,7 +146,7 @@ describe('Command project config migration', () => {
       }
     });
 
-    configService.saveApp({
+    configService.saveProject({
       id: 'deepseek',
       name: 'DeepSeek Harness 2',
       startCommand: 'new-start',
@@ -174,14 +174,14 @@ describe('Command project config migration', () => {
       }
     });
 
-    configService.removeApp('deepseek');
+    configService.removeProject('deepseek');
     expect(readConfig(configPath)).toMatchObject({ projects: {} });
     expect(readConfig(configPath).desktopApplications).toBeUndefined();
 
     jest.resetModules();
     process.env.MS_CONFIG_PATH = configPath;
-    const reloaded = require('../services/desktopAppConfigService');
-    expect(reloaded.getApps()).toEqual([]);
+    const reloaded = require('../services/commandProjectConfigService');
+    expect(reloaded.getProjects()).toEqual([]);
   });
 
   test('ignores non-command projects, rejects unsupported writes and preserves their ids', () => {
@@ -194,10 +194,10 @@ describe('Command project config migration', () => {
       }
     });
 
-    expect(configService.hasApp('advanced')).toBe(false);
+    expect(configService.hasProject('advanced')).toBe(false);
     let unsupportedError;
     try {
-      configService.saveApp({
+      configService.saveProject({
         type: 'python',
         name: 'Python Project',
         startCommand: 'python app.py',
@@ -208,7 +208,7 @@ describe('Command project config migration', () => {
     }
     expect(unsupportedError).toMatchObject({ code: 'DESKTOP_APP_TYPE_UNSUPPORTED' });
 
-    const saved = configService.saveApp({
+    const saved = configService.saveProject({
       name: 'Advanced',
       startCommand: 'command-start',
       stopCommand: 'command-stop'
