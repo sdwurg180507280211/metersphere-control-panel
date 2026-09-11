@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import DesktopAppEditor from './DesktopAppEditor'
+import CommandProjectEditor from './DesktopAppEditor'
+import { PROJECT_TYPES, buildProjectViewModel } from '../projectModel'
 import './DesktopShell.css'
 
 const POLL_MS = 3000
@@ -53,16 +54,16 @@ function summarizeMeterSphere(catalog, status, available) {
   return { total, running, tone: 'stopped', label: '全部已停止', detail: `${total} 个 MeterSphere 服务` }
 }
 
-function MeterSphereProjectRow({ summary, onOpen }) {
+function MeterSphereProjectRow({ project, summary, onOpen }) {
   return (
     <article className="desktop-service-row desktop-project-row-featured">
       <div className="desktop-service-identity">
         <div className="desktop-project-icon" aria-hidden="true">MS</div>
         <div>
           <button type="button" className="desktop-service-title desktop-project-title" onClick={onOpen}>
-            MeterSphere
+            {project.name}
           </button>
-          <span>Java / Vue · {summary.total ? `${summary.total} 个服务` : '多服务项目'}</span>
+          <span>内置工作区 · Java / Vue · {summary.total ? `${summary.total} 个服务` : '多服务项目'}</span>
         </div>
       </div>
 
@@ -89,12 +90,12 @@ function readManualRunning() {
   }
 }
 
-function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, onVisit, onEdit }) {
+function CommandProjectRow({ project, status, manualRunning, busy, onStart, onStop, onVisit, onEdit }) {
   const statusKnown = status?.statusKnown === true
   const running = statusKnown ? status?.running === true : manualRunning === true
   const phase = busy || (statusKnown ? status?.phase : running ? 'manual-running' : 'unknown')
   const meta = PHASE_META[phase] || PHASE_META.unknown
-  const port = status?.port || item.statusPort
+  const port = status?.port || project.statusPort
   const canVisit = Boolean(port && statusKnown && running && !busy)
   const actionIsStop = running || busy === 'stopping'
   const actionLabel = busy === 'starting'
@@ -130,9 +131,9 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
             onClick={handleTitleClick}
             title={canVisit ? `在浏览器中打开 http://127.0.0.1:${port}` : undefined}
           >
-            {item.name}
+            {project.name}
           </button>
-          <span>{port ? `127.0.0.1:${port}` : '未配置状态端口'}</span>
+          <span>{port ? `Command · 127.0.0.1:${port}` : 'Command · 未配置状态端口'}</span>
         </div>
       </div>
 
@@ -163,12 +164,46 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
   )
 }
 
+function ProjectRow({
+  project,
+  meterSphereSummary,
+  commandStatus,
+  manualRunning,
+  busy,
+  onOpenWorkspace,
+  onStart,
+  onStop,
+  onVisit,
+  onEdit
+}) {
+  if (project.type === PROJECT_TYPES.METERSPHERE) {
+    return <MeterSphereProjectRow project={project} summary={meterSphereSummary} onOpen={onOpenWorkspace} />
+  }
+
+  if (project.type === PROJECT_TYPES.COMMAND) {
+    return (
+      <CommandProjectRow
+        project={project}
+        status={commandStatus}
+        manualRunning={manualRunning}
+        busy={busy}
+        onStart={onStart}
+        onStop={onStop}
+        onVisit={onVisit}
+        onEdit={onEdit}
+      />
+    )
+  }
+
+  return null
+}
+
 export default function DesktopShell() {
-  const [catalog, setCatalog] = useState([])
-  const [status, setStatus] = useState({})
+  const [commandProjects, setCommandProjects] = useState([])
+  const [commandStatus, setCommandStatus] = useState({})
   const [meterSphere, setMeterSphere] = useState({ catalog: [], status: {}, available: true })
   const [manualRunning, setManualRunning] = useState(readManualRunning)
-  const [busy, setBusy] = useState({})
+  const [commandBusy, setCommandBusy] = useState({})
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [editor, setEditor] = useState(null)
@@ -194,13 +229,13 @@ export default function DesktopShell() {
         requestJson('/api/services/status')
       ]).catch(() => null)
 
-      const [[catalogData, statusData], meterSphereData] = await Promise.all([
+      const [[commandProjectsData, commandStatusData], meterSphereData] = await Promise.all([
         commandProjectsRequest,
         meterSphereRequest
       ])
 
-      setCatalog(Array.isArray(catalogData) ? catalogData : [])
-      setStatus(statusData || {})
+      setCommandProjects(Array.isArray(commandProjectsData) ? commandProjectsData : [])
+      setCommandStatus(commandStatusData || {})
       if (meterSphereData) {
         const [meterSphereCatalog, meterSphereStatus] = meterSphereData
         setMeterSphere({
@@ -283,8 +318,8 @@ export default function DesktopShell() {
   }, [checkUpdate])
 
   useEffect(() => {
-    if (catalog.length === 0) return
-    const ids = new Set(catalog.map((item) => item.id))
+    if (commandProjects.length === 0) return
+    const ids = new Set(commandProjects.map((project) => project.id))
     setManualRunning((current) => {
       const next = Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id)))
       if (Object.keys(next).length === Object.keys(current).length) return current
@@ -295,14 +330,16 @@ export default function DesktopShell() {
       }
       return next
     })
-  }, [catalog])
+  }, [commandProjects])
 
-  const summary = useMemo(() => {
-    const running = catalog.filter((item) => status[item.id]?.running === true).length
-    const stopped = catalog.filter((item) => status[item.id]?.running === false).length
-    const unknown = catalog.filter((item) => status[item.id]?.statusKnown !== true).length
-    return { running, stopped, unknown, total: catalog.length }
-  }, [catalog, status])
+  const projects = useMemo(() => buildProjectViewModel(commandProjects), [commandProjects])
+
+  const commandSummary = useMemo(() => {
+    const running = commandProjects.filter((project) => commandStatus[project.id]?.running === true).length
+    const stopped = commandProjects.filter((project) => commandStatus[project.id]?.running === false).length
+    const unknown = commandProjects.filter((project) => commandStatus[project.id]?.statusKnown !== true).length
+    return { running, stopped, unknown, total: commandProjects.length }
+  }, [commandProjects, commandStatus])
 
   const meterSphereSummary = useMemo(
     () => summarizeMeterSphere(meterSphere.catalog, meterSphere.status, meterSphere.available),
@@ -321,11 +358,11 @@ export default function DesktopShell() {
     })
   }, [])
 
-  const runAction = useCallback(async (id, action) => {
-    setBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
+  const runCommandAction = useCallback(async (id, action) => {
+    setCommandBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
     try {
       await requestJson(`/api/services/desktop-apps/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
-      if (status[id]?.statusKnown !== true) {
+      if (commandStatus[id]?.statusKnown !== true) {
         rememberManualRunning(id, action === 'start')
       }
       toast.success(action === 'start' ? '启动命令已执行' : '关闭命令已执行')
@@ -335,18 +372,18 @@ export default function DesktopShell() {
     } catch (error) {
       toast.error(error.message || (action === 'start' ? '启动失败' : '关闭失败'))
     } finally {
-      setBusy((current) => {
+      setCommandBusy((current) => {
         const next = { ...current }
         delete next[id]
         return next
       })
     }
-  }, [refresh, rememberManualRunning, status])
+  }, [commandStatus, refresh, rememberManualRunning])
 
-  const visitService = useCallback(async (item) => {
-    const serviceStatus = status[item.id]
-    const port = serviceStatus?.port || item.statusPort
-    if (!port || serviceStatus?.statusKnown !== true || serviceStatus?.running !== true) return
+  const visitCommandProject = useCallback(async (project) => {
+    const projectStatus = commandStatus[project.id]
+    const port = projectStatus?.port || project.statusPort
+    if (!port || projectStatus?.statusKnown !== true || projectStatus?.running !== true) return
 
     const url = `http://127.0.0.1:${port}`
     try {
@@ -358,7 +395,7 @@ export default function DesktopShell() {
     } catch (error) {
       toast.error(error.message || '打开服务地址失败')
     }
-  }, [status])
+  }, [commandStatus])
 
   const openMeterSphereWorkspace = useCallback(async () => {
     if (!window.desktopBridge?.openWorkspace) {
@@ -372,7 +409,7 @@ export default function DesktopShell() {
     }
   }, [])
 
-  const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中' 
+  const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中'
   const formatSize = (bytes) => (
     bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`
   )
@@ -407,15 +444,15 @@ export default function DesktopShell() {
           </div>
         </div>
         <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
-          ＋ 添加项目
+          ＋ 添加 Command 项目
         </button>
       </header>
 
       <section className="desktop-summary-grid" aria-label="项目概览">
         <div className="desktop-summary-card">
           <span>全部项目</span>
-          <strong>{summary.total + 1}</strong>
-          <small>MeterSphere + Command 项目</small>
+          <strong>{projects.length}</strong>
+          <small>内置项目 + 持久化 Command 项目</small>
         </div>
         <div className="desktop-summary-card summary-running">
           <span>MeterSphere</span>
@@ -424,12 +461,12 @@ export default function DesktopShell() {
         </div>
         <div className="desktop-summary-card">
           <span>Command 项目</span>
-          <strong>{summary.total}</strong>
+          <strong>{commandSummary.total}</strong>
           <small>使用启动 / 关闭命令管理</small>
         </div>
         <div className="desktop-summary-card">
           <span>Command 运行中</span>
-          <strong>{summary.running}</strong>
+          <strong>{commandSummary.running}</strong>
           <small>状态端口可连接</small>
         </div>
       </section>
@@ -446,32 +483,31 @@ export default function DesktopShell() {
         </div>
 
         <div className="desktop-service-list">
-          <div className="desktop-project-section-label">高级项目</div>
-          <MeterSphereProjectRow summary={meterSphereSummary} onOpen={openMeterSphereWorkspace} />
-          <div className="desktop-project-section-label desktop-project-section-label-command">Command 项目</div>
-          {catalog.length === 0 ? (
+          {projects.map((project) => (
+            <ProjectRow
+              key={`${project.source}:${project.id}`}
+              project={project}
+              meterSphereSummary={meterSphereSummary}
+              commandStatus={commandStatus[project.id]}
+              manualRunning={manualRunning[project.id]}
+              busy={commandBusy[project.id]}
+              onOpenWorkspace={openMeterSphereWorkspace}
+              onStart={() => runCommandAction(project.id, 'start')}
+              onStop={() => runCommandAction(project.id, 'stop')}
+              onVisit={() => visitCommandProject(project)}
+              onEdit={() => setEditor({ mode: 'edit', project })}
+            />
+          ))}
+
+          {commandProjects.length === 0 && (
             <div className="desktop-empty-state desktop-empty-state-compact">
               <div className="desktop-empty-icon">＋</div>
               <strong>还没有 Command 项目</strong>
-              <span>添加项目名称、启动命令、关闭命令和可选状态端口后，就可以从这里直接管理。</span>
+              <span>MeterSphere 已作为内置项目存在；添加 Command 项目后，可从同一个 Project Center 管理其启动和关闭。</span>
               <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
-                添加第一个项目
+                添加第一个 Command 项目
               </button>
             </div>
-          ) : (
-            catalog.map((item) => (
-              <LocalServiceRow
-                key={item.id}
-                item={item}
-                status={status[item.id]}
-                manualRunning={manualRunning[item.id]}
-                busy={busy[item.id]}
-                onStart={() => runAction(item.id, 'start')}
-                onStop={() => runAction(item.id, 'stop')}
-                onVisit={() => visitService(item)}
-                onEdit={() => setEditor({ mode: 'edit', app: item })}
-              />
-            ))
           )}
         </div>
       </main>
@@ -500,8 +536,8 @@ export default function DesktopShell() {
       </footer>
 
       {editor && (
-        <DesktopAppEditor
-          app={editor.mode === 'edit' ? editor.app : null}
+        <CommandProjectEditor
+          project={editor.mode === 'edit' ? editor.project : null}
           onClose={() => setEditor(null)}
           onSaved={() => refresh(false)}
         />

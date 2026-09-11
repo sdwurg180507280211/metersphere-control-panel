@@ -11,19 +11,19 @@ async function requestJson(url, init) {
   return data.data
 }
 
-function buildInitial(app) {
+function buildInitial(project) {
   return {
-    id: app?.id || '',
-    name: app?.name || '',
-    startCommand: app?.startCommand || '',
-    stopCommand: app?.stopCommand || '',
-    statusPort: app?.statusPort || ''
+    id: project?.id || '',
+    name: project?.name || '',
+    startCommand: project?.startCommand || '',
+    stopCommand: project?.stopCommand || '',
+    statusPort: project?.statusPort || ''
   }
 }
 
-export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
-  const editing = Boolean(app?.id)
-  const [form, setForm] = useState(() => buildInitial(app))
+export default function CommandProjectEditor({ project = null, onClose, onSaved }) {
+  const editing = Boolean(project?.id)
+  const [form, setForm] = useState(() => buildInitial(project))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -43,6 +43,7 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...(editing ? { id: form.id } : {}),
+          type: 'command',
           name: form.name.trim(),
           startCommand: form.startCommand.trim(),
           stopCommand: form.stopCommand.trim(),
