@@ -500,6 +500,85 @@
   background: #eef5ff;
 }
 
+
+.desktop-project-section-label {
+  padding: 8px 10px 6px;
+  color: var(--mac-subtle);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-project-section-label-command {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mac-border);
+}
+
+.desktop-project-row-featured {
+  margin-bottom: 8px;
+  border-color: #d8e8ff;
+  background: #f8fbff;
+}
+
+.desktop-project-row-featured:hover {
+  border-color: #bfdcff;
+  background: #f3f8ff;
+}
+
+.desktop-project-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #e8f2ff;
+  color: #0066cc;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.desktop-project-title:not(:disabled) {
+  color: #0b57a3;
+}
+
+.dot-partial {
+  background: var(--mac-orange);
+}
+
+.dot-failed {
+  background: var(--mac-red);
+}
+
+.state-partial {
+  background: #fff5df;
+  color: #9a5b00;
+}
+
+.state-failed {
+  background: #fff0ef;
+  color: #d70015;
+}
+
+.desktop-workspace-action {
+  min-width: 90px;
+  background: var(--mac-blue);
+  color: #ffffff;
+}
+
+.desktop-workspace-action:hover:not(:disabled) {
+  background: var(--mac-blue-hover);
+}
+
+.desktop-empty-state-compact {
+  min-height: 180px;
+  padding-top: 28px;
+  padding-bottom: 28px;
+}
+
 @keyframes desktopPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

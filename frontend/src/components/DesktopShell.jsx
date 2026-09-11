@@ -26,6 +26,60 @@ async function requestJson(url, init) {
   return data.data
 }
 
+function summarizeMeterSphere(catalog, status, available) {
+  const total = catalog.length
+  const running = catalog.filter((item) => status[item.id]?.running === true).length
+  const transitioning = catalog.some((item) => ['starting', 'stopping', 'restarting', 'checking_health'].includes(status[item.id]?.phase))
+  const failed = catalog.some((item) => status[item.id]?.phase === 'failed')
+
+  if (!available) {
+    return { total, running, tone: 'unknown', label: '状态不可用', detail: '打开工作区检查配置' }
+  }
+  if (total === 0) {
+    return { total, running, tone: 'unknown', label: '未检测', detail: '尚未读取服务目录' }
+  }
+  if (transitioning) {
+    return { total, running, tone: 'busy', label: `${running} / ${total} 运行中`, detail: '服务状态变化中' }
+  }
+  if (running === total) {
+    return { total, running, tone: 'running', label: `${running} / ${total} 运行中`, detail: '全部服务正常' }
+  }
+  if (running > 0) {
+    return { total, running, tone: 'partial', label: `${running} / ${total} 运行中`, detail: '部分服务已启动' }
+  }
+  if (failed) {
+    return { total, running, tone: 'failed', label: '服务异常', detail: `${total} 个 MeterSphere 服务` }
+  }
+  return { total, running, tone: 'stopped', label: '全部已停止', detail: `${total} 个 MeterSphere 服务` }
+}
+
+function MeterSphereProjectRow({ summary, onOpen }) {
+  return (
+    <article className="desktop-service-row desktop-project-row-featured">
+      <div className="desktop-service-identity">
+        <div className="desktop-project-icon" aria-hidden="true">MS</div>
+        <div>
+          <button type="button" className="desktop-service-title desktop-project-title" onClick={onOpen}>
+            MeterSphere
+          </button>
+          <span>Java / Vue · {summary.total ? `${summary.total} 个服务` : '多服务项目'}</span>
+        </div>
+      </div>
+
+      <div className="desktop-service-state">
+        <span className={`desktop-state-pill state-${summary.tone}`}>{summary.label}</span>
+        <small>{summary.detail}</small>
+      </div>
+
+      <div className="desktop-service-actions">
+        <button type="button" className="desktop-action desktop-workspace-action" onClick={onOpen}>
+          打开工作区
+        </button>
+      </div>
+    </article>
+  )
+}
+
 function readManualRunning() {
   try {
     const value = JSON.parse(localStorage.getItem(MANUAL_RUNNING_KEY) || '{}')
@@ -112,6 +166,7 @@ function LocalServiceRow({ item, status, manualRunning, busy, onStart, onStop, o
 export default function DesktopShell() {
   const [catalog, setCatalog] = useState([])
   const [status, setStatus] = useState({})
+  const [meterSphere, setMeterSphere] = useState({ catalog: [], status: {}, available: true })
   const [manualRunning, setManualRunning] = useState(readManualRunning)
   const [busy, setBusy] = useState({})
   const [loading, setLoading] = useState(true)
@@ -130,15 +185,35 @@ export default function DesktopShell() {
 
   const refresh = useCallback(async (silent = false) => {
     try {
-      const [catalogData, statusData] = await Promise.all([
+      const commandProjectsRequest = Promise.all([
         requestJson('/api/services/desktop-apps/catalog'),
         requestJson('/api/services/desktop-apps/status')
       ])
+      const meterSphereRequest = Promise.all([
+        requestJson('/api/services/catalog'),
+        requestJson('/api/services/status')
+      ]).catch(() => null)
+
+      const [[catalogData, statusData], meterSphereData] = await Promise.all([
+        commandProjectsRequest,
+        meterSphereRequest
+      ])
+
       setCatalog(Array.isArray(catalogData) ? catalogData : [])
       setStatus(statusData || {})
+      if (meterSphereData) {
+        const [meterSphereCatalog, meterSphereStatus] = meterSphereData
+        setMeterSphere({
+          catalog: Array.isArray(meterSphereCatalog) ? meterSphereCatalog : [],
+          status: meterSphereStatus || {},
+          available: true
+        })
+      } else {
+        setMeterSphere((current) => ({ ...current, available: false }))
+      }
       setLastUpdated(new Date())
     } catch (error) {
-      if (!silent) toast.error(error.message || '读取本地服务状态失败')
+      if (!silent) toast.error(error.message || '读取项目状态失败')
     } finally {
       setLoading(false)
     }
@@ -229,6 +304,11 @@ export default function DesktopShell() {
     return { running, stopped, unknown, total: catalog.length }
   }, [catalog, status])
 
+  const meterSphereSummary = useMemo(
+    () => summarizeMeterSphere(meterSphere.catalog, meterSphere.status, meterSphere.available),
+    [meterSphere]
+  )
+
   const rememberManualRunning = useCallback((id, running) => {
     setManualRunning((current) => {
       const next = { ...current, [id]: Boolean(running) }
@@ -280,7 +360,15 @@ export default function DesktopShell() {
     }
   }, [status])
 
-  const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中'
+  const openMeterSphereWorkspace = useCallback(() => {
+    if (!window.desktopBridge?.openMainWindow) {
+      toast.error('当前环境不支持打开 MeterSphere 工作区')
+      return
+    }
+    window.desktopBridge.openMainWindow()
+  }, [])
+
+  const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中' 
   const formatSize = (bytes) => (
     bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`
   )
@@ -310,42 +398,42 @@ export default function DesktopShell() {
           <div className="desktop-app-mark" aria-hidden="true">LS</div>
           <div>
             <span className="desktop-app-kicker">LOCAL SERVICE HUB</span>
-            <h1>本地服务</h1>
-            <p>在 Mac 上集中启动、访问和关闭常用开发服务。</p>
+            <h1>我的项目</h1>
+            <p>集中管理本地开发项目与服务。</p>
           </div>
         </div>
         <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
-          ＋ 添加服务
+          ＋ 添加项目
         </button>
       </header>
 
-      <section className="desktop-summary-grid" aria-label="服务概览">
+      <section className="desktop-summary-grid" aria-label="项目概览">
         <div className="desktop-summary-card">
-          <span>全部服务</span>
-          <strong>{summary.total}</strong>
-          <small>已保存的本地服务</small>
+          <span>全部项目</span>
+          <strong>{summary.total + 1}</strong>
+          <small>MeterSphere + Command 项目</small>
         </div>
         <div className="desktop-summary-card summary-running">
-          <span>运行中</span>
+          <span>MeterSphere</span>
+          <strong>{meterSphereSummary.total ? `${meterSphereSummary.running}/${meterSphereSummary.total}` : '—'}</strong>
+          <small>运行中的服务</small>
+        </div>
+        <div className="desktop-summary-card">
+          <span>Command 项目</span>
+          <strong>{summary.total}</strong>
+          <small>使用启动 / 关闭命令管理</small>
+        </div>
+        <div className="desktop-summary-card">
+          <span>Command 运行中</span>
           <strong>{summary.running}</strong>
           <small>状态端口可连接</small>
-        </div>
-        <div className="desktop-summary-card">
-          <span>已停止</span>
-          <strong>{summary.stopped}</strong>
-          <small>状态端口未监听</small>
-        </div>
-        <div className="desktop-summary-card">
-          <span>未检测</span>
-          <strong>{summary.unknown}</strong>
-          <small>未配置状态端口</small>
         </div>
       </section>
 
       <main className="desktop-content-panel">
         <div className="desktop-list-toolbar">
           <div>
-            <h2>服务列表</h2>
+            <h2>项目列表</h2>
             <span>{lastUpdated ? `最后更新 ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '正在读取状态'}</span>
           </div>
           <button type="button" className="desktop-refresh-button" onClick={() => refresh(false)} disabled={loading}>
@@ -354,13 +442,16 @@ export default function DesktopShell() {
         </div>
 
         <div className="desktop-service-list">
+          <div className="desktop-project-section-label">高级项目</div>
+          <MeterSphereProjectRow summary={meterSphereSummary} onOpen={openMeterSphereWorkspace} />
+          <div className="desktop-project-section-label desktop-project-section-label-command">Command 项目</div>
           {catalog.length === 0 ? (
-            <div className="desktop-empty-state">
+            <div className="desktop-empty-state desktop-empty-state-compact">
               <div className="desktop-empty-icon">＋</div>
-              <strong>还没有本地服务</strong>
-              <span>添加服务名称、启动命令、关闭命令和可选状态端口后，就可以从这里直接管理。</span>
+              <strong>还没有 Command 项目</strong>
+              <span>添加项目名称、启动命令、关闭命令和可选状态端口后，就可以从这里直接管理。</span>
               <button type="button" className="desktop-primary-button" onClick={() => setEditor({ mode: 'create' })}>
-                添加第一个服务
+                添加第一个项目
               </button>
             </div>
           ) : (

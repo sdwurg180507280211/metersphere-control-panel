@@ -49,7 +49,7 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
           statusPort: form.statusPort === '' ? null : Number(form.statusPort)
         })
       })
-      toast.success(editing ? '服务配置已更新' : '本地服务已添加')
+      toast.success(editing ? '项目配置已更新' : 'Command 项目已添加')
       await onSaved?.()
       onClose?.()
     } catch (error) {
@@ -61,11 +61,11 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
 
   const handleDelete = async () => {
     if (!editing || deleting) return
-    if (!window.confirm(`确定删除“${form.name}”吗？\n\n只删除 Local Service Hub 配置，不执行关闭命令。`)) return
+    if (!window.confirm(`确定删除“${form.name}”吗？\n\n只删除 Local Service Hub 项目配置，不执行关闭命令。`)) return
     setDeleting(true)
     try {
       await requestJson(`/api/services/desktop-apps/${encodeURIComponent(form.id)}`, { method: 'DELETE' })
-      toast.success('本地服务配置已删除')
+      toast.success('项目配置已删除')
       await onSaved?.()
       onClose?.()
     } catch (error) {
@@ -80,15 +80,15 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
       <section className="desktop-editor" onMouseDown={(event) => event.stopPropagation()}>
         <header className="desktop-editor-head">
           <div>
-            <span>{editing ? 'EDIT LOCAL SERVICE' : 'ADD LOCAL SERVICE'}</span>
-            <h2>{editing ? '配置本地服务' : '添加本地服务'}</h2>
+            <span>{editing ? 'EDIT COMMAND PROJECT' : 'ADD COMMAND PROJECT'}</span>
+            <h2>{editing ? '配置 Command 项目' : '添加 Command 项目'}</h2>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </header>
 
         <div className="desktop-editor-body">
           <label className="desktop-editor-block">
-            <span>服务名称</span>
+            <span>项目名称</span>
             <input
               value={form.name}
               onChange={(event) => update('name', event.target.value)}
@@ -135,7 +135,7 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
           </label>
 
           <div className="desktop-command-safety">
-            命令只会先保存到本机配置；点击对应服务的“启动”或“关闭”时，后端才会按服务 ID 读取并执行。
+            命令只会先保存到本机配置；点击对应项目的“启动”或“关闭”时，后端才会按项目 ID 读取并执行。
           </div>
         </div>
 
@@ -148,7 +148,7 @@ export default function DesktopAppEditor({ app = null, onClose, onSaved }) {
           <div>
             <button type="button" className="desktop-editor-cancel" onClick={onClose}>取消</button>
             <button type="button" className="desktop-editor-save" disabled={!canSave} onClick={handleSave}>
-              {saving ? '保存中…' : editing ? '保存配置' : '添加服务'}
+              {saving ? '保存中…' : editing ? '保存配置' : '添加项目'}
             </button>
           </div>
         </footer>
