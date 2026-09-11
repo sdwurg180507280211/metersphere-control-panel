@@ -37,5 +37,5 @@ jobs:
 
       - name: Test desktop updater, hardening, runtime policy, command project migration and Project Center model
         run: |
-          npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js backend/__tests__/commandProjectConfigService.test.js
+          npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js backend/__tests__/commandProjectConfigService.test.js backend/__tests__/commandProjectApiContract.test.js
           node --test frontend/__tests__/projectModel.test.js

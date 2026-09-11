@@ -38,7 +38,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
     if (!canSave) return
     setSaving(true)
     try {
-      await requestJson('/api/services/desktop-apps', {
+      await requestJson('/api/projects/commands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -65,7 +65,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
     if (!window.confirm(`确定删除“${form.name}”吗？\n\n只删除 Local Service Hub 项目配置，不执行关闭命令。`)) return
     setDeleting(true)
     try {
-      await requestJson(`/api/services/desktop-apps/${encodeURIComponent(form.id)}`, { method: 'DELETE' })
+      await requestJson(`/api/projects/commands/${encodeURIComponent(form.id)}`, { method: 'DELETE' })
       toast.success('项目配置已删除')
       await onSaved?.()
       onClose?.()

@@ -221,8 +221,8 @@ export default function DesktopShell() {
   const refresh = useCallback(async (silent = false) => {
     try {
       const commandProjectsRequest = Promise.all([
-        requestJson('/api/services/desktop-apps/catalog'),
-        requestJson('/api/services/desktop-apps/status')
+        requestJson('/api/projects/commands'),
+        requestJson('/api/projects/commands/status')
       ])
       const meterSphereRequest = Promise.all([
         requestJson('/api/services/catalog'),
@@ -361,7 +361,7 @@ export default function DesktopShell() {
   const runCommandAction = useCallback(async (id, action) => {
     setCommandBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
     try {
-      await requestJson(`/api/services/desktop-apps/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+      await requestJson(`/api/projects/commands/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
       if (commandStatus[id]?.statusKnown !== true) {
         rememberManualRunning(id, action === 'start')
       }
