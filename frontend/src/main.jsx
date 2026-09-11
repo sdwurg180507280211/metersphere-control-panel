@@ -10,7 +10,7 @@ const DesktopShell = React.lazy(() => import('./components/DesktopShell.jsx'))
 const LOCAL_TOKEN_KEY = 'msLocalToken'
 const params = new URLSearchParams(window.location.search)
 const urlToken = params.get('token')
-const desktopMode = params.get('desktop') === '1'
+const hubMode = params.get('view') === 'hub' || params.get('desktop') === '1'
 
 if (urlToken) {
   localStorage.setItem(LOCAL_TOKEN_KEY, urlToken)
@@ -44,7 +44,7 @@ window.fetch = async (input, init = {}) => {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {desktopMode ? (
+    {hubMode ? (
       <Suspense fallback={null}>
         <DesktopShell />
       </Suspense>

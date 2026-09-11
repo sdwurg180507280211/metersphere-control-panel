@@ -360,12 +360,16 @@ export default function DesktopShell() {
     }
   }, [status])
 
-  const openMeterSphereWorkspace = useCallback(() => {
-    if (!window.desktopBridge?.openMainWindow) {
+  const openMeterSphereWorkspace = useCallback(async () => {
+    if (!window.desktopBridge?.openWorkspace) {
       toast.error('当前环境不支持打开 MeterSphere 工作区')
       return
     }
-    window.desktopBridge.openMainWindow()
+    try {
+      await window.desktopBridge.openWorkspace('metersphere')
+    } catch (error) {
+      toast.error(error.message || '打开 MeterSphere 工作区失败')
+    }
   }, [])
 
   const versionLabel = update.currentVersion ? `v${update.currentVersion}` : '版本读取中' 
@@ -489,8 +493,8 @@ export default function DesktopShell() {
               {update.checking ? '检查中…' : update.checked ? '已是最新' : '检查更新'}
             </button>
           ) : null}
-          <button type="button" onClick={() => window.desktopBridge?.openMainWindow?.()}>
-            打开完整控制面板
+          <button type="button" onClick={openMeterSphereWorkspace}>
+            打开 MeterSphere 工作区
           </button>
         </div>
       </footer>

@@ -11,21 +11,21 @@ fixPath();
 app.setName('Local Service Hub');
 
 const APP_DATA_DIR = path.join(os.homedir(), '.metersphere-control-panel');
-const WINDOW_STATE_PATH = path.join(APP_DATA_DIR, 'window-state.json');
-const DEFAULT_WINDOW_BOUNDS = { width: 920, height: 680 };
-const MIN_WINDOW_BOUNDS = { width: 760, height: 540 };
+const HUB_WINDOW_STATE_PATH = path.join(APP_DATA_DIR, 'window-state.json');
+const DEFAULT_HUB_WINDOW_BOUNDS = { width: 920, height: 680 };
+const MIN_HUB_WINDOW_BOUNDS = { width: 760, height: 540 };
 
-let mainWindow = null;
-let desktopWindow = null;
+let workspaceWindow = null;
+let hubWindow = null;
 let tray = null;
 let server = null;
 let backendPort = null;
 let accessToken = '';
 let backendShutdown = null;
 let isQuitting = false;
-let windowStateTimer = null;
+let hubWindowStateTimer = null;
 let rendererReady = false;
-let pendingDesktopFocus = false;
+let pendingHubFocus = false;
 
 const useExternalDevBackend = process.env.MS_ELECTRON_EXTERNAL_BACKEND === '1';
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -47,15 +47,16 @@ function applyDevelopmentDockIcon() {
   app.dock.setIcon(icon);
 }
 
-function buildRendererUrl({ desktop = false } = {}) {
+function buildRendererUrl({ view = 'workspace' } = {}) {
   const base = process.env.ELECTRON_START_URL || `http://localhost:${backendPort}`;
   const url = new URL(base);
   if (accessToken) url.searchParams.set('token', accessToken);
-  if (desktop) {
-    url.searchParams.set('desktop', '1');
+  url.searchParams.delete('desktop');
+  if (view === 'hub') {
+    url.searchParams.set('view', 'hub');
     url.hash = '';
   } else {
-    url.searchParams.delete('desktop');
+    url.searchParams.delete('view');
     url.hash = 'services';
   }
   return url.toString();
@@ -97,10 +98,10 @@ async function waitForDevStack(timeoutMs = 20000) {
   throw new Error(`开发服务未就绪: ${healthUrl}`);
 }
 
-function readWindowState() {
+function readHubWindowState() {
   try {
-    if (!fs.existsSync(WINDOW_STATE_PATH)) return null;
-    const value = JSON.parse(fs.readFileSync(WINDOW_STATE_PATH, 'utf8'));
+    if (!fs.existsSync(HUB_WINDOW_STATE_PATH)) return null;
+    const value = JSON.parse(fs.readFileSync(HUB_WINDOW_STATE_PATH, 'utf8'));
     return value && typeof value === 'object' ? value : null;
   } catch { return null; }
 }
@@ -120,71 +121,71 @@ function isBoundsVisible(bounds) {
     return right - left >= 120 && bottom - top >= 80;
   });
 }
-function getDesktopWindowState() {
-  const saved = readWindowState();
+function getHubWindowState() {
+  const saved = readHubWindowState();
   const primary = screen.getPrimaryDisplay().workArea;
-  const width = clamp(saved?.width, MIN_WINDOW_BOUNDS.width, primary.width, DEFAULT_WINDOW_BOUNDS.width);
-  const height = clamp(saved?.height, MIN_WINDOW_BOUNDS.height, primary.height, DEFAULT_WINDOW_BOUNDS.height);
+  const width = clamp(saved?.width, MIN_HUB_WINDOW_BOUNDS.width, primary.width, DEFAULT_HUB_WINDOW_BOUNDS.width);
+  const height = clamp(saved?.height, MIN_HUB_WINDOW_BOUNDS.height, primary.height, DEFAULT_HUB_WINDOW_BOUNDS.height);
   const candidate = { width, height, x: isFiniteNumber(saved?.x) ? Math.round(saved.x) : undefined, y: isFiniteNumber(saved?.y) ? Math.round(saved.y) : undefined };
   const hasSavedPosition = isBoundsVisible(candidate);
   return { bounds: hasSavedPosition ? candidate : { width, height }, shouldCenter: !hasSavedPosition, maximized: saved?.maximized === true };
 }
-function persistWindowState() {
-  if (!desktopWindow || desktopWindow.isDestroyed()) return;
+function persistHubWindowState() {
+  if (!hubWindow || hubWindow.isDestroyed()) return;
   try {
-    const bounds = desktopWindow.getNormalBounds();
-    const value = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, maximized: desktopWindow.isMaximized() };
+    const bounds = hubWindow.getNormalBounds();
+    const value = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, maximized: hubWindow.isMaximized() };
     fs.mkdirSync(APP_DATA_DIR, { recursive: true });
-    const tempPath = `${WINDOW_STATE_PATH}.tmp`;
+    const tempPath = `${HUB_WINDOW_STATE_PATH}.tmp`;
     fs.writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-    fs.renameSync(tempPath, WINDOW_STATE_PATH);
+    fs.renameSync(tempPath, HUB_WINDOW_STATE_PATH);
   } catch (error) { console.warn(`保存窗口状态失败: ${error.message}`); }
 }
-function scheduleWindowStateSave() {
-  clearTimeout(windowStateTimer);
-  windowStateTimer = setTimeout(() => { windowStateTimer = null; persistWindowState(); }, 250);
-  windowStateTimer.unref?.();
+function scheduleHubWindowStateSave() {
+  clearTimeout(hubWindowStateTimer);
+  hubWindowStateTimer = setTimeout(() => { hubWindowStateTimer = null; persistHubWindowState(); }, 250);
+  hubWindowStateTimer.unref?.();
 }
-function focusDesktopWindow() {
-  const window = createDesktopWindow();
+function focusHubWindow() {
+  const window = createHubWindow();
   if (!window || window.isDestroyed()) return;
   if (window.isMinimized()) window.restore();
   window.show(); window.focus(); app.focus({ steal: true });
 }
-function requestDesktopFocus() {
-  if (!rendererReady || !backendPort) { pendingDesktopFocus = true; return; }
-  pendingDesktopFocus = false;
-  focusDesktopWindow();
+function requestHubFocus() {
+  if (!rendererReady || !backendPort) { pendingHubFocus = true; return; }
+  pendingHubFocus = false;
+  focusHubWindow();
 }
-function markRendererReady() { rendererReady = true; createTray(); requestDesktopFocus(); }
+function markRendererReady() { rendererReady = true; createTray(); requestHubFocus(); }
 
-function createMainWindow() {
-  if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); return mainWindow; }
-  mainWindow = new BrowserWindow({ width: 1240, height: 820, minWidth: 960, minHeight: 680, show: false, backgroundColor: '#08101f', title: 'MeterSphere Control Panel', webPreferences: sharedWebPreferences() });
-  hardenBrowserWindow(mainWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
-  mainWindow.loadURL(buildRendererUrl());
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
-  if (process.env.NODE_ENV === 'development') mainWindow.webContents.openDevTools({ mode: 'detach' });
-  mainWindow.on('close', (event) => { if (process.platform === 'darwin' && !isQuitting) { event.preventDefault(); mainWindow.hide(); } });
-  mainWindow.on('closed', () => { mainWindow = null; });
-  return mainWindow;
+function createMeterSphereWorkspaceWindow() {
+  if (workspaceWindow && !workspaceWindow.isDestroyed()) { workspaceWindow.show(); workspaceWindow.focus(); return workspaceWindow; }
+  workspaceWindow = new BrowserWindow({ width: 1240, height: 820, minWidth: 960, minHeight: 680, show: false, backgroundColor: '#08101f', title: 'MeterSphere Workspace', webPreferences: sharedWebPreferences() });
+  hardenBrowserWindow(workspaceWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
+  workspaceWindow.loadURL(buildRendererUrl());
+  workspaceWindow.once('ready-to-show', () => workspaceWindow?.show());
+  if (process.env.NODE_ENV === 'development') workspaceWindow.webContents.openDevTools({ mode: 'detach' });
+  workspaceWindow.on('close', (event) => { if (process.platform === 'darwin' && !isQuitting) { event.preventDefault(); workspaceWindow.hide(); } });
+  workspaceWindow.on('closed', () => { workspaceWindow = null; });
+  return workspaceWindow;
 }
 
-function createDesktopWindow() {
-  if (desktopWindow && !desktopWindow.isDestroyed()) return desktopWindow;
+function createHubWindow() {
+  if (hubWindow && !hubWindow.isDestroyed()) return hubWindow;
   if (!rendererReady || !backendPort) return null;
-  const savedState = getDesktopWindowState();
-  desktopWindow = new BrowserWindow({ ...savedState.bounds, minWidth: MIN_WINDOW_BOUNDS.width, minHeight: MIN_WINDOW_BOUNDS.height, show: false, resizable: true, backgroundColor: '#f5f5f7', title: 'Local Service Hub', webPreferences: sharedWebPreferences() });
-  hardenBrowserWindow(desktopWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
-  desktopWindow.loadURL(buildRendererUrl({ desktop: true }));
-  desktopWindow.once('ready-to-show', () => { if (savedState.shouldCenter) desktopWindow?.center(); if (savedState.maximized) desktopWindow?.maximize(); desktopWindow?.show(); desktopWindow?.focus(); });
-  desktopWindow.on('move', scheduleWindowStateSave);
-  desktopWindow.on('resize', scheduleWindowStateSave);
-  desktopWindow.on('maximize', scheduleWindowStateSave);
-  desktopWindow.on('unmaximize', scheduleWindowStateSave);
-  desktopWindow.on('close', persistWindowState);
-  desktopWindow.on('closed', () => { clearTimeout(windowStateTimer); windowStateTimer = null; desktopWindow = null; });
-  return desktopWindow;
+  const savedState = getHubWindowState();
+  hubWindow = new BrowserWindow({ ...savedState.bounds, minWidth: MIN_HUB_WINDOW_BOUNDS.width, minHeight: MIN_HUB_WINDOW_BOUNDS.height, show: false, resizable: true, backgroundColor: '#f5f5f7', title: 'Local Service Hub', webPreferences: sharedWebPreferences() });
+  hardenBrowserWindow(hubWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
+  hubWindow.loadURL(buildRendererUrl({ view: 'hub' }));
+  hubWindow.once('ready-to-show', () => { if (savedState.shouldCenter) hubWindow?.center(); if (savedState.maximized) hubWindow?.maximize(); hubWindow?.show(); hubWindow?.focus(); });
+  hubWindow.on('move', scheduleHubWindowStateSave);
+  hubWindow.on('resize', scheduleHubWindowStateSave);
+  hubWindow.on('maximize', scheduleHubWindowStateSave);
+  hubWindow.on('unmaximize', scheduleHubWindowStateSave);
+  hubWindow.on('close', persistHubWindowState);
+  hubWindow.on('closed', () => { clearTimeout(hubWindowStateTimer); hubWindowStateTimer = null; hubWindow = null; });
+  return hubWindow;
 }
 
 function createTray() {
@@ -194,13 +195,13 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('Local Service Hub');
   const contextMenu = Menu.buildFromTemplate([
-    { label: '打开 Local Service Hub', click: () => requestDesktopFocus() },
-    { label: '打开完整控制面板', click: () => createMainWindow() },
+    { label: '打开 Local Service Hub', click: () => requestHubFocus() },
+    { label: '打开 MeterSphere 工作区', click: () => createMeterSphereWorkspaceWindow() },
     { type: 'separator' },
     { label: '退出 Local Service Hub', click: () => app.quit() }
   ]);
   tray.setContextMenu(contextMenu);
-  tray.on('click', () => requestDesktopFocus());
+  tray.on('click', () => requestHubFocus());
   return tray;
 }
 
@@ -227,7 +228,13 @@ async function startBackend() {
   return null;
 }
 
-ipcMain.on('desktop:open-main', () => { createMainWindow(); });
+ipcMain.handle('project:open-workspace', async (_event, projectId) => {
+  if (projectId !== 'metersphere') {
+    throw new Error(`不支持的项目工作区: ${projectId || 'unknown'}`);
+  }
+  createMeterSphereWorkspaceWindow();
+  return true;
+});
 ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
   let target;
   try { target = new URL(String(rawUrl || '')); } catch { throw new Error('服务访问地址无效'); }
@@ -237,7 +244,7 @@ ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
   await shell.openExternal(target.toString());
   return true;
 });
-app.on('second-instance', () => { if (!hasSingleInstanceLock) return; requestDesktopFocus(); });
+app.on('second-instance', () => { if (!hasSingleInstanceLock) return; requestHubFocus(); });
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
   nativeTheme.themeSource = 'light'; applyDevelopmentDockIcon(); app.dock?.show();
@@ -253,8 +260,8 @@ app.whenReady().then(async () => {
 });
 async function cleanup() {
   if (isQuitting) return;
-  isQuitting = true; rendererReady = false; pendingDesktopFocus = false;
-  clearTimeout(windowStateTimer); windowStateTimer = null; persistWindowState();
+  isQuitting = true; rendererReady = false; pendingHubFocus = false;
+  clearTimeout(hubWindowStateTimer); hubWindowStateTimer = null; persistHubWindowState();
   tray?.destroy(); tray = null;
   if (!server) return;
   try {
@@ -265,4 +272,4 @@ async function cleanup() {
 }
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit', async (event) => { if (!isQuitting) { event.preventDefault(); await cleanup(); app.quit(); } });
-app.on('activate', () => { requestDesktopFocus(); });
+app.on('activate', () => { requestHubFocus(); });

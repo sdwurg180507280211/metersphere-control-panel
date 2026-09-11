@@ -39,6 +39,7 @@ describe('Desktop localhost request security', () => {
 describe('Desktop renderer navigation security', () => {
   test('only trusts configured localhost renderer origins', () => {
     const origins = getTrustedRendererOrigins({ backendPort: 5001, startUrl: 'http://localhost:3001' });
+    expect(isTrustedRendererUrl('http://localhost:5001/?view=hub', origins)).toBe(true);
     expect(isTrustedRendererUrl('http://localhost:5001/?desktop=1', origins)).toBe(true);
     expect(isTrustedRendererUrl('http://127.0.0.1:5001/#services', origins)).toBe(true);
     expect(isTrustedRendererUrl('http://localhost:3001/', origins)).toBe(true);
@@ -58,11 +59,27 @@ describe('Desktop renderer navigation security', () => {
     handlers['will-navigate'](untrusted, 'https://example.com');
     expect(untrusted.preventDefault).toHaveBeenCalledTimes(1);
     const trusted = { preventDefault: jest.fn() };
-    handlers['will-navigate'](trusted, 'http://localhost:5001/?desktop=1');
+    handlers['will-navigate'](trusted, 'http://localhost:5001/?view=hub');
     expect(trusted.preventDefault).not.toHaveBeenCalled();
     const webview = { preventDefault: jest.fn() };
     handlers['will-attach-webview'](webview);
     expect(webview.preventDefault).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Project Hub workspace semantics', () => {
+  test('uses project-level workspace IPC while preserving the legacy Hub URL alias', () => {
+    const electronSource = fs.readFileSync(path.join(__dirname, '..', '..', 'electron.js'), 'utf8');
+    const preloadSource = fs.readFileSync(path.join(__dirname, '..', '..', 'electron-preload.js'), 'utf8');
+    const mainSource = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'src', 'main.jsx'), 'utf8');
+
+    expect(electronSource).toContain("ipcMain.handle('project:open-workspace'");
+    expect(electronSource).toContain("projectId !== 'metersphere'");
+    expect(electronSource).toContain("url.searchParams.set('view', 'hub')");
+    expect(electronSource).not.toContain('desktop:open-main');
+    expect(preloadSource).toContain('openWorkspace: (projectId)');
+    expect(preloadSource).not.toContain('openMainWindow');
+    expect(mainSource).toContain("params.get('view') === 'hub' || params.get('desktop') === '1'");
   });
 });
 
