@@ -32,6 +32,21 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!hasSingleInstanceLock) app.quit();
 
+function applyDevelopmentDockIcon() {
+  if (process.platform !== 'darwin' || app.isPackaged || !app.dock) return;
+  const iconPath = path.join(__dirname, 'build', 'icon.icns');
+  if (!fs.existsSync(iconPath)) {
+    console.warn(`开发模式图标不存在: ${iconPath}`);
+    return;
+  }
+  const icon = nativeImage.createFromPath(iconPath);
+  if (icon.isEmpty()) {
+    console.warn(`开发模式图标无法读取: ${iconPath}`);
+    return;
+  }
+  app.dock.setIcon(icon);
+}
+
 function buildRendererUrl({ desktop = false } = {}) {
   const base = process.env.ELECTRON_START_URL || `http://localhost:${backendPort}`;
   const url = new URL(base);
@@ -225,7 +240,7 @@ ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
 app.on('second-instance', () => { if (!hasSingleInstanceLock) return; requestDesktopFocus(); });
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
-  nativeTheme.themeSource = 'light'; app.dock?.show();
+  nativeTheme.themeSource = 'light'; applyDevelopmentDockIcon(); app.dock?.show();
   if (useExternalDevBackend) {
     backendPort = Number(process.env.MS_DEV_BACKEND_PORT || 3000); accessToken = process.env.MS_LOCAL_TOKEN || '';
     try { await waitForDevStack(); }
