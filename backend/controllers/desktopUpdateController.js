@@ -104,8 +104,7 @@ const desktopUpdateController = {
         stagedAppPath: prepared.stagedPath,
         updateDir: prepared.updateDir,
         currentPid: process.pid,
-        mode: prepared.mode,
-        includeLive2d: prepared.includesLive2d === true
+        mode: prepared.mode
       });
 
       res.json({

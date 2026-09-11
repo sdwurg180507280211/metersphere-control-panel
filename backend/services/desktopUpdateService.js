@@ -22,8 +22,6 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
   'objects.githubusercontent.com',
   'release-assets.githubusercontent.com'
 ]);
-// Live2D 模型（约 300MB）视为不可变资源层：增量包默认不携带，安装时从旧包恢复。
-const LIVE2D_RELATIVE_DIR = 'frontend/dist/live2d';
 
 function normalizeVersion(value) {
   const normalized = String(value || '')
@@ -64,7 +62,6 @@ function electronFetch(url, options) {
     request.on('close', () => options.signal.removeEventListener('abort', abort));
     request.on('error', reject);
     request.on('redirect', (status, method, redirectUrl) => {
-      // Electron 28 net.fetch rejects manual redirects; expose them for validation.
       resolve(new Response(null, { status, headers: { location: redirectUrl } }));
       request.abort();
     });
@@ -83,14 +80,14 @@ function electronFetch(url, options) {
 }
 
 async function withUpdateResponse(url, options, consume) {
-  // Electron's network stack honors macOS system proxies; Node HTTPS does not.
-  const fetchResponse = process.versions?.electron
-    ? electronFetch
-    : globalThis.fetch;
+  const fetchResponse = process.versions?.electron ? electronFetch : globalThis.fetch;
   const controller = new AbortController();
   const timeoutMessage = options.download ? '下载安装包超时' : '连接更新服务超时';
-  const timer = setTimeout(() => controller.abort(new Error(timeoutMessage)),
-    options.download ? DOWNLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(new Error(timeoutMessage)),
+    options.download ? DOWNLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS
+  );
+
   try {
     let target = new URL(url);
     for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
@@ -98,6 +95,7 @@ async function withUpdateResponse(url, options, consume) {
       if (options.download && !ALLOWED_DOWNLOAD_HOSTS.has(target.hostname)) {
         throw new Error(`不允许的下载主机: ${target.hostname}`);
       }
+
       const response = await fetchResponse(target.toString(), {
         method: 'GET',
         redirect: 'manual',
@@ -108,6 +106,7 @@ async function withUpdateResponse(url, options, consume) {
           Accept: options.accept || 'application/vnd.github+json'
         }
       });
+
       const location = response.headers.get('location');
       if (response.status >= 300 && response.status < 400 && location) {
         await response.body?.cancel();
@@ -115,12 +114,14 @@ async function withUpdateResponse(url, options, consume) {
         target = new URL(location, target);
         continue;
       }
+
       if (!response.ok) {
         await response.body?.cancel();
         const error = new Error(`更新服务返回 HTTP ${response.status}`);
         error.status = response.status;
         throw error;
       }
+
       try {
         return await consume(response, controller.signal);
       } finally {
@@ -164,6 +165,7 @@ function ensureGitHubAssetUrl(rawUrl, repository = DEFAULT_REPOSITORY) {
   } catch {
     throw new Error('Release 下载地址无效');
   }
+
   const expectedPrefix = `/${repository}/releases/download/`;
   if (target.protocol !== 'https:' || target.hostname !== 'github.com' || !target.pathname.startsWith(expectedPrefix)) {
     throw new Error('Release 下载地址不在允许的 GitHub 路径中');
@@ -175,7 +177,9 @@ async function downloadFile(url, destination, options = {}) {
   const temporary = `${destination}.download`;
   try {
     return await withUpdateResponse(url, {
-      ...options, download: true, accept: 'application/octet-stream'
+      ...options,
+      download: true,
+      accept: 'application/octet-stream'
     }, async (response, signal) => {
       const hash = crypto.createHash('sha256');
       let bytes = 0;
@@ -186,8 +190,14 @@ async function downloadFile(url, destination, options = {}) {
           callback(null, chunk);
         }
       });
-      await pipeline(Readable.fromWeb(response.body), digest,
-        fs.createWriteStream(temporary, { mode: 0o600 }), { signal });
+
+      await pipeline(
+        Readable.fromWeb(response.body),
+        digest,
+        fs.createWriteStream(temporary, { mode: 0o600 }),
+        { signal }
+      );
+
       const sha256 = hash.digest('hex');
       await fsp.rename(temporary, destination);
       return { path: destination, bytes, sha256 };
@@ -219,6 +229,7 @@ function normalizeDeltaEntry(entry, repository) {
   if (!Number.isFinite(Number(entry.bytes)) || Number(entry.bytes) <= 0) return null;
   if (typeof entry.electronVersion !== 'string' || !entry.electronVersion.trim()) return null;
   if (entry.arch !== 'x64' && entry.arch !== 'arm64') return null;
+
   try {
     return {
       name: entry.name.trim(),
@@ -227,7 +238,6 @@ function normalizeDeltaEntry(entry, repository) {
       sha256: String(entry.sha256).toLowerCase(),
       bytes: Number(entry.bytes),
       electronVersion: entry.electronVersion.trim(),
-      includesLive2d: entry.includesLive2d === true,
       updateMode: 'delta'
     };
   } catch {
@@ -245,6 +255,7 @@ function selectAsset(metadata, arch, { electronVersion = null, repository } = {}
   if (!asset?.name || !asset?.url || !/^[a-f0-9]{64}$/i.test(String(asset.sha256 || ''))) {
     throw new Error(`Release 缺少 ${normalizedArch} ZIP 或 SHA256`);
   }
+
   const fullAsset = {
     name: String(asset.name),
     url: ensureGitHubAssetUrl(asset.url, repository),
@@ -257,7 +268,6 @@ function selectAsset(metadata, arch, { electronVersion = null, repository } = {}
 
   if (!electronVersion) return fullAsset;
 
-  // 增量包只替换应用代码层，Electron 运行时必须与构建时版本完全一致才允许使用。
   const delta = (Array.isArray(metadata?.deltas) ? metadata.deltas : [])
     .map((entry) => normalizeDeltaEntry(entry, repository))
     .find((entry) => entry?.arch === normalizedArch && entry.electronVersion === electronVersion);
@@ -269,32 +279,41 @@ async function fetchLatestMetadata(options = {}) {
   const repository = options.repository || DEFAULT_REPOSITORY;
   const releasesUrl = `https://api.github.com/repos/${repository}/releases?per_page=30`;
   let releases;
+
   try {
     releases = await requestJson(releasesUrl, { version: options.currentVersion });
   } catch (error) {
     if (error.status !== 403 && error.status !== 429) throw error;
-    // GitHub's public latest-release asset route does not consume API quota.
-    // Fail closed if another release channel is marked latest.
+
     const metadata = await requestJson(`https://github.com/${repository}/releases/latest/download/latest.json`, {
-      version: options.currentVersion, accept: 'application/json'
+      version: options.currentVersion,
+      accept: 'application/json'
     });
     if (!/^desktop-v\d+\.\d+\.\d+$/.test(String(metadata.tag || ''))) {
       throw new Error('GitHub API 限流，最新公开 Release 不是正式 Desktop 版本');
     }
+
     const version = normalizeVersion(metadata.version).text;
     if (metadata.tag !== `${RELEASE_TAG_PREFIX}${version}`) {
       throw new Error('Release 版本与 latest.json 不一致');
     }
+
     const expectedPrefix = `https://github.com/${repository}/releases/download/${metadata.tag}/`;
     if (!Array.isArray(metadata.assets) || !metadata.assets.length || metadata.assets.some(asset => (
       !ensureGitHubAssetUrl(asset.url, repository).startsWith(expectedPrefix)
-    ))) throw new Error('Release 资产与 Desktop 标签不一致');
-    return { ...metadata, version, releaseUrl: `https://github.com/${repository}/releases/tag/${metadata.tag}` };
+    ))) {
+      throw new Error('Release 资产与 Desktop 标签不一致');
+    }
+
+    return {
+      ...metadata,
+      version,
+      releaseUrl: `https://github.com/${repository}/releases/tag/${metadata.tag}`
+    };
   }
+
   const selected = selectDesktopRelease(releases);
-  if (!selected) {
-    return null;
-  }
+  if (!selected) return null;
 
   const metadataAsset = (selected.release.assets || []).find((asset) => asset?.name === 'latest.json');
   if (!metadataAsset?.browser_download_url) {
@@ -340,6 +359,7 @@ async function checkForUpdate(options = {}) {
     electronVersion: process.versions?.electron || null,
     repository: options.repository
   });
+
   return {
     currentVersion,
     latestVersion: metadata.version,
@@ -354,16 +374,19 @@ async function checkForUpdate(options = {}) {
 async function findAppBundle(directory, depth = 0) {
   if (depth > 4) return null;
   const entries = await fsp.readdir(directory, { withFileTypes: true });
+
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const fullPath = path.join(directory, entry.name);
     if (entry.name === `${APP_NAME}.app`) return fullPath;
   }
+
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.endsWith('.app')) continue;
     const result = await findAppBundle(path.join(directory, entry.name), depth + 1);
     if (result) return result;
   }
+
   return null;
 }
 
@@ -395,7 +418,7 @@ async function validateFullStage(extractDir, expectedVersion) {
     throw new Error(`更新包版本不匹配: ${bundleVersion} / ${expectedVersion}`);
   }
 
-  return { stagedPath: stagedAppPath, includesLive2d: null };
+  return { stagedPath: stagedAppPath };
 }
 
 async function validateDeltaStage(extractDir, expectedVersion) {
@@ -411,13 +434,12 @@ async function validateDeltaStage(extractDir, expectedVersion) {
   } catch {
     throw new Error('增量包缺少应用清单 package.json');
   }
+
   if (normalizeVersion(String(appManifest?.version || '')).text !== expectedVersion) {
     throw new Error('增量包内应用版本与 Release 不一致');
   }
 
-  const live2dDir = path.join(extractDir, 'Contents', 'Resources', 'app', LIVE2D_RELATIVE_DIR);
-  const includesLive2d = await fsp.access(live2dDir, fs.constants.R_OK).then(() => true, () => false);
-  return { stagedPath: extractDir, includesLive2d };
+  return { stagedPath: extractDir };
 }
 
 async function prepareUpdate(update, options = {}) {
@@ -433,7 +455,6 @@ async function prepareUpdate(update, options = {}) {
   const zipPath = path.join(updateDir, update.asset.name);
   const extractDir = path.join(updateDir, 'extracted');
 
-  // 清理历史版本残留的更新目录（全量 ZIP 每份数百 MB，不清理会持续占盘）
   try {
     for (const entryName of await fsp.readdir(baseDir)) {
       if (entryName !== path.basename(updateDir)) {
@@ -441,8 +462,9 @@ async function prepareUpdate(update, options = {}) {
       }
     }
   } catch {
-    // 目录不存在等情况直接忽略，目标目录随后一定会重建
+    // 目录不存在等情况直接忽略，目标目录随后一定会重建。
   }
+
   await fsp.rm(updateDir, { recursive: true, force: true });
   await fsp.mkdir(updateDir, { recursive: true });
 
@@ -456,6 +478,7 @@ async function prepareUpdate(update, options = {}) {
 
   await fsp.mkdir(extractDir, { recursive: true });
   await execFileAsync('/usr/bin/ditto', ['-x', '-k', zipPath, extractDir]);
+
   const expectedVersion = normalizeVersion(update.latestVersion).text;
   const stage = update.asset.updateMode === 'delta'
     ? await validateDeltaStage(extractDir, expectedVersion)
@@ -465,7 +488,6 @@ async function prepareUpdate(update, options = {}) {
     updateDir,
     stagedPath: stage.stagedPath,
     mode: update.asset.updateMode === 'delta' ? 'delta' : 'full',
-    includesLive2d: stage.includesLive2d,
     version: expectedVersion,
     sha256: downloaded.sha256,
     bytes: downloaded.bytes
@@ -481,15 +503,12 @@ TARGET_APP="$2"
 STAGED_APP="$3"
 UPDATE_DIR="$4"
 MODE="\${5:-full}"
-INCLUDE_LIVE2D="\${6:-false}"
 APP_NAME="${APP_NAME}"
 TARGET_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
 NEW_APP="$TARGET_APP.new"
 BACKUP_APP="$TARGET_APP.previous"
 STAGED_APP_DIR="$STAGED_APP/Contents/Resources/app"
-TARGET_APP_DIR="$TARGET_APP/Contents/Resources/app"
 NEW_APP_DIR="$NEW_APP/Contents/Resources/app"
-LIVE2D_DIR="frontend/dist/live2d"
 LOG_FILE="$UPDATE_DIR/update-helper.log"
 
 exec >>"$LOG_FILE" 2>&1
@@ -512,7 +531,7 @@ rm -rf "$NEW_APP"
 if [[ "$MODE" == 'delta' ]]; then
   test -f "$STAGED_APP/Contents/Info.plist"
   test -f "$STAGED_APP_DIR/package.json"
-  # 增量模式：克隆现有安装包（APFS 上近乎瞬时），只替换应用代码层。
+  # 克隆现有 App 以保留 Electron Runtime，只替换应用代码层。
   if ! cp -cR "$TARGET_APP" "$NEW_APP" 2>/dev/null; then
     rm -rf "$NEW_APP"
     cp -R "$TARGET_APP" "$NEW_APP"
@@ -520,15 +539,11 @@ if [[ "$MODE" == 'delta' ]]; then
   rm -rf "$NEW_APP_DIR"
   ditto "$STAGED_APP_DIR" "$NEW_APP_DIR"
   cp -f "$STAGED_APP/Contents/Info.plist" "$NEW_APP/Contents/Info.plist"
-  # 模型层不在增量包内时从旧包恢复；增量包自带时以增量包为准。
-  if [[ "$INCLUDE_LIVE2D" != 'true' && -d "$TARGET_APP_DIR/$LIVE2D_DIR" ]]; then
-    mkdir -p "$NEW_APP_DIR/$LIVE2D_DIR"
-    ditto "$TARGET_APP_DIR/$LIVE2D_DIR" "$NEW_APP_DIR/$LIVE2D_DIR"
-  fi
 else
   ditto "$STAGED_APP" "$NEW_APP"
   test -f "$NEW_APP/Contents/Info.plist"
 fi
+
 test -x "$NEW_APP/Contents/MacOS/$APP_NAME"
 
 rm -rf "$BACKUP_APP"
@@ -583,12 +598,12 @@ printf '[%s] update completed\\n' "$(date '+%Y-%m-%d %H:%M:%S')"
 
 async function launchInstallHelper(options = {}) {
   if (process.platform !== 'darwin') throw new Error('在线安装仅支持 macOS');
+
   const targetAppPath = path.resolve(String(options.targetAppPath || ''));
   const stagedAppPath = path.resolve(String(options.stagedAppPath || ''));
   const updateDir = path.resolve(String(options.updateDir || ''));
   const currentPid = Number(options.currentPid);
   const mode = options.mode === 'delta' ? 'delta' : 'full';
-  const includeLive2d = options.includeLive2d === true;
 
   if (!targetAppPath.endsWith(`/${APP_NAME}.app`) || !Number.isInteger(currentPid) || currentPid <= 0) {
     throw new Error('更新安装参数无效');
@@ -606,13 +621,13 @@ async function launchInstallHelper(options = {}) {
     targetAppPath,
     stagedAppPath,
     updateDir,
-    mode,
-    includeLive2d ? 'true' : 'false'
+    mode
   ], {
     detached: true,
     stdio: 'ignore'
   });
   child.unref();
+
   return { helperPath };
 }
 

@@ -123,7 +123,6 @@ class ConfigManager {
       redis: editableDraft.redis || currentRaw.redis,
       properties: editableDraft.properties || currentRaw.properties,
       claudeCode: editableDraft.claudeCode || currentRaw.claudeCode,
-      waifu: editableDraft.waifu || currentRaw.waifu,
       tunnel: editableDraft.tunnel || currentRaw.tunnel,
       sshTunnel: {
         ...(currentRaw.sshTunnel || {}),

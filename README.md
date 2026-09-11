@@ -1,6 +1,6 @@
 # MeterSphere Control Panel
 
-`metersphere-control-panel` 是一个独立维护的 MeterSphere 本地开发控制台，用于管理同级或指定目录中的 MeterSphere 源码项目。
+`metersphere-control-panel` 是一个独立维护的 MeterSphere 本地开发控制台，用于管理同级或指定目录中的 MeterSphere 源码项目，并提供 macOS Local Service Hub 桌面入口。
 
 它面向本地开发、联调、构建和验证场景，不是可直接暴露到公网的运维后台。
 
@@ -15,14 +15,13 @@
 - 实时通信：WebSocket 推送服务状态、任务进度和各类日志
 - SSH 隧道：保存端口映射、手动连接、自动连接和断线重连
 - SQL 工作区：使用专用数据库只读账号执行 SQL
-- AI 看板娘：可选 Live2D、AI 对话、TTS 和音频驱动嘴型同步
-- 桌面应用：支持构建 macOS Electron DMG
+- 桌面应用：macOS Local Service Hub，本地服务快捷启动/访问/关闭与在线更新
 
 ## 技术栈
 
 ### 后端
 
-- Node.js 18+
+- Node.js 22.12+
 - Express
 - 原生 WebSocket (`ws`)
 - MySQL (`mysql2`)
@@ -34,27 +33,31 @@
 - React 18
 - Vite 5
 - Zustand
-- PixiJS / Live2D（按配置懒加载）
+
+### Desktop
+
+- Electron 44.3.0
+- electron-builder
+- macOS x64 / arm64
 
 ## 项目结构
 
 ```text
 .
 ├── backend/
-│   ├── config/                 # Redis 等运行时配置
-│   ├── controllers/            # HTTP 控制器
-│   ├── middleware/             # 本地令牌鉴权
-│   ├── routes/                 # API 路由
-│   ├── services/               # 任务、进程、构建、配置、SQL、WebSocket 等服务
-│   ├── utils/                  # 日志、错误、校验工具
-│   └── server.js               # 后端入口
+│   ├── config/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── routes/
+│   ├── services/
+│   ├── utils/
+│   └── server.js
 ├── docs/
 ├── frontend/
 │   ├── public/
 │   └── src/
 │       ├── components/
 │       ├── hooks/
-│       ├── plugins/
 │       ├── store/
 │       └── styles/
 ├── scripts/
@@ -64,13 +67,13 @@
 
 ## 运行要求
 
-- Node.js 18+
+- Node.js 22.12+
 - npm
 - Java 和 Maven Wrapper 环境
 - 可访问的 MeterSphere 源码目录
 - macOS 或 Linux
 
-当前服务进程控制主要面向 Unix 环境。Electron 构建配置当前只提供 macOS DMG；Windows 不是正式支持目标。
+当前服务进程控制主要面向 Unix 环境。Electron 正式构建目标为 macOS；Windows 不是正式支持目标。
 
 ## 安装与启动
 
@@ -107,10 +110,16 @@ http://127.0.0.1:3000
 ### macOS 桌面包
 
 ```bash
-npm run electron:build
+npm run electron:app
 ```
 
-桌面版通过 GitHub 的 `desktop-v*` Release 在线更新，按 CPU 架构下载 ZIP 并校验 SHA256。修复后的更新器遵循 macOS 系统代理（如 `127.0.0.1:7890`），并支持 GitHub 匿名 API 限流时的公开 Release 后备读取。原始 `2.0.0` 在需要系统代理的网络中需手动安装修复版一次。发布与升级步骤见 [在线更新说明](docs/DESKTOP-UPDATE.md)。
+推荐的本机安装/更新命令：
+
+```bash
+npm run install:local
+```
+
+Desktop 发布使用 `desktop-v*` GitHub Release。App 会按 CPU 架构选择 ZIP、校验 SHA256，并在 Electron 运行时一致时优先使用 delta 包。详见 [Desktop 在线更新](docs/DESKTOP-UPDATE.md)。
 
 ## 配置文件
 
@@ -132,15 +141,15 @@ MS_CONFIG_PATH=/custom/path/config.json
 - `port`
 - `maxLogLines`
 - `services`
+- `desktopApplications`
 - `package`
 - `properties`
 - `redis`
 - `sshTunnel`
-- `waifu`
 - `claudeCode`
 - `jvmOptions`
 
-配置保存时会先备份旧文件，再通过临时文件原子替换。
+配置保存时使用临时文件原子替换，并保留备份。Desktop 本地服务定义中的启动/关闭命令只按已保存 ID 执行，不提供任意命令执行 API。
 
 ### 项目根目录
 
@@ -150,13 +159,11 @@ MS_CONFIG_PATH=/custom/path/config.json
 
 ## SQL 工作区与只读账号
 
-SQL 工作区不再在应用层判断 SQL 类型，也不会给 SQL 自动追加 `LIMIT`。数据库权限是唯一的写操作安全边界。
+SQL 工作区不在应用层判断 SQL 类型，也不会自动追加 `LIMIT`。数据库账号权限是写操作安全边界。
 
 控制面板不会复用 `metersphere.properties` 中的业务数据库用户名和密码。必须单独配置数据库只读账号；未配置或检测到写权限时，SQL 工作区会拒绝连接。
 
 ### 创建 MySQL 只读账号
-
-以下示例需要根据实际数据库名、来源地址和密码调整：
 
 ```sql
 CREATE USER 'ms_panel_ro'@'127.0.0.1' IDENTIFIED BY 'change-this-password';
@@ -164,7 +171,7 @@ GRANT SELECT, SHOW VIEW ON metersphere.* TO 'ms_panel_ro'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 
-不要授予以下权限：
+不要授予：
 
 - `INSERT`、`UPDATE`、`DELETE`
 - `CREATE`、`DROP`、`ALTER`、`INDEX`
@@ -174,7 +181,7 @@ FLUSH PRIVILEGES;
 
 控制面板连接时会执行 `SHOW GRANTS FOR CURRENT_USER()`。检测到高风险权限后会立即关闭连接池。
 
-### 方式一：环境变量
+### 环境变量
 
 ```bash
 export MS_SQL_READONLY_HOST=127.0.0.1
@@ -184,9 +191,7 @@ export MS_SQL_READONLY_USER=ms_panel_ro
 export MS_SQL_READONLY_PASSWORD='change-this-password'
 ```
 
-`HOST`、`PORT` 和 `DATABASE` 未设置时，可以从 `MS_PROPERTIES_PATH` 指向的 MeterSphere properties 中推导；只读用户名不会从业务配置中回退。
-
-### 方式二：独立 properties 文件
+### 独立 properties 文件
 
 默认路径：
 
@@ -194,7 +199,7 @@ export MS_SQL_READONLY_PASSWORD='change-this-password'
 ~/.metersphere-control-panel/sql-readonly.properties
 ```
 
-内容示例：
+示例：
 
 ```properties
 spring.datasource.url=jdbc:mysql://127.0.0.1:3306/metersphere
@@ -225,8 +230,6 @@ export MS_REDIS_DB=0
 export MS_CACHE_KEY_PREFIX=ms-panel:
 ```
 
-当 Redis 被配置为任务强依赖且不可用时，新的控制任务会返回 `503 REDIS_UNAVAILABLE`。任务执行中的短暂写入失败会进入内存恢复缓冲，并在 Redis 恢复后补写。
-
 ## 本地访问安全
 
 后端默认只监听：
@@ -235,13 +238,13 @@ export MS_CACHE_KEY_PREFIX=ms-panel:
 127.0.0.1
 ```
 
-访问令牌可以通过以下方式传递：
+访问令牌支持：
 
 - `X-MS-Local-Token`
 - `Authorization: Bearer <token>`
-- 首次打开页面时的 `?token=<token>`
+- 首次页面访问的 `?token=<token>`
 
-前端会把 URL 中的 Token 保存到 `localStorage`，随后从地址栏移除，并自动添加到 API 和 WebSocket 请求。
+前端会保存 Token 后从地址栏移除，并自动附加到后续 API 和 WebSocket 请求。写请求还会校验浏览器 `Origin`，阻止其他网页跨站调用本机控制 API。
 
 如设置：
 
@@ -276,12 +279,10 @@ WebSocket 地址：
 - `infra:status`
 - `tunnel:status`
 
-旧的 `build:*`、`service:status` 和 `/api/progress/*` 仍处于兼容期。新增功能应优先使用 `/api/jobs/*` 和 `job:*` 事件。
-
 ## API 模块
 
 ```text
-/api/services   服务、基础设施、SDK 和 SSH 隧道
+/api/services   服务、基础设施、SDK、SSH 隧道和 Desktop 本地应用
 /api/build      前端构建
 /api/progress   构建兼容进度接口
 /api/jobs       统一任务查询
@@ -289,7 +290,6 @@ WebSocket 地址：
 /api/config     配置管理
 /api/logs       日志查询与兼容流
 /api/sql        SQL 工作区
-/api/chat       AI 对话与 TTS
 ```
 
 ## Electron 下载问题
@@ -300,9 +300,11 @@ WebSocket 地址：
 npm config set registry https://registry.npmmirror.com
 export ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 npm cache clean --force
-rm -rf node_modules package-lock.json frontend/node_modules frontend/package-lock.json
+rm -rf node_modules frontend/node_modules
 npm run install:all
 ```
+
+如果需要重新生成 lockfile，应在明确确认依赖变化后执行，不要无故删除已验证的 lockfile。
 
 ## License
 

@@ -98,12 +98,11 @@ backend/
   __tests__/           # Jest test files
 frontend/
   src/
-    App.jsx            # Shell: sidebar + tab panels + waifu
+    App.jsx            # Shell: sidebar + tab panels
     main.jsx           # React root
     store/             # Zustand stores (useAppStore.js, useUiStore.js)
     hooks/             # useWebSocket.jsx
     components/        # ~25 components (each .jsx + .css pair)
-    live2d/            # Optional Live2D waifu system (feature-flagged)
     styles/            # Global CSS
     utils/             # passwordCache.js
 config.json.example    # Example config with all fields
@@ -138,7 +137,7 @@ docs/                  # Plans, operational notes, regressions, roadmap
 
 ### Config Sections
 
-`config.json` has sections for: `port`, `projectRoot`, `npmPath`, `maxLogLines`, `jvmOptions`, `redis`, `services` (per-service definitions with pom/port/healthCheck/startOrder/critical/enabled), `package` (build config), `properties` (MeterSphere properties file paths), `waifu` (AI chat config), `claudeCode` (Claude Code integration).
+`config.json` has sections for: `port`, `projectRoot`, `npmPath`, `maxLogLines`, `jvmOptions`, `redis`, `services` (per-service definitions with pom/port/healthCheck/startOrder/critical/enabled), `package` (build config), `properties` (MeterSphere properties file paths), `claudeCode` (Claude Code integration).
 
 The config page exposes three views: `editable` (writable fields), `runtime` (read-only env-derived), `resolved` (final merged snapshot).
 
