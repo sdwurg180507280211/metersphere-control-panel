@@ -20,6 +20,7 @@ const { sendError } = require('./utils/errors');
 // 导入路由
 const serviceRoutes = require('./routes/services');
 const commandProjectRoutes = require('./routes/commandProjects');
+const meterSphereProjectRoutes = require('./routes/meterSphereProject');
 const buildRoutes = require('./routes/build');
 const logRoutes = require('./routes/logs');
 const progressRoutes = require('./routes/progress');
@@ -40,6 +41,7 @@ app.use('/api', localAuth);
 // API 路由
 app.use('/api/services', serviceRoutes);
 app.use('/api/projects/commands', commandProjectRoutes);
+app.use('/api/projects/metersphere', meterSphereProjectRoutes);
 app.use('/api/build', buildRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/progress', progressRoutes);

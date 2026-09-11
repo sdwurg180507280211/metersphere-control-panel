@@ -35,6 +35,66 @@ test('Project Center builds one Project[] with builtin MeterSphere and persisted
   assert.equal(projects[1].statusPort, 3080)
 })
 
+test('Project Center uses persisted MeterSphere metadata when a persisted record exists', () => {
+  const projects = buildProjectViewModel([], {
+    persisted: true,
+    project: {
+      id: 'metersphere',
+      type: 'metersphere',
+      name: 'MeterSphere Local'
+    }
+  })
+
+  assert.deepEqual(projects, [{
+    id: 'metersphere',
+    type: PROJECT_TYPES.METERSPHERE,
+    source: PROJECT_SOURCES.PERSISTED,
+    name: 'MeterSphere Local',
+    capabilities: ['openWorkspace']
+  }])
+})
+
+test('MeterSphere view-model allowlist strips operational and command fields', () => {
+  const projects = buildProjectViewModel([], {
+    persisted: true,
+    project: {
+      id: 'wrong-id',
+      type: 'metersphere',
+      name: 'MeterSphere Safe',
+      source: 'persisted',
+      projectRoot: '/bad-value',
+      services: { gateway: {} },
+      package: { mode: 'bad' },
+      properties: { bad: true },
+      startCommand: 'bad-start',
+      stopCommand: 'bad-stop',
+      statusPort: 1234
+    }
+  })
+
+  const meterSphere = projects[0]
+  assert.deepEqual(meterSphere, {
+    id: 'metersphere',
+    type: PROJECT_TYPES.METERSPHERE,
+    source: PROJECT_SOURCES.PERSISTED,
+    name: 'MeterSphere Safe',
+    capabilities: ['openWorkspace']
+  })
+  assert.equal('projectRoot' in meterSphere, false)
+  assert.equal('startCommand' in meterSphere, false)
+  assert.equal('statusPort' in meterSphere, false)
+})
+
+test('normalized MeterSphere fallback stays builtin when API record is not persisted', () => {
+  const projects = buildProjectViewModel([], {
+    persisted: false,
+    project: { id: 'metersphere', type: 'metersphere', name: 'MeterSphere' }
+  })
+
+  assert.equal(projects[0].source, PROJECT_SOURCES.BUILTIN)
+  assert.deepEqual(projects[0].capabilities, ['openWorkspace'])
+})
+
 test('Project view-model construction does not mutate persisted command data', () => {
   const persisted = { id: 'node-api', name: 'Node API', startCommand: 'node server.js', stopCommand: 'pkill node' }
   const input = [persisted]

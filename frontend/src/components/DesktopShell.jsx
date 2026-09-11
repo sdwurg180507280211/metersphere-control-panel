@@ -200,6 +200,7 @@ function ProjectRow({
 
 export default function DesktopShell() {
   const [commandProjects, setCommandProjects] = useState([])
+  const [meterSphereProject, setMeterSphereProject] = useState(null)
   const [commandStatus, setCommandStatus] = useState({})
   const [meterSphere, setMeterSphere] = useState({ catalog: [], status: {}, available: true })
   const [manualRunning, setManualRunning] = useState(readManualRunning)
@@ -224,18 +225,21 @@ export default function DesktopShell() {
         requestJson('/api/projects/commands'),
         requestJson('/api/projects/commands/status')
       ])
+      const meterSphereProjectRequest = requestJson('/api/projects/metersphere').catch(() => null)
       const meterSphereRequest = Promise.all([
         requestJson('/api/services/catalog'),
         requestJson('/api/services/status')
       ]).catch(() => null)
 
-      const [[commandProjectsData, commandStatusData], meterSphereData] = await Promise.all([
+      const [[commandProjectsData, commandStatusData], meterSphereProjectData, meterSphereData] = await Promise.all([
         commandProjectsRequest,
+        meterSphereProjectRequest,
         meterSphereRequest
       ])
 
       setCommandProjects(Array.isArray(commandProjectsData) ? commandProjectsData : [])
       setCommandStatus(commandStatusData || {})
+      setMeterSphereProject(meterSphereProjectData)
       if (meterSphereData) {
         const [meterSphereCatalog, meterSphereStatus] = meterSphereData
         setMeterSphere({
@@ -332,7 +336,10 @@ export default function DesktopShell() {
     })
   }, [commandProjects])
 
-  const projects = useMemo(() => buildProjectViewModel(commandProjects), [commandProjects])
+  const projects = useMemo(
+    () => buildProjectViewModel(commandProjects, meterSphereProject),
+    [commandProjects, meterSphereProject]
+  )
 
   const commandSummary = useMemo(() => {
     const running = commandProjects.filter((project) => commandStatus[project.id]?.running === true).length
