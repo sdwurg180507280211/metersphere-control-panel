@@ -6,6 +6,15 @@ const { createAppError } = require('../utils/errors');
 const { ensureParentDirectory, secureFile, copyPrivateFile, writePrivateText } = require('../utils/privateFile');
 
 const APP_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const COMMAND_PROJECT_TYPE = 'command';
+
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
 
 function readConfig() {
   secureFile(CONFIG_PATH);
@@ -26,11 +35,46 @@ function writeConfig(rawConfig) {
   secureFile(CONFIG_PATH);
 }
 
-function getDefinitions(raw = readConfig()) {
-  const configured = raw.desktopApplications;
-  return configured && typeof configured === 'object' && !Array.isArray(configured)
-    ? configured
-    : {};
+function getProjects(raw) {
+  return isObjectRecord(raw.projects) ? raw.projects : {};
+}
+
+function getLegacyDefinitions(raw) {
+  return isObjectRecord(raw.desktopApplications) ? raw.desktopApplications : {};
+}
+
+function toCommandDefinition(rawDefinition = {}) {
+  const definition = isObjectRecord(rawDefinition) ? rawDefinition : {};
+  return {
+    ...definition,
+    type: COMMAND_PROJECT_TYPE
+  };
+}
+
+function getCommandDefinitions(raw = readConfig()) {
+  if (hasOwn(raw, 'projects')) {
+    return Object.fromEntries(
+      Object.entries(getProjects(raw)).filter(([, definition]) => (
+        isObjectRecord(definition) && definition.type === COMMAND_PROJECT_TYPE
+      ))
+    );
+  }
+
+  return Object.fromEntries(
+    Object.entries(getLegacyDefinitions(raw)).map(([id, definition]) => [id, toCommandDefinition(definition)])
+  );
+}
+
+function materializeProjects(raw) {
+  const projects = hasOwn(raw, 'projects')
+    ? { ...getProjects(raw) }
+    : Object.fromEntries(
+      Object.entries(getLegacyDefinitions(raw)).map(([id, definition]) => [id, toCommandDefinition(definition)])
+    );
+
+  raw.projects = projects;
+  delete raw.desktopApplications;
+  return projects;
 }
 
 function slugify(value) {
@@ -64,7 +108,14 @@ function normalizePort(value) {
   return port;
 }
 
-function normalizeDefinition(input = {}, definitions = {}) {
+function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions = definitions) {
+  const requestedType = input.type === undefined || input.type === null || input.type === ''
+    ? COMMAND_PROJECT_TYPE
+    : String(input.type).trim();
+  if (requestedType !== COMMAND_PROJECT_TYPE) {
+    throw createAppError(400, 'DESKTOP_APP_TYPE_UNSUPPORTED', '当前仅支持 command 类型项目', { type: requestedType });
+  }
+
   const name = String(input.name || '').trim();
   const startCommand = String(input.startCommand || '').trim();
   const stopCommand = String(input.stopCommand || '').trim();
@@ -79,13 +130,14 @@ function normalizeDefinition(input = {}, definitions = {}) {
     if (!APP_ID_PATTERN.test(id)) throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '本地应用 ID 格式无效');
     if (!definitions[id]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
   } else {
-    id = createUniqueId(name, definitions);
+    id = createUniqueId(name, reservedDefinitions);
   }
 
   return {
     id,
     definition: {
       name,
+      type: COMMAND_PROJECT_TYPE,
       startCommand,
       stopCommand,
       ...(statusPort ? { statusPort } : {})
@@ -94,9 +146,10 @@ function normalizeDefinition(input = {}, definitions = {}) {
 }
 
 function getApps() {
-  const definitions = getDefinitions();
+  const definitions = getCommandDefinitions();
   return Object.entries(definitions).map(([id, raw = {}]) => ({
     id,
+    type: COMMAND_PROJECT_TYPE,
     name: String(raw.name || id),
     startCommand: String(raw.startCommand || ''),
     stopCommand: String(raw.stopCommand || ''),
@@ -106,10 +159,10 @@ function getApps() {
 
 function saveApp(input) {
   const raw = readConfig();
-  const definitions = getDefinitions(raw);
-  const { id, definition } = normalizeDefinition(input, definitions);
-  raw.desktopApplications = definitions;
-  raw.desktopApplications[id] = definition;
+  const definitions = getCommandDefinitions(raw);
+  const projects = materializeProjects(raw);
+  const { id, definition } = normalizeDefinition(input, definitions, projects);
+  raw.projects[id] = definition;
   writeConfig(raw);
   return { id, ...definition };
 }
@@ -117,17 +170,18 @@ function saveApp(input) {
 function removeApp(id) {
   const appId = String(id || '').trim().toLowerCase();
   const raw = readConfig();
-  const definitions = getDefinitions(raw);
+  const definitions = getCommandDefinitions(raw);
   if (!definitions[appId]) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${appId}`, { appId });
-  delete definitions[appId];
-  if (Object.keys(definitions).length > 0) raw.desktopApplications = definitions;
-  else delete raw.desktopApplications;
+
+  const projects = materializeProjects(raw);
+  delete projects[appId];
+  raw.projects = projects;
   writeConfig(raw);
   return { id: appId };
 }
 
 function hasApp(id) {
-  return Boolean(getDefinitions()[String(id || '').trim().toLowerCase()]);
+  return Boolean(getCommandDefinitions()[String(id || '').trim().toLowerCase()]);
 }
 
 module.exports = { getApps, saveApp, removeApp, hasApp };

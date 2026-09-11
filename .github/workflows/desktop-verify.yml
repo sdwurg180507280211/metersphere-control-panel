@@ -35,5 +35,5 @@ jobs:
       - name: Verify desktop
         run: npm run verify:desktop
 
-      - name: Test desktop updater, hardening and runtime policy
-        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js
+      - name: Test desktop updater, hardening, runtime policy and project migration
+        run: npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js backend/__tests__/desktopAppConfigService.test.js
