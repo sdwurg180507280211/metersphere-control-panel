@@ -56,7 +56,11 @@ function validateTunnelPorts(ports) {
     if (!validator.isValidPort(remotePort) || !validator.isValidPort(localPort)) {
       throw createAppError(400, 'INVALID_TUNNEL_PORT', '端口必须是 1 到 65535 之间的整数');
     }
-    return { remotePort, localPort };
+    return {
+      remotePort,
+      localPort,
+      exposePublicly: item.exposePublicly === true
+    };
   });
 }
 
@@ -202,8 +206,8 @@ class SystemCommandService {
 
   async _doStartTunnel(ports, remoteUser, remoteHost) {
     // 构建 -R 参数
-    const reverseArgs = ports.flatMap(({ remotePort, localPort }) => [
-      '-R', `${remotePort}:localhost:${localPort}`
+    const reverseArgs = ports.flatMap(({ remotePort, localPort, exposePublicly }) => [
+      '-R', `${exposePublicly ? '0.0.0.0:' : ''}${remotePort}:localhost:${localPort}`
     ]);
 
     const sshArgs = [

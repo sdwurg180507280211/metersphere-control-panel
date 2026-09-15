@@ -3,10 +3,10 @@ import { useConfigStore } from '../store/useAppStore'
 import './TunnelDialog.css'
 
 const DEFAULT_PORT_MAPPINGS = [
-  { remotePort: 12580, localPort: 8000, description: '主服务' },
-  { remotePort: 4005, localPort: 4005, description: '辅助服务' },
-  { remotePort: 4002, localPort: 4002, description: '辅助服务' },
-  { remotePort: 4001, localPort: 4001, description: '辅助服务' }
+  { remotePort: 12580, localPort: 8000, exposePublicly: true, description: '主服务' },
+  { remotePort: 4005, localPort: 4005, exposePublicly: false, description: '辅助服务' },
+  { remotePort: 4002, localPort: 4002, exposePublicly: false, description: '辅助服务' },
+  { remotePort: 4001, localPort: 4001, exposePublicly: false, description: '辅助服务' }
 ]
 
 function TunnelDialog({ isOpen, onClose }) {
@@ -52,7 +52,8 @@ function TunnelDialog({ isOpen, onClose }) {
           setPortMappings(dataConfig.data.ports.map(m => ({
             ...m,
             remotePort: Number(m.remotePort),
-            localPort: Number(m.localPort)
+            localPort: Number(m.localPort),
+            exposePublicly: !!m.exposePublicly
           })))
           setAutoConnect(!!dataConfig.data.autoConnect)
         } else {
@@ -102,7 +103,7 @@ function TunnelDialog({ isOpen, onClose }) {
 
   const addPort = useCallback(() => {
     if (loading) return
-    setPortMappings((prev) => [...prev, { remotePort: '', localPort: '', description: '' }])
+    setPortMappings((prev) => [...prev, { remotePort: '', localPort: '', exposePublicly: false, description: '' }])
   }, [loading])
 
   const removePort = useCallback((index) => {
@@ -116,6 +117,7 @@ function TunnelDialog({ isOpen, onClose }) {
       .map((m) => ({
         remotePort: Number(m.remotePort),
         localPort: Number(m.localPort),
+        exposePublicly: !!m.exposePublicly,
         description: m.description || ''
       }))
 
@@ -144,6 +146,7 @@ function TunnelDialog({ isOpen, onClose }) {
     const ports = validPorts.map((m) => ({
       remotePort: Number(m.remotePort),
       localPort: Number(m.localPort),
+      exposePublicly: !!m.exposePublicly,
       description: m.description || ''
     }))
 
@@ -259,6 +262,7 @@ function TunnelDialog({ isOpen, onClose }) {
               <div className="tunnel-ports-head">
                 <span>远程端口</span>
                 <span>本地端口</span>
+                <span>公网监听</span>
                 <span>说明</span>
                 <span />
               </div>
@@ -284,6 +288,17 @@ function TunnelDialog({ isOpen, onClose }) {
                         placeholder="本地端口"
                         disabled={loading}
                       />
+                    </div>
+                    <div className="tunnel-port-cell">
+                      <label className="tunnel-public-cell">
+                        <input
+                          type="checkbox"
+                          checked={!!mapping.exposePublicly}
+                          onChange={(e) => updatePort(index, 'exposePublicly', e.target.checked)}
+                          disabled={loading}
+                        />
+                        <span>{mapping.exposePublicly ? '是' : '否'}</span>
+                      </label>
                     </div>
                     <div className="tunnel-port-cell">
                       <input

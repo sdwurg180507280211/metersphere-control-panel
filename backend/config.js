@@ -233,7 +233,8 @@ function normalizeSshTunnelConfig(rawTunnel = {}, legacyTunnel = {}) {
       .map(p => ({
         remotePort: normalizeNumericField(p.remotePort, null),
         localPort: normalizeNumericField(p.localPort, null),
-        description: normalizeString(p.description, '')
+        description: normalizeString(p.description, ''),
+        exposePublicly: normalizeBoolean(p.exposePublicly, false)
       }))
       .filter(p => p.remotePort && p.localPort);
   }
