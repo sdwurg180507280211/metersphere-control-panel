@@ -27,6 +27,8 @@ jobs:
             frontend/package-lock.json
 
       - name: Validate release version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -38,6 +40,14 @@ jobs:
           fi
           if [[ ! -f build/icon.icns ]]; then
             echo "缺少 build/icon.icns；正式 Desktop Release 必须包含 App 图标" >&2
+            exit 1
+          fi
+          # 占号检查：tag 版本必须大于所有已发布的 desktop-v* 版本。
+          # 排除当前 tag 自身，允许同一 tag 的重跑补发。
+          MAX_PUBLISHED="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' \
+            | grep '^desktop-v' | sed 's/^desktop-v//' | grep -vx "$VERSION" | sort -V | tail -1 || true)"
+          if [[ -n "$MAX_PUBLISHED" && "$(printf '%s\n' "$VERSION" "$MAX_PUBLISHED" | sort -V | tail -1)" != "$VERSION" ]]; then
+            echo "版本号 $VERSION 已被已发布 Release 占用（当前最大: $MAX_PUBLISHED）；请换用更大的版本号，不要覆盖旧版本号" >&2
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
