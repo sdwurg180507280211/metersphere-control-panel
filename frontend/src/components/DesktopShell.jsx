@@ -25,6 +25,14 @@ export default function DesktopShell() {
   const { projects, loaded, loading, loadError, commandStatus, commandBusy, manualRunning, refresh, update } = consoleState
   const selected = projects.find((project) => project.id === route.projectId)
   const pageName = !route.projectId ? '管理项目' : isMS ? TAB_ITEMS.find((tab) => tab.id === activeTab)?.label : '项目概览'
+  const formatSize = (bytes) => (
+    bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`
+  )
+  const updateButtonTitle = [
+    update.asset?.updateMode === 'delta' ? '增量更新（模型层复用旧包）' : '完整更新',
+    update.asset?.bytes ? `约 ${formatSize(update.asset.bytes)}` : '',
+    update.notes ? update.notes.slice(0, 400) : ''
+  ].filter(Boolean).join(' · ') || undefined
 
   useEffect(() => { if (isMS) setVisitedMS(true) }, [isMS])
   useEffect(() => {
@@ -69,7 +77,7 @@ export default function DesktopShell() {
           <div className="console-connection" role="status"><i className={connected ? 'connected' : ''} />{connected ? '实时连接正常' : reconnectAttempts >= 5 ? '连接中断，请刷新重试' : '正在连接本机服务…'}</div>
           <div className="console-update">
             <span>{update.currentVersion ? `v${update.currentVersion}` : 'Local Service Hub'}</span>
-            {update.installSupported ? <button disabled={update.checking || update.installing} onClick={() => update.updateAvailable ? consoleState.installUpdate() : consoleState.checkUpdate(false)}>
+            {update.installSupported ? <button title={update.updateAvailable ? updateButtonTitle : undefined} disabled={update.checking || update.installing} onClick={() => update.updateAvailable ? consoleState.installUpdate() : consoleState.checkUpdate(false)}>
               {update.installing ? '正在安装…' : update.checking ? '检查中…' : update.updateAvailable ? `升级 v${update.latestVersion}` : '检查更新'}
             </button> : <span>本地控制台</span>}
           </div>
