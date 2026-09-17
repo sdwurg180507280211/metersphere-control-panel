@@ -12,10 +12,9 @@ app.setName('Local Service Hub');
 
 const APP_DATA_DIR = path.join(os.homedir(), '.metersphere-control-panel');
 const HUB_WINDOW_STATE_PATH = path.join(APP_DATA_DIR, 'window-state.json');
-const DEFAULT_HUB_WINDOW_BOUNDS = { width: 920, height: 680 };
+const DEFAULT_HUB_WINDOW_BOUNDS = { width: 1240, height: 820 };
 const MIN_HUB_WINDOW_BOUNDS = { width: 760, height: 540 };
 
-let workspaceWindow = null;
 let hubWindow = null;
 let tray = null;
 let server = null;
@@ -26,6 +25,8 @@ let isQuitting = false;
 let hubWindowStateTimer = null;
 let rendererReady = false;
 let pendingHubFocus = false;
+let consoleNavigationReady = false;
+let pendingProjectSelection = null;
 
 const useExternalDevBackend = process.env.MS_ELECTRON_EXTERNAL_BACKEND === '1';
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -47,18 +48,13 @@ function applyDevelopmentDockIcon() {
   app.dock.setIcon(icon);
 }
 
-function buildRendererUrl({ view = 'workspace' } = {}) {
+function buildRendererUrl() {
   const base = process.env.ELECTRON_START_URL || `http://localhost:${backendPort}`;
   const url = new URL(base);
   if (accessToken) url.searchParams.set('token', accessToken);
   url.searchParams.delete('desktop');
-  if (view === 'hub') {
-    url.searchParams.set('view', 'hub');
-    url.hash = '';
-  } else {
-    url.searchParams.delete('view');
-    url.hash = 'services';
-  }
+  url.searchParams.delete('view');
+  // Leave the hash empty so the console can restore its last project.
   return url.toString();
 }
 
@@ -159,32 +155,37 @@ function requestHubFocus() {
 }
 function markRendererReady() { rendererReady = true; createTray(); requestHubFocus(); }
 
-function createMeterSphereWorkspaceWindow() {
-  if (workspaceWindow && !workspaceWindow.isDestroyed()) { workspaceWindow.show(); workspaceWindow.focus(); return workspaceWindow; }
-  workspaceWindow = new BrowserWindow({ width: 1240, height: 820, minWidth: 960, minHeight: 680, show: false, backgroundColor: '#08101f', title: 'MeterSphere Workspace', webPreferences: sharedWebPreferences() });
-  hardenBrowserWindow(workspaceWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
-  workspaceWindow.loadURL(buildRendererUrl());
-  workspaceWindow.once('ready-to-show', () => workspaceWindow?.show());
-  if (process.env.NODE_ENV === 'development') workspaceWindow.webContents.openDevTools({ mode: 'detach' });
-  workspaceWindow.on('close', (event) => { if (process.platform === 'darwin' && !isQuitting) { event.preventDefault(); workspaceWindow.hide(); } });
-  workspaceWindow.on('closed', () => { workspaceWindow = null; });
-  return workspaceWindow;
+function flushProjectSelection() {
+  if (!consoleNavigationReady || !hubWindow || hubWindow.isDestroyed() || !pendingProjectSelection) return;
+  hubWindow.webContents.send('console:select-project', pendingProjectSelection);
+  pendingProjectSelection = null;
+}
+
+function requestProjectSelection(projectId) {
+  pendingProjectSelection = projectId;
+  requestHubFocus();
+  flushProjectSelection();
 }
 
 function createHubWindow() {
   if (hubWindow && !hubWindow.isDestroyed()) return hubWindow;
   if (!rendererReady || !backendPort) return null;
   const savedState = getHubWindowState();
-  hubWindow = new BrowserWindow({ ...savedState.bounds, minWidth: MIN_HUB_WINDOW_BOUNDS.width, minHeight: MIN_HUB_WINDOW_BOUNDS.height, show: false, resizable: true, backgroundColor: '#f5f5f7', title: 'Local Service Hub', webPreferences: sharedWebPreferences() });
+  hubWindow = new BrowserWindow({ ...savedState.bounds, minWidth: MIN_HUB_WINDOW_BOUNDS.width, minHeight: MIN_HUB_WINDOW_BOUNDS.height, show: false, resizable: true, backgroundColor: '#0b1322', title: 'Local Service Hub', webPreferences: sharedWebPreferences() });
   hardenBrowserWindow(hubWindow, { backendPort, startUrl: process.env.ELECTRON_START_URL });
-  hubWindow.loadURL(buildRendererUrl({ view: 'hub' }));
+  consoleNavigationReady = false;
+  hubWindow.webContents.on('did-start-loading', () => { consoleNavigationReady = false; });
+  hubWindow.loadURL(buildRendererUrl());
   hubWindow.once('ready-to-show', () => { if (savedState.shouldCenter) hubWindow?.center(); if (savedState.maximized) hubWindow?.maximize(); hubWindow?.show(); hubWindow?.focus(); });
   hubWindow.on('move', scheduleHubWindowStateSave);
   hubWindow.on('resize', scheduleHubWindowStateSave);
   hubWindow.on('maximize', scheduleHubWindowStateSave);
   hubWindow.on('unmaximize', scheduleHubWindowStateSave);
-  hubWindow.on('close', persistHubWindowState);
-  hubWindow.on('closed', () => { clearTimeout(hubWindowStateTimer); hubWindowStateTimer = null; hubWindow = null; });
+  hubWindow.on('close', (event) => {
+    persistHubWindowState();
+    if (process.platform === 'darwin' && !isQuitting) { event.preventDefault(); hubWindow.hide(); }
+  });
+  hubWindow.on('closed', () => { clearTimeout(hubWindowStateTimer); hubWindowStateTimer = null; hubWindow = null; consoleNavigationReady = false; });
   return hubWindow;
 }
 
@@ -196,7 +197,7 @@ function createTray() {
   tray.setToolTip('Local Service Hub');
   const contextMenu = Menu.buildFromTemplate([
     { label: '打开 Local Service Hub', click: () => requestHubFocus() },
-    { label: '打开 MeterSphere 工作区', click: () => createMeterSphereWorkspaceWindow() },
+    { label: '切换到 MeterSphere', click: () => requestProjectSelection('metersphere') },
     { type: 'separator' },
     { label: '退出 Local Service Hub', click: () => app.quit() }
   ]);
@@ -228,11 +229,16 @@ async function startBackend() {
   return null;
 }
 
+ipcMain.on('console:ready', (event) => {
+  if (!hubWindow || event.sender !== hubWindow.webContents) return;
+  consoleNavigationReady = true;
+  flushProjectSelection();
+});
 ipcMain.handle('project:open-workspace', async (_event, projectId) => {
   if (projectId !== 'metersphere') {
     throw new Error(`不支持的项目工作区: ${projectId || 'unknown'}`);
   }
-  createMeterSphereWorkspaceWindow();
+  requestProjectSelection('metersphere');
   return true;
 });
 ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
@@ -247,7 +253,7 @@ ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
 app.on('second-instance', () => { if (!hasSingleInstanceLock) return; requestHubFocus(); });
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
-  nativeTheme.themeSource = 'light'; applyDevelopmentDockIcon(); app.dock?.show();
+  nativeTheme.themeSource = 'dark'; applyDevelopmentDockIcon(); app.dock?.show();
   if (useExternalDevBackend) {
     backendPort = Number(process.env.MS_DEV_BACKEND_PORT || 3000); accessToken = process.env.MS_LOCAL_TOKEN || '';
     try { await waitForDevStack(); }

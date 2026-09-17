@@ -434,10 +434,6 @@ function PackageHistoryItem({ record, updateChangelog }) {
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      handleSaveChangelog()
-    }
     if (e.key === 'Escape') {
       handleCancelEdit()
     }
@@ -547,7 +543,7 @@ function PackageHistoryItem({ record, updateChangelog }) {
                       onClick={handleSaveChangelog}
                       disabled={saving}
                     >
-                      {saving ? '保存中...' : '保存 (Ctrl+Enter)'}
+                      {saving ? '保存中...' : '保存'}
                     </button>
                     <button
                       className="package-history-changelog-cancel"

@@ -9,7 +9,7 @@ import Tooltip from './Tooltip'
 import { ModuleButtonSkeleton } from './Skeleton'
 import './BuildTab.css'
 
-function BuildTab({ searchInputRef }) {
+function BuildTab({ searchInputRef, isActive = true }) {
   const { modules, activeBuilds, fetchModules, fetchActiveBuilds, addActiveBuild } = useBuildStore()
   const [initialLoading, setInitialLoading] = useState(true)
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, moduleId: null, moduleName: '' })
@@ -401,7 +401,7 @@ function BuildTab({ searchInputRef }) {
       </div>
 
       <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
+        isOpen={isActive && confirmDialog.isOpen}
         title="确认构建"
         message={`确定要构建 ${confirmDialog.moduleName} 吗？`}
         confirmText="开始构建"
@@ -424,7 +424,7 @@ function BuildTab({ searchInputRef }) {
       </ConfirmDialog>
 
       <ConfirmDialog
-        isOpen={batchDialog.isOpen}
+        isOpen={isActive && batchDialog.isOpen}
         title="全部构建"
         message={`确定要构建全部 ${modules.length} 个前端模块吗？将按顺序逐个构建。`}
         confirmText="开始构建"
@@ -447,7 +447,7 @@ function BuildTab({ searchInputRef }) {
       </ConfirmDialog>
 
       <BackendBuildPromptDialog
-        isOpen={backendPrompt.isOpen}
+        isOpen={isActive && backendPrompt.isOpen}
         onBuildBackend={handleBuildBackend}
         onCancel={handleCancelBackendPrompt}
       />

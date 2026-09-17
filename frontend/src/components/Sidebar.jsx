@@ -24,14 +24,13 @@ function Sidebar({ activeTab, onTabChange, items = [] }) {
                 className={`nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => onTabChange(item.id)}
                 aria-current={isActive ? 'page' : undefined}
-                title={`${item.label} (${item.shortcut})`}
+                title={item.label}
               >
                 <span className="nav-item-icon" aria-hidden="true">{item.navCode}</span>
                 <span className="nav-item-copy">
                   <span className="nav-label">{item.label}</span>
                   <span className="nav-description">{item.title}</span>
                 </span>
-                <span className="nav-shortcut">{item.shortcut}</span>
               </button>
             )
           })}

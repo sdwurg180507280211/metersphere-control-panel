@@ -306,6 +306,7 @@ export function useWebSocketEvents(scheduleRefresh) {
 
   const handleConnected = useCallback(() => {
     useServiceStore.getState().fetchServices()
+    useBuildStore.getState().fetchActiveBuilds()
     usePackageStore.getState().fetchActiveTask()
     useInfraStore.getState().fetchInfraStatus()
     useLogStore.getState().loadCommandHistory()

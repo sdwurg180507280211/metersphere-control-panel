@@ -13,7 +13,7 @@ function extractError(data, fallback) {
   return error || fallback
 }
 
-export default function PackageTaskGuard() {
+export default function PackageTaskGuard({ compact = false, onOpen }) {
   const currentTask = usePackageStore((state) => state.currentTask)
   const fetchActiveTask = usePackageStore((state) => state.fetchActiveTask)
   const [cancelling, setCancelling] = useState(false)
@@ -48,6 +48,12 @@ export default function PackageTaskGuard() {
 
   if ((!isRunning && !isFailed) || isDismissed) {
     return null
+  }
+
+  if (compact) {
+    return <button className={`console-task-link ${isFailed ? 'failed' : ''}`} onClick={onOpen}>
+      MeterSphere · {isFailed ? '打包失败' : isCancelling ? '正在取消打包' : '打包运行中'} · 查看 →
+    </button>
   }
 
   const handleCancel = async () => {

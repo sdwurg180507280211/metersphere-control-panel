@@ -67,12 +67,6 @@ export default function SqlTab() {
     }
   }, [sql, history]);
 
-  const handleKeyDown = (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      executeQuery();
-    }
-  };
-
   const formatSql = () => {
     // 简单的关键词大写格式化
     const keywords = ['select', 'from', 'where', 'and', 'or', 'group by', 'order by', 'limit', 'left join', 'inner join', 'on', 'as', 'insert into', 'values', 'update', 'set', 'delete', 'having', 'in', 'is', 'not', 'null', 'like', 'between'];
@@ -169,8 +163,8 @@ export default function SqlTab() {
             className="sql-textarea"
             value={sql}
             onChange={(e) => setSql(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="在此输入 SQL 语句... (支持 Ctrl + Enter 快捷运行)"
+            aria-label="SQL 查询语句"
+            placeholder="在此输入 SQL 语句…"
             spellCheck="false"
           />
         </main>
@@ -182,7 +176,6 @@ export default function SqlTab() {
               <div className="empty-icon">⚡</div>
               <p>准备就绪。编写查询并点击“运行”以查看结果。</p>
               <div className="quick-hints">
-                <span>Ctrl + Enter 执行</span>
                 <span>支持多行 SQL</span>
                 <span>结果自动截断至 1000 行</span>
               </div>

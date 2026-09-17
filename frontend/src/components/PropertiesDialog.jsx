@@ -188,10 +188,6 @@ function PropertiesDialog({ onClose }) {
       setTimeout(() => {
         target.selectionStart = target.selectionEnd = start + 1;
       }, 0);
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      e.preventDefault();
-      setShowSearch(true);
-      setTimeout(() => searchInputRef.current?.focus(), 0);
     }
   }
 

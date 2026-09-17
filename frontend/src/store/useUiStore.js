@@ -1,37 +1,20 @@
 import { create } from 'zustand'
+import { DEFAULT_ROUTE, normalizeRoute, parseProjectHash, projectHash } from '../projectNavigation'
 
-const TAB_IDS = ['build', 'services', 'package', 'config', 'sql']
-
-const getInitialTab = () => {
-  const hash = window.location.hash.slice(1)
-  if (TAB_IDS.includes(hash)) return hash
-
-  const saved = localStorage.getItem('activeTab')
-  if (saved && TAB_IDS.includes(saved)) return saved
-
-  return 'build'
-}
+const STORAGE_KEY = 'local-service-hub.navigation'
+let saved = {}
+try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {} } catch { /* Use defaults. */ }
+const initialRoute = parseProjectHash(window.location.hash, saved.route || DEFAULT_ROUTE)
 
 export const useUiStore = create((set, get) => ({
-  activeTab: getInitialTab(),
-  
-  setActiveTab: (tabId) => {
-    if (!TAB_IDS.includes(tabId) || tabId === get().activeTab) return
-
-    set({ activeTab: tabId })
-    localStorage.setItem('activeTab', tabId)
-    
-    // 同步到 URL Hash，但不触发额外的 hashchange 事件处理
-    if (window.location.hash.slice(1) !== tabId) {
-      window.history.pushState(null, '', `#${tabId}`)
-    }
-  },
-
-  syncHash: () => {
-    const hash = window.location.hash.slice(1)
-    if (TAB_IDS.includes(hash) && hash !== get().activeTab) {
-      set({ activeTab: hash })
-      localStorage.setItem('activeTab', hash)
-    }
+  route: initialRoute,
+  activeTab: initialRoute.projectId === 'metersphere' ? initialRoute.tab : normalizeRoute({ projectId: 'metersphere', tab: saved.meterSphereTab }).tab,
+  navigate: (next, { replace = false } = {}) => {
+    const route = normalizeRoute(next)
+    const activeTab = route.projectId === 'metersphere' ? route.tab : get().activeTab
+    set({ route, activeTab })
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ route, meterSphereTab: activeTab })) } catch { /* Session state still works. */ }
+    const hash = projectHash(route)
+    if (window.location.hash !== hash) window.history[replace ? 'replaceState' : 'pushState'](null, '', hash)
   }
 }))

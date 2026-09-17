@@ -559,7 +559,7 @@ function LogViewer({ type, searchInputRef, services = [] }) {
             <input
               ref={searchInputRefLocal}
               type="text"
-              placeholder="搜索日志... (快捷键: S)"
+              placeholder="搜索日志…"
               value={searchTerm}
               onChange={(e) => updateSearchTerm(e.target.value)}
               className="log-search-input"
@@ -586,7 +586,7 @@ function LogViewer({ type, searchInputRef, services = [] }) {
               💾
             </button>
           </Tooltip>
-          <Tooltip content="清空日志 (快捷键: C)" position="bottom">
+          <Tooltip content="清空日志" position="bottom">
             <button className="btn-icon" onClick={handleClear}>
               🗑️
             </button>

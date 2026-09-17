@@ -1,8 +1,6 @@
 import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import toast from 'react-hot-toast'
-import App from './App.jsx'
-import PackageTaskGuard from './components/PackageTaskGuard.jsx'
 import './styles/index.css'
 
 const DesktopShell = React.lazy(() => import('./components/DesktopShell.jsx'))
@@ -10,7 +8,6 @@ const DesktopShell = React.lazy(() => import('./components/DesktopShell.jsx'))
 const LOCAL_TOKEN_KEY = 'msLocalToken'
 const params = new URLSearchParams(window.location.search)
 const urlToken = params.get('token')
-const hubMode = params.get('view') === 'hub' || params.get('desktop') === '1'
 
 if (urlToken) {
   localStorage.setItem(LOCAL_TOKEN_KEY, urlToken)
@@ -42,17 +39,11 @@ window.fetch = async (input, init = {}) => {
   return response
 }
 
+// Legacy view=hub and desktop=1 URLs now render the same console.
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {hubMode ? (
-      <Suspense fallback={null}>
-        <DesktopShell />
-      </Suspense>
-    ) : (
-      <>
-        <App />
-        <PackageTaskGuard />
-      </>
-    )}
+    <Suspense fallback={<div className="console-loading" role="status">正在打开项目控制台…</div>}>
+      <DesktopShell />
+    </Suspense>
   </React.StrictMode>,
 )

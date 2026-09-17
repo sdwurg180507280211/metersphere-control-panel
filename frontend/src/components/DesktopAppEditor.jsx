@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import './DesktopAppEditor.css'
 
@@ -22,15 +22,38 @@ function buildInitial(project) {
 }
 
 export default function CommandProjectEditor({ project = null, onClose, onSaved }) {
+  const dialogRef = useRef(null)
+  const initial = useRef(buildInitial(project))
   const editing = Boolean(project?.id)
   const [form, setForm] = useState(() => buildInitial(project))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const canSave = form.name.trim()
+  const dirty = Object.keys(form).some((key) => String(form[key]) !== String(initial.current[key]))
+  const busy = saving || deleting
+  const requestClose = () => {
+    if (busy) return
+    if (dirty && !window.confirm('项目配置尚未保存。确定放弃这次修改吗？')) return
+    onClose?.()
+  }
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
+  useEffect(() => {
+    const guard = (event) => {
+      if (dirty || busy) { event.preventDefault(); event.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [dirty, busy])
+
+  const validPort = form.statusPort === '' || (Number.isInteger(Number(form.statusPort)) && Number(form.statusPort) >= 1 && Number(form.statusPort) <= 65535)
+  const canSave = validPort && form.name.trim()
     && form.startCommand.trim()
     && form.stopCommand.trim()
-    && !saving
+    && !busy
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
 
@@ -50,7 +73,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
           statusPort: form.statusPort === '' ? null : Number(form.statusPort)
         })
       })
-      toast.success(editing ? '项目配置已更新' : 'Command 项目已添加')
+      toast.success(editing ? '项目配置已更新' : '项目已添加')
       await onSaved?.()
       onClose?.()
     } catch (error) {
@@ -77,17 +100,17 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
   }
 
   return (
-    <div className="desktop-editor-backdrop desktop-no-drag" onMouseDown={onClose}>
+    <dialog ref={dialogRef} className="desktop-editor-dialog" aria-labelledby="project-editor-title" onCancel={(event) => { event.preventDefault(); requestClose() }}>
       <section className="desktop-editor" onMouseDown={(event) => event.stopPropagation()}>
         <header className="desktop-editor-head">
           <div>
-            <span>{editing ? 'EDIT COMMAND PROJECT' : 'ADD COMMAND PROJECT'}</span>
-            <h2>{editing ? '配置 Command 项目' : '添加 Command 项目'}</h2>
+            <span>本地项目</span>
+            <h2 id="project-editor-title">{editing ? `配置 ${project.name}` : '添加项目'}</h2>
           </div>
-          <button type="button" onClick={onClose}>×</button>
+          <button type="button" aria-label="关闭项目配置" disabled={busy} onClick={requestClose}>×</button>
         </header>
 
-        <div className="desktop-editor-body">
+        <fieldset className="desktop-editor-body" disabled={busy}>
           <label className="desktop-editor-block">
             <span>项目名称</span>
             <input
@@ -132,13 +155,14 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
               onChange={(event) => update('statusPort', event.target.value)}
               placeholder="3080"
             />
+            {!validPort && <small role="alert">端口必须是 1–65535 之间的整数。</small>}
             <small>填写后通过 127.0.0.1 端口判断运行状态；不填写时仍可手动启动和关闭。</small>
           </label>
 
           <div className="desktop-command-safety">
             命令只会先保存到本机配置；点击对应项目的“启动”或“关闭”时，后端才会按项目 ID 读取并执行。
           </div>
-        </div>
+        </fieldset>
 
         <footer className="desktop-editor-footer">
           {editing ? (
@@ -147,13 +171,13 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
             </button>
           ) : <span />}
           <div>
-            <button type="button" className="desktop-editor-cancel" onClick={onClose}>取消</button>
+            <button type="button" className="desktop-editor-cancel" disabled={busy} onClick={requestClose}>取消</button>
             <button type="button" className="desktop-editor-save" disabled={!canSave} onClick={handleSave}>
               {saving ? '保存中…' : editing ? '保存配置' : '添加项目'}
             </button>
           </div>
         </footer>
       </section>
-    </div>
+    </dialog>
   )
 }
