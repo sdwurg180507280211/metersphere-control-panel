@@ -68,18 +68,20 @@ describe('Desktop renderer navigation security', () => {
 });
 
 describe('Project Hub workspace semantics', () => {
-  test('uses project-level workspace IPC while preserving the legacy Hub URL alias', () => {
+  test('uses project-level workspace IPC without legacy URL view aliases', () => {
     const electronSource = fs.readFileSync(path.join(__dirname, '..', '..', 'electron.js'), 'utf8');
     const preloadSource = fs.readFileSync(path.join(__dirname, '..', '..', 'electron-preload.js'), 'utf8');
     const mainSource = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'src', 'main.jsx'), 'utf8');
 
     expect(electronSource).toContain("ipcMain.handle('project:open-workspace'");
     expect(electronSource).toContain("projectId !== 'metersphere'");
-    expect(electronSource).toContain("url.searchParams.set('view', 'hub')");
+    // 单窗口控制台自行恢复路由，主进程不再注入 view=hub 别名
+    expect(electronSource).toContain("url.searchParams.delete('view')");
     expect(electronSource).not.toContain('desktop:open-main');
     expect(preloadSource).toContain('openWorkspace: (projectId)');
     expect(preloadSource).not.toContain('openMainWindow');
-    expect(mainSource).toContain("params.get('view') === 'hub' || params.get('desktop') === '1'");
+    expect(mainSource).not.toContain("params.get('view')");
+    expect(mainSource).toContain("params.get('token')");
   });
 });
 
