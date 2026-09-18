@@ -1,0 +1,59 @@
+.compact-service-card {
+  box-sizing: border-box;
+  height: 72px;
+  min-width: 0;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, .5);
+}
+.compact-service-card.is-log-selected {
+  border-color: #93c5fd;
+  box-shadow: inset 3px 0 #93c5fd;
+  background: rgba(30, 64, 175, .16);
+}
+.compact-service-top, .compact-service-bottom {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+.compact-service-name, .compact-service-summary {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.compact-service-name { font-size: 13px; font-weight: 650; color: var(--text-primary); }
+.compact-service-phase { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.compact-service-card.phase-running:not(.is-stale) .compact-service-phase { color: #86efac; }
+.compact-service-card.phase-failed:not(.is-stale) .compact-service-phase { color: #fca5a5; }
+.compact-service-phase.is-busy { color: #fcd34d; }
+.compact-service-actions { display: flex; flex-shrink: 0; gap: 4px; }
+.compact-service-card button {
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 3px 6px;
+  min-height: 26px;
+  border-radius: 5px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, .07);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.compact-service-card button:hover:not(:disabled) { background: rgba(148, 163, 184, .2); }
+.compact-service-card button:disabled { opacity: .45; cursor: not-allowed; }
+.compact-service-card button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 1px; }
+.compact-service-card button[aria-pressed="true"] { color: #bfdbfe; border-color: #60a5fa; }
+.compact-service-bottom { font-size: 11px; line-height: 22px; }
+.compact-service-bottom button { border: 0; background: transparent; padding-block: 0; min-height: 24px; }
+.compact-service-summary.tone-ok { color: #86efac; }
+.compact-service-summary.tone-warning, .compact-service-bottom button.has-issue { color: #fcd34d; }
+.compact-service-summary.tone-unknown { color: #94a3b8; }

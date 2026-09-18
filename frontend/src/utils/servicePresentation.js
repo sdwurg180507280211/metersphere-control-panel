@@ -39,6 +39,23 @@ const DEPENDENCY_REASONS = {
   PHASE_UNKNOWN: '阶段未知', HEALTH_UNKNOWN: '健康状态未知', STATUS_UNKNOWN: '状态未知'
 }
 
+// Keep the card brief; complete observations remain available in the drawer.
+export function compactServicePresentation(status = {}, stale = false) {
+  const view = servicePresentation(status, stale)
+  const outdated = stale || status.healthStale === true || status.processStale === true
+  const summary = view.hasIssue
+    ? `${outdated ? '上次异常' : '异常'}：${view.message || (status.portOccupied ? '端口被其他进程占用' : '服务状态异常，请查看详情')}`
+    : `${view.processLabel} · ${view.healthLabel}`
+  const dependencyNeedsAttention = status.dependencyStatus?.ready === false
+    && !stale && !status.dependencyStatusStale
+  return {
+    ...view,
+    summary: `${outdated && view.hasIssue ? '状态待刷新 · ' : ''}${summary}${status.pid ? ` · PID ${status.pid}` : ''}`,
+    summaryTone: outdated ? 'unknown' : view.hasIssue ? 'warning' : view.healthTone,
+    dependencyNeedsAttention
+  }
+}
+
 export function dependencyPresentation(status = {}, stale = false) {
   const observation = status.dependencyStatus
   if (!observation || !Array.isArray(observation.dependencies) || observation.dependencies.length === 0) return null

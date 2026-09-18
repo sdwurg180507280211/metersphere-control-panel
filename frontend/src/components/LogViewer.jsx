@@ -116,7 +116,7 @@ function getNativeFileForLevel(level) {
   return 'info.log'
 }
 
-function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = null }) {
+function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = null, onServiceSelectionChange }) {
   const logRef = useRef(null)
   const [appliedLogRequest, setAppliedLogRequest] = useState(null)
   const searchInputRefLocal = useRef(null)
@@ -163,6 +163,11 @@ function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = nu
   const nativeLogLabel = isNativeSource
     ? `${selectedService?.name || selectedServiceId || '未选择服务'} / ${nativeFileLabel}`
     : ''
+  useEffect(() => {
+    if (type === 'service' && !pendingLogRequest) {
+      onServiceSelectionChange?.(isNativeSource && selectedService ? selectedServiceId : null)
+    }
+  }, [type, pendingLogRequest, isNativeSource, selectedService, selectedServiceId, onServiceSelectionChange])
   // 直接订阅状态，确保响应式更新
   const subscribedLines = useLogLines(type, currentSource)
   const nativeSelectionMatches = nativeServiceLogs.serviceId === selectedServiceId && nativeServiceLogs.file === nativeFile
@@ -567,6 +572,7 @@ function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = nu
             </>
           )}
           <select
+            aria-label="日志级别"
             value={logLevel}
             onChange={(e) => updateLogLevel(e.target.value)}
             className="log-select"
@@ -583,6 +589,7 @@ function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = nu
             <input
               ref={searchInputRefLocal}
               type="text"
+              aria-label="搜索日志"
               placeholder="搜索日志…"
               value={searchTerm}
               onChange={(e) => updateSearchTerm(e.target.value)}

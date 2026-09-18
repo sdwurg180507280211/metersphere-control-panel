@@ -10,7 +10,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
   gap: 8px;
 }
 
@@ -29,19 +29,80 @@
   border-radius: 16px 16px 0 0;
 }
 
-.services-control-panel {
-  padding: 14px;
+.services-workspace > .services-control-panel {
+  padding: 8px 10px;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
+
+.services-workspace.services-collapsed { grid-template-rows: auto minmax(0, 1fr); }
+.services-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; font-size: 13px; min-height: 28px; }
+.services-panel-tools { display: flex; gap: 8px; }
+.services-panel-tools button {
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, .25);
+  border-radius: 6px;
+  background: rgba(148, 163, 184, .08);
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.services-panel-tools button:disabled { opacity: .55; cursor: wait; }
+.services-panel-tools button:focus-visible, .services-controls .btn-grid:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }
+.services-controls { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.services-controls[hidden] { display: none; }
+.services-controls .btn-grid {
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1;
+  align-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  padding: 2px;
+  gap: 6px;
+  scrollbar-gutter: stable;
+}
+.services-control-panel .services-controls .card-header {
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin: 4px 0 6px;
+  padding: 2px 0;
+  gap: 12px;
+}
+.services-controls .batch-actions { width: auto; flex-wrap: nowrap; flex-shrink: 0; gap: 4px; }
+.services-controls .btn-batch { flex: none; min-width: auto; min-height: 30px; padding: 5px 8px; gap: 4px; white-space: nowrap; }
+.services-controls .infra-status-strip { gap: 4px; }
+.services-controls .infra-badge { padding: 4px 7px; }
+.services-controls .btn-icon-text { display: none; }
 
 .services-log-panel {
   min-height: 0;
+  min-width: 0;
+  container-type: inline-size;
 }
 
-.services-log-panel .card-header {
+/* Keep the service selector, level and search usable in narrow desktop windows. */
+.services-log-panel .log-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; }
+.services-log-panel .log-filters { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+.services-log-panel .log-source-switch { width: auto; }
+.services-log-panel .native-service-select { flex: 0 1 160px; width: 160px; min-width: 120px; }
+.services-log-panel .log-search { flex: 1 1 150px; width: auto; }
+.services-log-panel .log-search-input { min-width: 0; width: 100%; }
+.services-log-panel .log-source-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 900px) {
+  .services-log-panel .log-source-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+.services-workspace .services-log-panel .card-header {
   padding: 10px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: transparent;
