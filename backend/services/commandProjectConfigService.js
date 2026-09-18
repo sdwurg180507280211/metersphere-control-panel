@@ -1,4 +1,5 @@
 const fs = require('fs');
+const configFileStore = require('../utils/configFileStore');
 const path = require('path');
 const crypto = require('crypto');
 const { CONFIG_PATH, loadConfigFromFile } = require('../config');
@@ -18,21 +19,7 @@ function hasOwn(object, key) {
 
 function readConfig() {
   secureFile(CONFIG_PATH);
-  return loadConfigFromFile(CONFIG_PATH) || {};
-}
-
-function writeConfig(rawConfig) {
-  ensureParentDirectory(CONFIG_PATH);
-  const tempPath = `${CONFIG_PATH}.desktop.tmp`;
-  const backupPath = `${CONFIG_PATH}.bak`;
-
-  if (fs.existsSync(CONFIG_PATH)) {
-    copyPrivateFile(CONFIG_PATH, backupPath);
-  }
-
-  writePrivateText(tempPath, `${JSON.stringify(rawConfig, null, 2)}\n`);
-  fs.renameSync(tempPath, CONFIG_PATH);
-  secureFile(CONFIG_PATH);
+  return configFileStore.read(CONFIG_PATH);
 }
 
 function getPersistedProjects(raw) {
@@ -158,27 +145,30 @@ function getProjects() {
 }
 
 function saveProject(input) {
-  const raw = readConfig();
-  const definitions = getCommandDefinitions(raw);
-  const projects = materializeProjects(raw);
-  const { id, definition } = normalizeDefinition(input, definitions, projects);
-  raw.projects[id] = definition;
-  writeConfig(raw);
-  return { id, ...definition };
+  if (input?.id) require('./commandProjectService').assertIdle(input.id);
+  let result;
+  configFileStore.transaction(CONFIG_PATH, (raw) => {
+    const definitions = getCommandDefinitions(raw);
+    const projects = materializeProjects(raw);
+    const { id, definition } = normalizeDefinition(input, definitions, projects);
+    projects[id] = definition;
+    result = { id, ...definition };
+    return raw;
+  });
+  return result;
 }
 
 function removeProject(id) {
   const projectId = String(id || '').trim().toLowerCase();
-  const raw = readConfig();
-  const definitions = getCommandDefinitions(raw);
-  if (!definitions[projectId]) {
-    throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${projectId}`, { appId: projectId });
-  }
-
-  const projects = materializeProjects(raw);
-  delete projects[projectId];
-  raw.projects = projects;
-  writeConfig(raw);
+  require('./commandProjectService').assertIdle(projectId);
+  configFileStore.transaction(CONFIG_PATH, (raw) => {
+    if (!getCommandDefinitions(raw)[projectId]) {
+      throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${projectId}`, { appId: projectId });
+    }
+    const projects = materializeProjects(raw);
+    delete projects[projectId];
+    return raw;
+  });
   return { id: projectId };
 }
 

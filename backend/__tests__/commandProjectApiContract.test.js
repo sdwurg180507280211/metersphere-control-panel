@@ -40,7 +40,7 @@ describe('Command Project API canonicalization', () => {
   });
 
   test('Project Center uses canonical Command API while MeterSphere API stays unchanged', () => {
-    const shellSource = read('frontend/src/components/DesktopShell.jsx');
+    const shellSource = read('frontend/src/hooks/useProjectConsole.js');
     const editorSource = read('frontend/src/components/DesktopAppEditor.jsx');
     const frontendSource = `${shellSource}\n${editorSource}`;
 

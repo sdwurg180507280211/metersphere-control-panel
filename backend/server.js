@@ -33,6 +33,8 @@ const processManager = require('./services/processManager');
 
 const app = express();
 const server = http.createServer(app);
+let startupState = { phase: 'stopped', ready: false };
+let startupPromise = null;
 
 // 中间件
 app.use(express.json({ limit: '1mb' }));
@@ -93,6 +95,8 @@ if (!initialFrontendStatus.built) {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.get('/api/ready', (req, res) => res.status(startupState.ready ? 200 : 503).json({ ready: startupState.ready, phase: startupState.phase }));
 
 // 所有其他请求返回前端应用
 app.get('*', (req, res) => {
@@ -229,9 +233,11 @@ app.use((err, req, res, next) => {
 });
 
 // 初始化服务
-async function initServices() {
+async function initServices(signal) {
+  signal?.throwIfAborted();
   // 连接 Redis
   await cacheService.connect();
+  signal?.throwIfAborted();
 
   // 初始化 WebSocket
   websocketService.init(server);
@@ -239,13 +245,15 @@ async function initServices() {
   // 初始化打包历史表
   try {
     const packageHistoryService = require('./services/packageHistoryService');
-    await packageHistoryService.ensureTable();
-    console.log('打包历史表已就绪');
+    if (process.env.MS_PACKAGE_HISTORY_AUTO_INIT === '1') await packageHistoryService.ensureTable();
+    console.log(process.env.MS_PACKAGE_HISTORY_AUTO_INIT === '1' ? '打包历史表已就绪' : '打包历史按需初始化；现有数据库历史保持不变');
   } catch (error) {
     console.warn(`打包历史表初始化失败（不影响控制面板启动）: ${error.message}`);
   }
 
+  signal?.throwIfAborted();
   const recoveryResult = await jobService.recoverActiveJobs();
+  signal?.throwIfAborted();
   const recoveredJobs = recoveryResult.recoveredJobs || [];
   const cleanedLocks = recoveryResult.cleanup?.cleanedLocks || [];
   const cleanedRates = recoveryResult.cleanup?.cleanedRates || [];
@@ -260,6 +268,7 @@ async function initServices() {
 
   // 恢复后端服务进程跟踪
   try {
+    signal?.throwIfAborted();
     if (processManager.restoreServices) {
       const restoredCount = await processManager.restoreServices();
       if (restoredCount > 0) {
@@ -273,6 +282,7 @@ async function initServices() {
   // 恢复开发服务器进程跟踪
   try {
     const processManager = require('./services/processManager');
+    signal?.throwIfAborted();
     if (processManager.restoreDevServers) {
       const restoredCount = await processManager.restoreDevServers();
       if (restoredCount > 0) {
@@ -287,6 +297,7 @@ async function initServices() {
   try {
     const resolvedConfig = configManager.getResolvedConfig();
     const sshTunnelConfig = resolvedConfig.sshTunnel || {};
+    signal?.throwIfAborted();
     if (sshTunnelConfig.autoConnect && sshTunnelConfig.ports?.length > 0) {
       const systemCommandService = require('./services/systemCommandService');
       const currentStatus = await systemCommandService.getTunnelStatus();
@@ -300,68 +311,18 @@ async function initServices() {
     console.error('SSH 隧道自动连接失败:', error.message);
   }
 
+  signal?.throwIfAborted();
   console.log('服务初始化完成');
 }
 
 // 优雅关闭处理
 async function gracefulShutdown(signal) {
-  processManager.markControlPanelShuttingDown();
-  console.log(`收到 ${signal} 信号，正在优雅关闭...`);
-
+  startupState = { phase: 'stopping', ready: false };
+  console.log(`收到 ${signal}，关闭控制台`);
+  const keepServices = !['0', 'false', 'no'].includes(process.env.MS_KEEP_SERVICES_ON_EXIT);
   try {
-    // 环境变量控制：默认保持后端服务不停止
-    // - 开发环境（nodemon 自动重启）：不改代码重启杀死所有服务，提升开发效率
-    // - 如果需要退出时停止所有服务，请明确设置: MS_KEEP_SERVICES_ON_EXIT=0
-    const keepServices = !(
-      process.env.MS_KEEP_SERVICES_ON_EXIT === '0' ||
-      process.env.MS_KEEP_SERVICES_ON_EXIT === 'false' ||
-      process.env.MS_KEEP_SERVICES_ON_EXIT === 'no'
-    );
-
-    if (!keepServices) {
-      // 停止所有服务
-      const processManager = require('./services/processManager');
-      await processManager.stopAll();
-      console.log('所有后端服务已停止');
-    } else {
-      console.log('默认保持后端进程运行（如需停止请设置 MS_KEEP_SERVICES_ON_EXIT=0）');
-    }
-
-    // 清理 jobService 定时器
-    jobService.destroy();
-
-    // 关闭所有 WebSocket 客户端
-    if (websocketService.wss) {
-      for (const client of websocketService.wss.clients) {
-        client.close(1001, 'Server shutting down');
-      }
-    }
-    
-    // 关闭 Redis 连接
-    await cacheService.disconnect();
-
-    // 关闭打包历史写入连接池
-    try {
-      const packageHistoryService = require('./services/packageHistoryService');
-      await packageHistoryService.closePool();
-    } catch {
-      // 忽略关闭错误
-    }
-
-    // 刷新并关闭日志写入流
-    await logger.closeStreams();
-    
-    // 关闭 HTTP 服务器
-    server.close(() => {
-      console.log('服务器已关闭');
-      process.exit(0);
-    });
-    
-    // 强制退出（防止某些连接卡住）
-    setTimeout(() => {
-      console.error('强制退出');
-      process.exit(1);
-    }, 30000);
+    await require('./services/backendShutdownService').shutdownBackend(server, { keepServices });
+    process.exit(0);
   } catch (error) {
     console.error('关闭过程出错:', error);
     process.exit(1);
@@ -384,34 +345,29 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // 启动服务器函数
 async function startServer(port) {
+  if (startupPromise) return startupPromise;
   const startupConfig = configManager.getResolvedConfig();
   logger.updateOptions({ maxLogLines: startupConfig.maxLogLines });
-
   const listenPort = port || startupConfig.port;
   const bindHost = process.env.MS_BIND_HOST || '127.0.0.1';
-  const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
-  const accessUrl = `http://${displayHost}:${listenPort}/?token=${encodeURIComponent(localAuthService.getToken())}`;
-
-  return new Promise((resolve, reject) => {
-    server.listen(listenPort, bindHost, async () => {
-      console.log(`控制面板运行在 http://${bindHost}:${listenPort}`);
-      console.log(`本地访问地址: ${accessUrl}`);
-      if (bindHost === '0.0.0.0') {
-        console.warn('警告: 控制面板正在监听 0.0.0.0，请确认当前网络环境可信并妥善保管访问令牌');
-      }
-      console.log(`项目根目录: ${startupConfig.projectRoot}`);
-
-      await initServices();
-      resolve(server);
-    }).on('error', (err) => {
-      reject(err);
-    });
+  localAuthService.configureOrigins({ port: listenPort, origins: process.env.NODE_ENV === 'development'
+    ? ['http://localhost:3001', 'http://127.0.0.1:3001'] : [] });
+  startupPromise = require('./utils/startupLifecycle').start({
+    server, port: listenPort, host: bindHost, initialize: initServices,
+    cleanup: () => require('./services/backendShutdownService').shutdownBackend(server, { keepServices: true }),
+    onState: (state) => { startupState = state; }
   });
+  try {
+    const result = await startupPromise;
+    console.log(`控制面板运行在 http://${bindHost}:${listenPort}`);
+    console.log(`本地访问地址: http://${bindHost === '0.0.0.0' ? 'localhost' : bindHost}:${listenPort}/?token=${encodeURIComponent(localAuthService.getToken())}`);
+    return result;
+  } catch (error) { startupPromise = null; throw error; }
 }
 
 // 仅在直接运行时启动
 if (require.main === module) {
-  startServer();
+  startServer().catch((error) => { console.error('后端启动失败:', error); process.exitCode = 1; });
 }
 
 module.exports = { app, server, startServer };

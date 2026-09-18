@@ -14,7 +14,7 @@ import './DesktopShell.css'
 export default function DesktopShell() {
   const consoleState = useProjectConsole()
   const { route, activeTab, go, selectProject } = useProjectNavigation()
-  const { connected, reconnectAttempts } = useWebSocket()
+  const { connected, reconnectAttempts, reconnect } = useWebSocket()
   const [editor, setEditor] = useState(null)
   const isMS = route.projectId === 'metersphere'
   const [visitedMS, setVisitedMS] = useState(isMS)
@@ -29,7 +29,7 @@ export default function DesktopShell() {
     bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round((bytes || 0) / 1024))} KB`
   )
   const updateButtonTitle = [
-    update.asset?.updateMode === 'delta' ? '增量更新（模型层复用旧包）' : '完整更新',
+    update.asset?.updateMode === 'delta' ? '增量更新（复用 Electron 运行时）' : '完整更新',
     update.asset?.bytes ? `约 ${formatSize(update.asset.bytes)}` : '',
     update.notes ? update.notes.slice(0, 400) : ''
   ].filter(Boolean).join(' · ') || undefined
@@ -74,7 +74,7 @@ export default function DesktopShell() {
         </nav>
         <div className="console-sidebar-bottom">
           <button className="console-manage" aria-current={!route.projectId ? 'page' : undefined} onClick={() => selectProject(null)}>▦ <span>管理项目</span><span>{projects.length}</span></button>
-          <div className="console-connection" role="status"><i className={connected ? 'connected' : ''} />{connected ? '实时连接正常' : reconnectAttempts >= 5 ? '连接中断，请刷新重试' : '正在连接本机服务…'}</div>
+          <div className="console-connection" role="status"><i className={connected ? 'connected' : ''} />{connected ? '实时连接正常' : reconnectAttempts >= 5 ? '连接中断，正在后台重试' : '正在连接本机服务…'}{!connected && <button onClick={reconnect}>重新连接</button>}</div>
           <div className="console-update">
             <span>{update.currentVersion ? `v${update.currentVersion}` : 'Local Service Hub'}</span>
             {update.installSupported ? <button title={update.updateAvailable ? updateButtonTitle : undefined} disabled={update.checking || update.installing} onClick={() => update.updateAvailable ? consoleState.installUpdate() : consoleState.checkUpdate(false)}>

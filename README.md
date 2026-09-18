@@ -213,7 +213,7 @@ spring.datasource.password=change-this-password
 MS_SQL_READONLY_PROPERTIES_PATH=/custom/path/sql-readonly.properties
 ```
 
-SQL 返回结果默认最多传给前端 1000 行，接口允许的最大展示上限为 5000 行。该上限只控制返回数据量，不参与 SQL 权限判断，也不会改写用户 SQL。
+SQL 返回结果默认最多传给前端 1000 行，接口允许的最大展示上限为 5000 行。查询采用有界读取，同时限制已接收结果的数据量为 8 MiB。达到行数或数据量上限时停止读取；不参与 SQL 权限判断，也不会改写用户 SQL。`rowCount` 表示已返回行数，`rowCountExact: false` 表示未统计完整结果总数。查询页可取消正在执行的请求。
 
 ## Redis
 
@@ -244,7 +244,7 @@ export MS_CACHE_KEY_PREFIX=ms-panel:
 - `Authorization: Bearer <token>`
 - 首次页面访问的 `?token=<token>`
 
-前端会保存 Token 后从地址栏移除，并自动附加到后续 API 和 WebSocket 请求。写请求还会校验浏览器 `Origin`，阻止其他网页跨站调用本机控制 API。
+前端会保存 Token 后从地址栏移除，并自动附加到后续 API 和 WebSocket 请求。写请求与 WebSocket 握手都校验精确的浏览器 `Origin`，不信任任意本机端口。无 `Origin` 的 WebSocket 客户端必须提供访问令牌。本机 HTTP CLI 请求保留兼容模式；设置 `MS_REQUIRE_LOCAL_TOKEN=1` 可强制本机请求也使用令牌。
 
 如设置：
 
@@ -309,3 +309,21 @@ npm run install:all
 ## License
 
 MIT
+
+## 可靠性改进与验收
+
+本次可靠性修复的实现说明、配置锁恢复方法、兼容性变化和验收限制见 [可靠性改进说明](docs/RELIABILITY-2026-09-18.md)。
+
+- `/api/health` 表示 HTTP 存活，`/api/ready` 只有初始化完成后才返回 200。
+- 配置保存返回版本标识，冲突时拒绝覆盖；保存过程中继续输入的草稿不会被旧响应清空。
+- 端口被占用不代表进程属于 MeterSphere；恢复和终止前需要核验进程身份。
+- 桌面更新保留旧版本，直到新版本的后端与界面确认就绪；不是仅根据进程存在就判定成功。
+- 启动控制台默认不主动建表或迁移 MeterSphere 数据库中的打包历史；显式设置 `MS_PACKAGE_HISTORY_AUTO_INIT=1` 可恢复启动初始化。现有历史和按需存储行为保留。
+
+行为回归命令：
+
+```bash
+npm run test:reliability
+```
+
+该命令不能替代原有 Jest、前端构建和 macOS 桌面验收。

@@ -5,7 +5,6 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync } = require('child_process');
 
 // 关键：将配置存储在用户主目录，解决 DMG 只读环境下的写入失败问题
 const APP_DATA_DIR = path.join(os.homedir(), '.metersphere-control-panel');
@@ -41,14 +40,25 @@ const DEFAULT_SERVICE_DEPENDENCIES = {
   workstation: ['eureka', 'gateway']
 };
 
+let detectedNpm = { key: null, value: '' };
 function detectNpmPath() {
-  try {
-    const whichCmd = os.platform() === 'win32' ? 'where npm' : 'which npm';
-    const output = execSync(whichCmd, { encoding: 'utf8' }).trim();
-    return output.split('\n')[0];
-  } catch (e) {
-    return '';
+  const platform = os.platform();
+  const key = `${platform}:${process.env.PATH || ''}`;
+  if (detectedNpm.key === key && detectedNpm.value && fs.existsSync(detectedNpm.value)) return detectedNpm.value;
+  const names = platform === 'win32' ? ['npm.cmd', 'npm.exe', 'npm'] : ['npm'];
+  for (const directory of (process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = path.join(directory, name);
+      try {
+        fs.accessSync(candidate, platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
+        if (!fs.statSync(candidate).isFile()) continue;
+        detectedNpm = { key, value: candidate };
+        return candidate;
+      } catch {}
+    }
   }
+  detectedNpm = { key, value: '' };
+  return '';
 }
 
 function detectMaxJobs() {
@@ -400,18 +410,9 @@ function buildConfigSnapshot(rawConfig = {}) {
 }
 
 function loadConfigFromFile(configPath = CONFIG_PATH) {
-  if (!fs.existsSync(configPath)) {
-    const defaultConfig = {};
-    fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
-    return defaultConfig;
-  }
-  try {
-    const content = fs.readFileSync(configPath, 'utf8');
-    return JSON.parse(content);
-  } catch (err) {
-    console.error(`解析配置文件失败 (${configPath}):`, err);
-    return {};
-  }
+  const store = require('./utils/configFileStore');
+  if (!fs.existsSync(configPath)) store.transaction(configPath, (raw) => raw);
+  return store.read(configPath);
 }
 
 module.exports = {

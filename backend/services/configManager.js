@@ -1,4 +1,5 @@
 const fs = require('fs');
+const configFileStore = require('../utils/configFileStore');
 const path = require('path');
 const logger = require('../utils/logger');
 const jobService = require('./jobService');
@@ -114,7 +115,7 @@ class ConfigManager {
   }
 
   _buildPersistedRawConfig(editableDraft) {
-    const currentRaw = this.currentRawConfig || {};
+    const currentRaw = this._clone(this.currentRawConfig || {});
     const persisted = {
       ...currentRaw,
       port: editableDraft.port,
@@ -180,7 +181,8 @@ class ConfigManager {
           ...rawService,
           name: serviceDraft.name,
           pom: serviceDraft.pom,
-          port: serviceDraft.port
+          port: serviceDraft.port,
+          dependencies: [...(serviceDraft.dependencies || [])]
         };
 
         // 仅保存非默认值
@@ -263,17 +265,11 @@ class ConfigManager {
     return nextPackage;
   }
 
-  _writeFileAtomic(rawConfig) {
-    const directory = path.dirname(this.configPath);
-    const tempPath = path.join(directory, `${path.basename(this.configPath)}.tmp`);
-    
-    // 安全：写入前备份
-    if (fs.existsSync(this.configPath)) {
-      fs.copyFileSync(this.configPath, `${this.configPath}.bak`);
-    }
-
-    fs.writeFileSync(tempPath, `${JSON.stringify(rawConfig, null, 2)}\n`, 'utf8');
-    fs.renameSync(tempPath, this.configPath);
+  _writeFileAtomic(rawConfig, options = {}) {
+    const ownedKeys = ['port', 'projectRoot', 'npmPath', 'maxLogLines', 'redis', 'properties',
+      'claudeCode', 'tunnel', 'sshTunnel', 'services', 'package', 'jvmOptions'];
+    return configFileStore.transaction(this.configPath, (latest) =>
+      configFileStore.mergeOwned(latest, this.currentRawConfig || {}, rawConfig, ownedKeys, { normalize: normalizeEditableConfig }), options);
   }
 
   _hasUnappliedChanges() {
@@ -283,6 +279,7 @@ class ConfigManager {
   _getMeta() {
     return {
       configPath: this.configPath,
+      revision: configFileStore.revision(this.currentRawConfig || {}),
       lastLoadedAt: this.lastLoadedAt,
       lastSavedAt: this.lastSavedAt,
       lastAppliedAt: this.lastAppliedAt,
@@ -403,6 +400,7 @@ class ConfigManager {
   }
 
   getConfigPageData() {
+    this._reloadCurrentSnapshot();
     const resolvedPreview = buildResolvedConfig(this.currentEditableConfig, {
       allowProjectRootFallback: true,
       onlyFallbackForDefault: true
@@ -452,7 +450,7 @@ class ConfigManager {
     };
   }
 
-  saveDraft(draft) {
+  saveDraft(draft, options = {}) {
     const validation = this.validateDraft(draft);
     if (!validation.valid) {
       throw createAppError(400, 'CONFIG_INVALID', '配置校验失败', {
@@ -466,7 +464,7 @@ class ConfigManager {
 
     try {
       const persistedRawConfig = this._buildPersistedRawConfig(validation.normalizedDraft);
-      this._writeFileAtomic(persistedRawConfig);
+      this._writeFileAtomic(persistedRawConfig, options);
       const snapshot = this._reloadCurrentSnapshot();
       this.lastSavedAt = new Date().toISOString();
 

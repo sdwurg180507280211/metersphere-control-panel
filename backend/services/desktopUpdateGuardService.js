@@ -1,41 +1,21 @@
 const jobService = require('./jobService');
 const { createAppError } = require('../utils/errors');
-
-function isBlockingJob(job) {
-  if (!job || !['pending', 'running'].includes(job.status)) return false;
-  return job.type === 'package.run' || String(job.type || '').startsWith('frontend.build');
-}
-
-function summarizeJob(job) {
-  return {
-    jobId: job.jobId,
-    type: job.type,
-    status: job.status,
-    stage: job.stage || null,
-    message: job.message || ''
-  };
-}
-
-async function getBlockingJobs() {
-  const activeJobs = await jobService.getActiveJobs();
-  return activeJobs.filter(isBlockingJob).map(summarizeJob);
-}
-
+const taskAdmission = require('./taskAdmissionService');
 async function assertUpdateAllowed() {
-  const blockingJobs = await getBlockingJobs();
-  if (blockingJobs.length > 0) {
-    throw createAppError(
-      409,
-      'DESKTOP_UPDATE_TASKS_ACTIVE',
-      '存在运行中的构建或打包任务，请任务结束后再更新 Local Service Hub',
-      { blockingJobs }
-    );
-  }
+  const jobs = (await jobService.getActiveJobs()).filter((job) => ['pending', 'running'].includes(job.status));
+  if (jobs.length) throw createAppError(409, 'DESKTOP_UPDATE_TASKS_ACTIVE', '存在执行中的任务，完成后才能更新桌面应用', {
+    jobs: jobs.map(({ jobId, type, targetId, status, stage }) => ({ jobId, type, targetId, status, stage }))
+  });
   return true;
 }
-
-module.exports = {
-  isBlockingJob,
-  getBlockingJobs,
-  assertUpdateAllowed
-};
+async function beginInstallation() {
+  const release = taskAdmission.enterMaintenance();
+  try {
+    await assertUpdateAllowed();
+    return release;
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+module.exports = { assertUpdateAllowed, beginInstallation };

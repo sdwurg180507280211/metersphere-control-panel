@@ -1,11 +1,4 @@
-export function commandState(project, status, manualRunning, busy) {
-  const known = status?.statusKnown === true
-  const running = known ? status.running === true : manualRunning === true
-  const phase = busy || (known ? status.phase : running ? 'manual-running' : 'unknown')
-  const labels = { running: '运行中', stopped: '已停止', starting: '启动中…', stopping: '关闭中…', 'manual-running': '手动已启动', unknown: '未检测' }
-  const port = status?.port || project.statusPort
-  return { running, port, canVisit: Boolean(port && known && running && !busy), label: labels[phase] || '未检测', tone: busy ? 'busy' : running ? 'running' : known ? 'stopped' : 'unknown' }
-}
+import { commandState } from '../commandState'
 
 export default function CommandProjectPanel({ project, status, manualRunning, busy, onStart, onStop, onVisit, onEdit, lastUpdated }) {
   const state = commandState(project, status, manualRunning, busy)
@@ -18,12 +11,13 @@ export default function CommandProjectPanel({ project, status, manualRunning, bu
       <div className="console-project-hero">
         <div><span className={`console-status ${state.tone}`}><i />{state.label}</span>
           <h2>{state.port ? `127.0.0.1:${state.port}` : '手动控制'}</h2>
-          <p>{state.port ? '通过本机端口检测状态，服务运行后可在浏览器访问。' : '尚未配置状态端口。执行命令后显示手动状态，不代表服务已经就绪。'}</p>
+          <p>{state.port ? '端口状态仅表示是否可连接，不代表进程归属或整个项目的健康状态。' : '未配置状态端口，无法验证运行状态。启动和停止命令仍可手动执行。'}</p>
+          {state.lastStartIssued && <p>上次已发出启动命令，尚未验证服务是否就绪。</p>}
+          {status?.error && <p role="alert">上次操作未确认：{status.error}</p>}
         </div>
         <div className="console-actions">
-          <button className={`console-button ${state.running ? 'danger' : 'primary'}`} disabled={Boolean(busy)} onClick={state.running ? onStop : onStart}>
-            {busy ? state.label : state.running ? '停止项目' : '启动项目'}
-          </button>
+          <button className="console-button primary" disabled={Boolean(busy) || state.running} onClick={onStart}>{busy === 'starting' ? '启动中…' : '启动项目'}</button>
+          <button className="console-button danger" disabled={Boolean(busy)} onClick={onStop}>{busy === 'stopping' ? '关闭中…' : '停止项目'}</button>
           <button className="console-button" onClick={onVisit} disabled={!state.canVisit} title={state.canVisit ? '在系统浏览器中访问' : '服务运行并配置状态端口后可访问'}>访问服务 ↗</button>
         </div>
       </div>

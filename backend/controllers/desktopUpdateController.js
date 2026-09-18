@@ -3,6 +3,7 @@ const desktopUpdateService = require('../services/desktopUpdateService');
 const desktopUpdateGuardService = require('../services/desktopUpdateGuardService');
 const { createAppError, sendError } = require('../utils/errors');
 const packageJson = require('../../package.json');
+let installationInProgress = false;
 
 function getElectronApp() {
   if (!process.versions?.electron) return null;
@@ -80,6 +81,9 @@ const desktopUpdateController = {
   },
 
   async install(req, res) {
+    if (installationInProgress) return sendError(res, createAppError(409, 'DESKTOP_UPDATE_BUSY', '已有更新正在准备或安装'));
+    installationInProgress = true;
+    let releaseAdmission;
     try {
       const runtime = getRuntimeInfo();
       if (!runtime.packaged || runtime.platform !== 'darwin' || !runtime.electronApp) {
@@ -97,14 +101,15 @@ const desktopUpdateController = {
       }
 
       const prepared = await desktopUpdateService.prepareUpdate(update);
-      await desktopUpdateGuardService.assertUpdateAllowed();
+      releaseAdmission = await desktopUpdateGuardService.beginInstallation();
 
       await desktopUpdateService.launchInstallHelper({
         targetAppPath: getTargetAppPath(),
         stagedAppPath: prepared.stagedPath,
         updateDir: prepared.updateDir,
         currentPid: process.pid,
-        mode: prepared.mode
+        mode: prepared.mode,
+        version: prepared.version
       });
 
       res.json({
@@ -122,6 +127,8 @@ const desktopUpdateController = {
       const timer = setTimeout(() => runtime.electronApp.quit(), 350);
       timer.unref?.();
     } catch (error) {
+      releaseAdmission?.();
+      installationInProgress = false;
       if (error?.status || error?.statusCode) {
         sendError(res, error);
         return;

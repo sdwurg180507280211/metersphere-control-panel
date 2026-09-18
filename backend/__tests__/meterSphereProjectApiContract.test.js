@@ -25,7 +25,7 @@ describe('MeterSphere Project record API contract', () => {
   });
 
   test('Project Center reads MeterSphere project identity from canonical API while operational APIs stay unchanged', () => {
-    const shellSource = read('frontend/src/components/DesktopShell.jsx');
+    const shellSource = read('frontend/src/hooks/useProjectConsole.js');
 
     expect(shellSource).toContain("requestJson('/api/projects/metersphere')");
     expect(shellSource).toContain("requestJson('/api/services/catalog')");

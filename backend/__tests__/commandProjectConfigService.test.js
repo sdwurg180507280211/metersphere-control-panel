@@ -231,7 +231,7 @@ describe('Command Project config migration', () => {
       }
     });
 
-    await expect(runtimeService.getStatus('manual')).resolves.toEqual({
+    await expect(runtimeService.getStatus('manual')).resolves.toMatchObject({
       id: 'manual',
       running: null,
       statusKnown: false,

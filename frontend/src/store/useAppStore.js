@@ -465,6 +465,7 @@ export const useInfraStore = create((set) => ({
 
 export const useConfigStore = create((set, get) => ({
   snapshot: null,
+  snapshotRevision: null,
   draft: null,
   resolved: null,
   snapshotResolved: null,
@@ -514,6 +515,7 @@ export const useConfigStore = create((set, get) => ({
       const configData = data.data;
       set({
         snapshot: cloneValue(configData.editable),
+        snapshotRevision: configData.meta?.revision || null,
         draft: cloneValue(configData.editable),
         resolved: configData.resolved,
         snapshotResolved: cloneValue(configData.resolved),
@@ -672,7 +674,7 @@ export const useConfigStore = create((set, get) => ({
       const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draft })
+        body: JSON.stringify({ draft, revision: get().snapshotRevision })
       })
       const data = await res.json()
       if (!data.success) {
@@ -681,9 +683,13 @@ export const useConfigStore = create((set, get) => ({
         throw error
       }
 
+      const latestDraft = get().draft
+      const draftAfterSave = JSON.stringify(latestDraft) === JSON.stringify(draft)
+        ? data.data.editable : latestDraft
       set({
         snapshot: cloneValue(data.data.editable),
-        draft: cloneValue(data.data.editable),
+        snapshotRevision: data.data.meta?.revision || null,
+        draft: cloneValue(draftAfterSave),
         resolved: data.data.resolved,
         snapshotResolved: cloneValue(data.data.resolved),
         runtime: data.data.runtime,
@@ -694,7 +700,7 @@ export const useConfigStore = create((set, get) => ({
         meta: data.data.meta,
         applyImpact: data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] },
         snapshotApplyImpact: cloneValue(data.data.applyImpact || { changedPaths: [], hotApply: [], requiresRestart: [] }),
-        dirtyFields: []
+        dirtyFields: collectDirtyPaths(data.data.editable, draftAfterSave)
       })
 
       return data.data
@@ -1009,7 +1015,12 @@ function normalizeServiceStatus(serviceId, status, previous = null) {
     pid: status.pid ?? previous?.pid ?? null,
     error: status.error ?? null,
     updatedAt: status.updatedAt || new Date().toISOString(),
-    name: status.name || previous?.name || serviceId
+    name: status.name || previous?.name || serviceId,
+    processAlive: status.processAlive ?? previous?.processAlive ?? null,
+    owned: status.owned ?? previous?.owned ?? null,
+    portOccupied: status.portOccupied ?? previous?.portOccupied ?? false,
+    observedPids: status.observedPids ?? previous?.observedPids ?? [],
+    health: Object.prototype.hasOwnProperty.call(status, 'health') ? status.health : previous?.health ?? null
   }
 }
 

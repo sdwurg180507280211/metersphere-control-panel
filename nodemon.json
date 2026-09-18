@@ -1,5 +1,6 @@
 {
   "watch": ["backend/"],
+  "env": { "NODE_ENV": "development" },
   "ext": "js json",
   "pre-start": "node scripts/clean-port.js 3000 2000",
   "delay": 1000,

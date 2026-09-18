@@ -1,199 +1,152 @@
-const net = require('net');
-const { spawn, execFile } = require('child_process');
+const net = require('node:net');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { spawn } = require('node:child_process');
 const commandProjectConfigService = require('./commandProjectConfigService');
 const { createAppError } = require('../utils/errors');
+const jobService = require('./jobService');
+const { setTimeout: delay } = require('node:timers/promises');
+const active = new Map();
+const observations = new Map();
+const START_TIMEOUT_MS = 60000;
+const STOP_TIMEOUT_MS = 15000;
 
-const STOP_COMMAND_TIMEOUT_MS = 15000;
-const STATUS_WAIT_MS = 5000;
-
-function getCatalog() {
-  return commandProjectConfigService.getProjects();
-}
-
+function getCatalog() { return commandProjectConfigService.getProjects(); }
 function getProject(id) {
-  const project = getCatalog().find((item) => item.id === id);
-  if (!project) {
-    throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(String(id || ''))) {
+    throw createAppError(400, 'DESKTOP_APP_ID_INVALID', '项目 ID 无效');
   }
+  const project = getCatalog().find((item) => item.id === id);
+  if (!project) throw createAppError(404, 'DESKTOP_APP_NOT_FOUND', `未找到桌面应用: ${id}`, { appId: id });
   return project;
 }
-
-function checkPort(host, port, timeoutMs = 500) {
+function checkPort(port) {
   if (!port) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port });
+    const socket = net.createConnection({ host: '127.0.0.1', port });
     let settled = false;
-    const done = (value) => {
-      if (settled) return;
-      settled = true;
-      socket.destroy();
-      resolve(value);
-    };
-    socket.setTimeout(timeoutMs);
-    socket.once('connect', () => done(true));
-    socket.once('timeout', () => done(false));
-    socket.once('error', () => done(false));
+    const finish = (value) => { if (settled) return; settled = true; socket.destroy(); resolve(value); };
+    socket.setTimeout(500);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
   });
 }
-
-function getShellInvocation(command) {
-  if (process.platform === 'win32') {
-    return { executable: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', command] };
-  }
-  return { executable: process.env.SHELL || '/bin/zsh', args: ['-lc', command] };
-}
-
-async function getStatus(id) {
-  const project = getProject(id);
-  if (!project.statusPort) {
-    return {
-      id,
-      running: null,
-      statusKnown: false,
-      phase: 'unknown',
-      port: null
-    };
-  }
-
-  const running = await checkPort('127.0.0.1', project.statusPort);
+async function observe(project) {
+  const running = await checkPort(project.statusPort);
+  const task = active.get(project.id);
   return {
-    id,
-    running,
-    statusKnown: true,
-    phase: running ? 'running' : 'stopped',
-    port: project.statusPort
+    id: project.id, running, statusKnown: running !== null,
+    phase: task ? (task.action === 'start' ? 'starting' : 'stopping')
+      : running === null ? 'unknown' : running ? 'running' : 'stopped',
+    port: project.statusPort || null, observedAt: new Date().toISOString(),
+    statusSource: running === null ? 'unknown' : 'port',
+    processOwnershipVerified: false,
+    ...(task?.jobId ? { jobId: task.jobId } : {}),
+    ...(observations.get(project.id)?.error ? { error: observations.get(project.id).error } : {})
   };
 }
-
+async function getStatus(id) { return observe(getProject(id)); }
 async function getAllStatus() {
-  const projects = getCatalog();
-  const entries = await Promise.all(projects.map(async (project) => [project.id, await getStatus(project.id)]));
-  return Object.fromEntries(entries);
+  const projects = getCatalog(); // Read the catalog once, not once for every project.
+  return Object.fromEntries(await Promise.all(projects.map(async (project) => [project.id, await observe(project)])));
 }
-
-function runDetached(command) {
-  return new Promise((resolve, reject) => {
-    const invocation = getShellInvocation(command);
-    const child = spawn(invocation.executable, invocation.args, {
-      detached: true,
-      windowsHide: true,
-      shell: false,
-      stdio: 'ignore',
-      env: process.env
-    });
-
-    child.once('error', reject);
-    child.once('spawn', () => {
-      child.unref();
-      resolve();
-    });
-  });
+function shellInvocation(command) {
+  return process.platform === 'win32'
+    ? { executable: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', command] }
+    : { executable: process.env.SHELL || '/bin/zsh', args: ['-lc', command] };
 }
-
-function runAndWait(command) {
-  return new Promise((resolve, reject) => {
-    const invocation = getShellInvocation(command);
-    execFile(invocation.executable, invocation.args, {
-      timeout: STOP_COMMAND_TIMEOUT_MS,
-      windowsHide: true,
-      maxBuffer: 256 * 1024,
-      env: process.env
-    }, (error, stdout, stderr) => {
-      if (error) {
-        reject(createAppError(
-          500,
-          'DESKTOP_APP_STOP_COMMAND_FAILED',
-          `关闭命令执行失败: ${error.message}`,
-          { stdout: String(stdout || '').slice(-2000), stderr: String(stderr || '').slice(-2000) }
-        ));
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
-async function waitForPort(port, expectedOpen, timeoutMs = STATUS_WAIT_MS) {
-  if (!port) return null;
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const open = await checkPort('127.0.0.1', port);
-    if (open === expectedOpen) return open;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return checkPort('127.0.0.1', port);
-}
-
-async function start(id) {
-  const project = getProject(id);
-  if (!project.startCommand) {
-    throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', `${project.name} 未配置启动命令`);
-  }
-
-  const current = await getStatus(id);
-  if (current.running === true) return current;
-
+function launch(command, task) {
+  const invocation = shellInvocation(command);
+  const directory = path.join(os.homedir(), '.metersphere-control-panel', 'command-logs');
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  task.logFile = path.join(directory, `${task.id}.log`);
+  const fd = fs.openSync(task.logFile, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0), 0o600);
+  if (process.platform !== 'win32') fs.fchmodSync(fd, 0o600);
+  let child;
   try {
-    await runDetached(project.startCommand);
-  } catch (error) {
-    throw createAppError(500, 'DESKTOP_APP_START_FAILED', `${project.name} 启动命令执行失败: ${error.message}`);
-  }
+    child = spawn(invocation.executable, invocation.args, {
+      detached: true, windowsHide: true, shell: false,
+      stdio: ['ignore', fd, fd], env: process.env
+    });
+  } finally { fs.closeSync(fd); }
+  task.child = child;
+  // Direct file descriptors survive control-panel exit; closing a pipe would cause EPIPE.
 
-  if (project.statusPort) {
-    const running = await waitForPort(project.statusPort, true);
-    return {
-      id,
-      running,
-      statusKnown: true,
-      phase: running ? 'running' : 'starting',
-      port: project.statusPort
-    };
-  }
-
-  return {
-    id,
-    running: null,
-    statusKnown: false,
-    phase: 'starting',
-    port: null
-  };
+  child.once('exit', (code, signal) => { task.exit = { code, signal }; });
+  child.on('error', (error) => { task.error = error; });
+  child.unref();
+  return child;
 }
-
-async function stop(id) {
+function assertIdle(id) {
+  id = String(id || '').trim().toLowerCase();
+  if (active.has(id)) throw createAppError(409, 'DESKTOP_APP_BUSY', '项目已有启停任务，请等待当前任务结束', { appId: id, jobId: active.get(id).jobId });
+}
+async function run(id, action) {
+  assertIdle(id);
   const project = getProject(id);
-  if (!project.stopCommand) {
-    throw createAppError(400, 'DESKTOP_APP_STOP_COMMAND_MISSING', `${project.name} 未配置关闭命令`);
+  const command = action === 'start' ? project.startCommand : project.stopCommand;
+  if (!command) throw createAppError(400, `DESKTOP_APP_${action.toUpperCase()}_COMMAND_MISSING`, '未配置操作命令');
+  const task = { id, action, controller: new AbortController() };
+  active.set(id, task); // Set before the first await, including job persistence.
+  const resourceKey = `command:${id}`;
+  let locked = false;
+  try {
+    await jobService.assertWritableRequestAllowed(resourceKey);
+    const job = await jobService.createJob({
+      type: `command.${action}`, targetType: 'command', targetId: id,
+      metadata: { resourceKey, projectId: id, statusPort: project.statusPort || null },
+      message: `${action === 'start' ? '启动' : '停止'} ${project.name}`
+    });
+    task.jobId = job.jobId;
+    const lock = await jobService.acquireLock(resourceKey, job, 120);
+    if (!lock.acquired) throw createAppError(409, 'DESKTOP_APP_BUSY', '项目已有运行中的任务');
+    locked = true;
+    await jobService.startJob(job.jobId, { stage: 'command' });
+    const before = await checkPort(project.statusPort);
+    if (action === 'start' && before === true) {
+      const result = { ...(await observe(project)), phase: before ? 'running' : 'stopped', alreadyInState: true };
+      await jobService.completeJob(job.jobId, result, { message: '端口状态已满足，未重复执行命令' });
+      return result;
+    }
+    launch(command, task);
+    const issuedAt = Date.now();
+    const deadline = Date.now() + (action === 'start' ? START_TIMEOUT_MS : STOP_TIMEOUT_MS);
+    while (Date.now() < deadline) {
+      task.controller.signal.throwIfAborted();
+      if (task.error) throw task.error;
+      if (task.exit && task.exit.code !== 0) throw Object.assign(new Error(`命令退出: ${task.exit.code ?? task.exit.signal}`), { code: 'COMMAND_EXIT_FAILED' });
+      const running = await checkPort(project.statusPort);
+      const reached = project.statusPort && running === (action === 'start');
+      // A stop command must also have exited successfully; port closure alone is insufficient.
+      if ((reached && (action === 'start' || task.exit?.code === 0)) || (!project.statusPort && (task.exit?.code === 0 || (action === 'start' && Date.now() - issuedAt >= 250)))) {
+        const result = {
+          id, running, statusKnown: running !== null,
+          phase: running === null ? 'unknown' : running ? 'running' : 'stopped',
+          port: project.statusPort || null, jobId: job.jobId,
+          exitCode: task.exit?.code ?? null, commandIssued: true,
+          verification: running === null ? (task.exit?.code === 0 ? 'command_exit_only' : 'command_issued_only') : 'port_only'
+        };
+        observations.delete(id);
+        await jobService.completeJob(job.jobId, result, { message: running === null ? '命令已发出；未配置状态探测，运行状态未知' : '操作及端口检查完成' });
+        return result;
+      }
+      await delay(250, undefined, { signal: task.controller.signal });
+    }
+    throw Object.assign(new Error('操作未在期限内得到确认；不会自动重试命令，请检查项目状态'), { code: 'COMMAND_CONFIRMATION_TIMEOUT' });
+  } catch (error) {
+    observations.set(id, { error: error.message });
+    if (task.jobId) await jobService.failJob(task.jobId, error, { stage: 'command', result: { commandIssued: Boolean(task.child), exitCode: task.exit?.code ?? null } }).catch(() => {});
+    throw createAppError(error.statusCode || 500, error.code || 'DESKTOP_APP_COMMAND_FAILED', error.message, { appId: id, jobId: task.jobId });
+  } finally {
+    // Do not kill unverified service trees. The user-provided command may intentionally daemonize.
+    // The child owns its log descriptors; no service output pipe is torn down here.
+    if (locked) await jobService.releaseLock(resourceKey, task.jobId).catch(() => {});
+    active.delete(id);
   }
-
-  const current = await getStatus(id);
-  if (current.running === false) return current;
-
-  await runAndWait(project.stopCommand);
-
-  if (project.statusPort) {
-    const running = await waitForPort(project.statusPort, false);
-    return {
-      id,
-      running,
-      statusKnown: true,
-      phase: running ? 'stopping' : 'stopped',
-      port: project.statusPort
-    };
-  }
-
-  return {
-    id,
-    running: null,
-    statusKnown: false,
-    phase: 'unknown',
-    port: null
-  };
 }
-
-module.exports = {
-  getCatalog,
-  getStatus,
-  getAllStatus,
-  start,
-  stop
-};
+async function destroy() {
+  for (const task of active.values()) task.controller.abort(new Error('控制台退出，任务结果需重新核验'));
+}
+module.exports = { getCatalog, getStatus, getAllStatus, start: (id) => run(id, 'start'), stop: (id) => run(id, 'stop'), assertIdle, destroy };

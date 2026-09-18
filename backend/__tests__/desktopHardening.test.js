@@ -14,6 +14,7 @@ function request({ method = 'POST', origin, host = '127.0.0.1:5001', remoteAddre
 }
 
 describe('Desktop localhost request security', () => {
+  beforeEach(() => localAuthService.configureOrigins({ port: 5001, origins: ['http://localhost:3001'] }));
   test('allows trusted localhost origins and CLI requests without Origin', () => {
     expect(localAuthService.verifyOrigin(request({ origin: 'http://127.0.0.1:5001' }))).toBe(true);
     expect(localAuthService.verifyOrigin(request({ origin: 'http://localhost:3001' }))).toBe(true);
@@ -125,11 +126,11 @@ describe('Desktop update task guard', () => {
     await expect(guard.assertUpdateAllowed()).rejects.toMatchObject({ statusCode: 409, code: 'DESKTOP_UPDATE_TASKS_ACTIVE' });
   });
 
-  test('does not block service lifecycle jobs or completed builds', async () => {
+  test('blocks service lifecycle jobs but ignores completed builds', async () => {
     const guard = loadGuard([
       { jobId: 's1', type: 'service.start', status: 'running' },
       { jobId: 'b1', type: 'frontend.build.batch', status: 'completed' }
     ]);
-    await expect(guard.assertUpdateAllowed()).resolves.toBe(true);
+    await expect(guard.assertUpdateAllowed()).rejects.toMatchObject({ statusCode: 409, code: 'DESKTOP_UPDATE_TASKS_ACTIVE' });
   });
 });

@@ -83,9 +83,9 @@ function probeUrl(url) {
   });
 }
 
-async function waitForDevStack(timeoutMs = 20000) {
+async function waitForDevStack(timeoutMs = 35000) {
   const rendererBase = process.env.ELECTRON_START_URL || 'http://localhost:3001';
-  const healthUrl = new URL('/api/health', rendererBase).toString();
+  const healthUrl = new URL('/api/ready', rendererBase).toString();
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await probeUrl(healthUrl)) return;
@@ -231,10 +231,16 @@ async function startBackend() {
 
 ipcMain.on('console:ready', (event) => {
   if (!hubWindow || event.sender !== hubWindow.webContents) return;
+  if (event.senderFrame && event.senderFrame !== hubWindow.webContents.mainFrame) return;
   consoleNavigationReady = true;
+  if (backendPort && rendererReady && process.env.MS_UPDATE_NONCE) {
+    require('./backend/utils/desktopReadiness').acknowledge(app.getVersion())
+      .catch((error) => console.error('更新就绪确认失败:', error.message));
+  }
   flushProjectSelection();
 });
 ipcMain.handle('project:open-workspace', async (_event, projectId) => {
+  if (!hubWindow || _event.sender !== hubWindow.webContents || (_event.senderFrame && _event.senderFrame !== hubWindow.webContents.mainFrame)) throw new Error('IPC 来源无效');
   if (projectId !== 'metersphere') {
     throw new Error(`不支持的项目工作区: ${projectId || 'unknown'}`);
   }
@@ -242,6 +248,7 @@ ipcMain.handle('project:open-workspace', async (_event, projectId) => {
   return true;
 });
 ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
+  if (!hubWindow || _event.sender !== hubWindow.webContents || (_event.senderFrame && _event.senderFrame !== hubWindow.webContents.mainFrame)) throw new Error('IPC 来源无效');
   let target;
   try { target = new URL(String(rawUrl || '')); } catch { throw new Error('服务访问地址无效'); }
   const allowedProtocol = target.protocol === 'http:' || target.protocol === 'https:';

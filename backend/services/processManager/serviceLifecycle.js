@@ -60,7 +60,12 @@ module.exports = function applyServiceLifecycle(proto) {
     });
   };
 
-  proto._attachServiceProcess = function(serviceId, serviceConfig, child) {
+  proto._attachServiceProcess = async function(serviceId, serviceConfig, child) {
+    if (!await this._verifyServicePid(serviceId, child.pid, true)) {
+      // This child was just launched by us, not discovered through a port scan.
+      if (child.exitCode == null && typeof child.kill === 'function') child.kill('SIGTERM');
+      throw new Error('无法核验新服务的进程身份，已中止接管');
+    }
     const tailProcess = this._attachServiceLogTail(serviceId);
 
     serviceProcesses.set(serviceId, {
@@ -160,6 +165,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
   proto.start = async function(serviceId, serviceConfig, options = {}) {
     const status = await this.getStatus(serviceId);
+    if (status.portOccupied && !status.owned) throw new Error('端口被无法确认归属的进程占用，拒绝启动');
 
     if (status.running || this._isTransitionalPhase(status.phase)) {
       return { pid: status.pid, alreadyRunning: true, phase: status.phase };
@@ -218,7 +224,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
 
     const child = await this._spawnDetachedService(mavenCommand, serviceConfig, javaToolOptions, serviceLogFile);
 
-    this._attachServiceProcess(serviceId, serviceConfig, child);
+    await this._attachServiceProcess(serviceId, serviceConfig, child);
 
     if (options.monitorHealth !== false) {
       this._monitorServiceHealth(serviceId, serviceConfig, {
@@ -257,12 +263,16 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     };
 
     const trackedPid = this._getPid(serviceId);
-    if (trackedPid) {
+    if (trackedPid && await this._verifyServicePid(serviceId, trackedPid)) {
       registerPid(trackedPid, 'tracked');
+    } else if (trackedPid) {
+      skippedPids.push({ pid: trackedPid, reason: '已记录的 PID 身份不匹配' });
+      this._clearPid(serviceId, trackedPid);
     }
 
     for (const pid of await this._findPidsByPom(serviceConfig.pom)) {
-      registerPid(pid, 'pom');
+      if (await this._verifyServicePid(serviceId, pid)) registerPid(pid, 'pom');
+      else skippedPids.push({ pid, reason: 'POM 匹配但项目或进程身份不符' });
     }
 
     // 对 port 来源的 PID 做归属验证，防止误杀其他服务
@@ -301,6 +311,11 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       logger.broadcast(`跳过可能不属于本服务的进程: ${skipInfo}`, 'service', serviceId);
     }
 
+    if (pidCandidates.size === 0 && portPids.length > 0) {
+      this._clearPid(serviceId);
+      this._setServiceStatus(serviceId, { phase: 'failed', running: false, pid: null, owned: false, portOccupied: true, error: '端口进程归属未确认，未执行终止' }, { serviceConfig });
+      return { success: false, method: 'none', phase: 'failed', skippedPids };
+    }
     if (pidCandidates.size === 0) {
       this._clearPid(serviceId);
       this._setServiceStatus(serviceId, {
@@ -314,8 +329,13 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const pids = [...pidCandidates.values()].map(({ pid, sources }) => `${pid}(${[...sources].join('/')})`).join(', ');
     logger.broadcastCommand(`kill ${serviceConfig.name} [${pids}]`, 'service', serviceId);
 
-    for (const { pid } of pidCandidates.values()) {
-      await this._terminateProcess(pid);
+    for (const { pid, sources } of pidCandidates.values()) {
+      const verified = sources.has('port')
+        ? await this._isPidBelongsToService(pid, serviceConfig, trackedPid)
+        : await this._verifyServicePid(serviceId, pid);
+      if (verified) await this._terminateProcess(pid, { verifyOwnership: () => sources.has('port')
+        ? this._isPidBelongsToService(pid, serviceConfig, trackedPid)
+        : this._verifyServicePid(serviceId, pid) });
     }
 
     const mandatoryRemaining = [];
@@ -389,6 +409,9 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     const health = await healthChecker.check(serviceId);
+    this._setServiceStatus(serviceId, { processAlive: Boolean(pid),
+      health: { healthy: health.healthy, checkedAt: health.checkedAt || new Date().toISOString(), error: health.error || null } },
+      { serviceConfig, broadcast: false });
     if (health.healthy) {
       return this._setServiceStatus(serviceId, {
         running: true,
@@ -441,7 +464,8 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     const current = this._getCurrentServiceStatus(serviceId, serviceConfig);
     const trackedPid = this._getPid(serviceId);
 
-    if (trackedPid && this._isProcessRunning(trackedPid)) {
+    if (trackedPid && this._isProcessRunning(trackedPid) && await this._verifyServicePid(serviceId, trackedPid, true)) {
+      this._setServiceStatus(serviceId, { owned: true, processAlive: true, portOccupied: false, observedPids: [] }, { serviceConfig, broadcast: false });
       if (this._isTransitionalPhase(current.phase)) {
         if (!this.serviceHealthMonitors.has(serviceId)) {
           logger.broadcast(`[${serviceConfig.name}] 检测到进程运行中但状态为 ${current.phase}，自动恢复健康检查`, 'service', serviceId);
@@ -455,9 +479,20 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
       return this._resolveObservedServiceStatus(serviceId, serviceConfig, current, trackedPid);
     }
 
-    const pidsByPom = await this._findPidsByPom(serviceConfig.pom);
-    const pid = pidsByPom[0] || (await this._findPidsByPort(serviceConfig.port))[0] || null;
+    if (trackedPid) this._clearPid(serviceId, trackedPid);
+    const portPids = await this._findPidsByPort(serviceConfig.port);
+    const candidates = [...new Set([...(await this._findPidsByPom(serviceConfig.pom)), ...portPids])];
+    let pid = null;
+    for (const candidate of candidates) {
+      if (await this._verifyServicePid(serviceId, candidate, true)) { pid = candidate; break; }
+    }
+    if (!pid && portPids.length > 0) {
+      return this._setServiceStatus(serviceId, { phase: 'failed', running: false, pid: null,
+        owned: false, portOccupied: true, observedPids: portPids,
+        error: '端口被无法确认归属的进程占用；未接管，也不会终止该进程' }, { serviceConfig, broadcast: false });
+    }
     if (pid) {
+      this._setServiceStatus(serviceId, { owned: true, portOccupied: false, observedPids: [] }, { serviceConfig, broadcast: false });
       this._savePid(serviceId, pid);
       serviceProcesses.set(serviceId, {
         pid,
@@ -481,6 +516,7 @@ ${serviceConfig.name} 进程错误: ${err.message}`, 'service');
     }
 
     this._clearPid(serviceId);
+    this._setServiceStatus(serviceId, { owned: false, portOccupied: false, observedPids: [], processAlive: false, health: null }, { serviceConfig, broadcast: false });
 
     if (current.phase === 'failed') {
       return this._setServiceStatus(serviceId, {

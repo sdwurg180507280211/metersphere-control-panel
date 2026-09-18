@@ -23,7 +23,7 @@ const configController = {
 
   save(req, res) {
     try {
-      const result = configManager.saveDraft(req.body?.draft || {});
+      const result = configManager.saveDraft(req.body?.draft || {}, { expectedRevision: req.body?.revision });
       res.json({ success: true, data: result });
     } catch (error) {
       sendError(res, error);
@@ -69,9 +69,9 @@ const configController = {
     }
   },
 
-  scanNodeVersions(req, res) {
+  async scanNodeVersions(req, res) {
     try {
-      const result = nodeVersionService.scan();
+      const result = await nodeVersionService.scan();
       res.json({ success: true, data: result });
     } catch (error) {
       sendError(res, error);

@@ -40,5 +40,8 @@ jobs:
           node --check backend/services/meterSphereProjectConfigService.js
           node --check backend/controllers/meterSphereProjectController.js
           node --check backend/routes/meterSphereProject.js
-          npm test -- --runInBand backend/__tests__/desktopUpdateService.test.js backend/__tests__/desktopHardening.test.js backend/__tests__/electronRuntimePolicy.test.js backend/__tests__/commandProjectConfigService.test.js backend/__tests__/commandProjectApiContract.test.js backend/__tests__/meterSphereProjectConfigService.test.js backend/__tests__/meterSphereProjectApiContract.test.js
-          node --test frontend/__tests__/projectModel.test.js
+          npm test -- --runInBand
+          npm run test:frontend
+
+      - name: Reliability behavior regression
+        run: npm run test:reliability

@@ -43,24 +43,11 @@ module.exports = function applyBuildProcess(proto) {
       .find((file) => fs.existsSync(file)) || null;
   };
 
-  proto._computeDependencyFingerprint = function(frontendDir, moduleConfig = {}) {
-    const fingerprintSource = this._getDependencyLockfile(frontendDir, moduleConfig);
-    if (!fingerprintSource) {
-      return null;
-    }
-
-    const content = fs.readFileSync(fingerprintSource);
-    const { command: npmCommand } = this._resolveNpmCommand();
-    const hash = crypto.createHash('sha256')
-      .update(content)
-      .update(npmCommand)
-      .digest('hex');
-
-    return {
-      source: path.basename(fingerprintSource),
-      npmPath: npmCommand,
-      hash
-    };
+  proto._computeDependencyFingerprint = async function(frontendDir, moduleConfig = {}) {
+    const invocation = this._resolveNpmCommand();
+    return require('../../utils/dependencyFingerprint').fingerprint(frontendDir, moduleConfig, {
+      ...invocation, env: this._getExtendedEnv(process.env, invocation.command)
+    });
   };
 
   proto._readDependencyState = function(frontendDir) {
@@ -89,7 +76,7 @@ module.exports = function applyBuildProcess(proto) {
     }, null, 2));
   };
 
-  proto._getDependencyInstallDecision = function(frontendDir, forceInstall = false, moduleConfig = {}) {
+  proto._getDependencyInstallDecision = async function(frontendDir, forceInstall = false, moduleConfig = {}) {
     if (forceInstall) {
       return { shouldInstall: true, reason: '用户手动启用了强制安装依赖' };
     }
@@ -104,7 +91,7 @@ module.exports = function applyBuildProcess(proto) {
       return { shouldInstall: true, reason: 'node_modules/.bin 缺失或为空，依赖安装不完整' };
     }
 
-    const fingerprint = this._computeDependencyFingerprint(frontendDir, moduleConfig);
+    const fingerprint = await this._computeDependencyFingerprint(frontendDir, moduleConfig);
     if (!fingerprint) {
       return { shouldInstall: false, reason: '未检测到 lockfile，沿用现有 node_modules' };
     }
@@ -135,7 +122,7 @@ module.exports = function applyBuildProcess(proto) {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
         cwd,
-        shell: true,
+        shell: process.platform === 'win32',
         detached: process.platform !== 'win32',
         env: extendedEnv
       });
@@ -175,7 +162,7 @@ module.exports = function applyBuildProcess(proto) {
 
       child.stdout?.on('data', handleOutput);
       child.stderr?.on('data', (raw) => {
-        stderrOutput += raw.toString();
+        stderrOutput = (stderrOutput + raw.toString()).slice(-65536);
         handleOutput(raw);
       });
 
@@ -216,7 +203,7 @@ module.exports = function applyBuildProcess(proto) {
       return;
     }
 
-    const decision = this._getDependencyInstallDecision(sdkFrontendDir);
+    const decision = await this._getDependencyInstallDecision(sdkFrontendDir);
     if (!decision.shouldInstall) {
       logger.broadcast(`SDK 前端依赖检查: ${decision.reason}`, 'build');
       return;
@@ -236,7 +223,7 @@ module.exports = function applyBuildProcess(proto) {
       stepName: '安装 SDK 前端依赖',
       logType: 'build'
     });
-    this._writeDependencyState(sdkFrontendDir, decision.fingerprint || this._computeDependencyFingerprint(sdkFrontendDir));
+    this._writeDependencyState(sdkFrontendDir, decision.fingerprint || await this._computeDependencyFingerprint(sdkFrontendDir));
   };
 
   proto.executeBuild = async function(moduleConfig, buildId, options = {}) {
@@ -255,7 +242,7 @@ module.exports = function applyBuildProcess(proto) {
 
       await buildProgressService.updateStep(buildId, 1, 'running', 0, '检查依赖...');
 
-      const dependencyDecision = this._getDependencyInstallDecision(frontendDir, options.forceInstall, moduleConfig);
+      const dependencyDecision = await this._getDependencyInstallDecision(frontendDir, options.forceInstall, moduleConfig);
       if (dependencyDecision.shouldInstall) {
         const installCommand = moduleConfig.installCommand || (fs.existsSync(path.join(frontendDir, 'package-lock.json')) ? 'ci' : 'install');
         logger.broadcast(`依赖安装原因: ${dependencyDecision.reason}`, 'build');
@@ -272,7 +259,7 @@ module.exports = function applyBuildProcess(proto) {
           stepName: '安装依赖',
           logType: 'build'
         });
-        this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || this._computeDependencyFingerprint(frontendDir, moduleConfig));
+        this._writeDependencyState(frontendDir, dependencyDecision.fingerprint || await this._computeDependencyFingerprint(frontendDir, moduleConfig));
       } else {
         await buildProgressService.updateStep(buildId, 1, 'completed', 100, dependencyDecision.reason);
       }
@@ -302,7 +289,7 @@ module.exports = function applyBuildProcess(proto) {
 
       this._throwIfCancelled(buildId);
       await buildProgressService.updateStep(buildId, 3, 'running', 50, '复制构建文件...');
-      await this._copyBuildFiles(frontendDir, targetDir, moduleConfig.outputDir);
+      await this._copyBuildFiles(frontendDir, targetDir, moduleConfig.outputDir, buildId);
       await buildProgressService.updateStep(buildId, 3, 'completed', 100, '文件复制完成');
 
       this._throwIfCancelled(buildId);
@@ -344,9 +331,10 @@ module.exports = function applyBuildProcess(proto) {
     return { success: true, message: '构建进程已终止' };
   };
 
-  proto._copyBuildFiles = async function(frontendDir, targetDir, outputDir = 'dist') {
-    await fsp.rm(targetDir, { recursive: true, force: true });
-    await fsp.mkdir(targetDir, { recursive: true });
-    await fsp.cp(path.join(frontendDir, outputDir), targetDir, { recursive: true });
+  proto._copyBuildFiles = async function(frontendDir, targetDir, outputDir = 'dist', buildId = null) {
+    await require('../../utils/atomicDirectory').replaceDirectory(path.join(frontendDir, outputDir), targetDir, {
+      projectRoot: this._getProjectRoot(),
+      assertActive: () => { if (buildId) this._throwIfCancelled(buildId); }
+    });
   };
 };

@@ -7,6 +7,11 @@ const METERSPHERE_CONF = process.env.MS_PROPERTIES_PATH || '/opt/metersphere/con
 const READONLY_CONF = process.env.MS_SQL_READONLY_PROPERTIES_PATH
   || path.join(os.homedir(), '.metersphere-control-panel', 'sql-readonly.properties');
 
+const { singleFlightPool } = require('../utils/singleFlightPool');
+const { acquire, runQuery } = require('../utils/boundedSql');
+const activeQueryConnections = new Set();
+const activeQueryControllers = new Set();
+let closingQueries = false;
 let pool = null;
 let verifiedAccount = null;
 
@@ -130,9 +135,9 @@ function extractPrivileges(grantStatement) {
 }
 
 async function verifyReadonlyAccount(connection) {
-  const [identityRows] = await connection.query('SELECT CURRENT_USER() AS currentUser');
+  const [identityRows] = await connection.query({ sql: 'SELECT CURRENT_USER() AS currentUser', timeout: 5000 });
   const currentUser = identityRows?.[0]?.currentUser || 'unknown';
-  const [grantRows] = await connection.query('SHOW GRANTS FOR CURRENT_USER()');
+  const [grantRows] = await connection.query({ sql: 'SHOW GRANTS FOR CURRENT_USER()', timeout: 5000 });
 
   const grants = grantRows.flatMap((row) => Object.values(row).map(String));
   const privileges = grants.flatMap(extractPrivileges);
@@ -160,88 +165,50 @@ async function verifyReadonlyAccount(connection) {
   };
 }
 
-async function createPool() {
-  if (pool) {
-    return pool;
-  }
-
+const poolManager = singleFlightPool(async () => {
   const config = readDatabaseConfig();
-  const candidatePool = mysql.createPool({
-    ...config,
-    connectionLimit: 2,
-    queueLimit: 5,
-    waitForConnections: true,
-    multipleStatements: false
-  });
-
+  const candidatePool = mysql.createPool({ ...config, connectionLimit: 2, queueLimit: 5,
+    waitForConnections: true, multipleStatements: false, connectTimeout: 5000,
+    supportBigNumbers: true, bigNumberStrings: true });
   let connection;
   try {
     connection = await candidatePool.getConnection();
-    verifiedAccount = await verifyReadonlyAccount(connection);
+    const account = await verifyReadonlyAccount(connection);
+    verifiedAccount = account;
     pool = candidatePool;
-    return pool;
+    return candidatePool;
   } catch (error) {
-    connection?.release();
-    connection = null;
+    connection?.release(); connection = null;
     await candidatePool.end().catch(() => {});
     throw error;
-  } finally {
-    connection?.release();
-  }
-}
+  } finally { connection?.release(); }
+});
+async function createPool() { return poolManager.get(); }
 
-async function executeQuery(sql, timeout = 30000, limit = DEFAULT_LIMIT) {
-  if (typeof sql !== 'string' || !sql.trim()) {
-    return { success: false, error: '无效的 SQL 语句' };
-  }
-
-  const safeLimit = normalizeLimit(limit);
-  const activePool = await createPool();
-  const startTime = Date.now();
-
+async function executeQuery(sql, timeout = 30000, limit = DEFAULT_LIMIT, options = {}) {
+  if (typeof sql !== 'string' || !sql.trim()) return { success: false, error: '无效的 SQL 语句' };
+  if (closingQueries) return { success: false, code: 'POOL_CLOSING', error: 'SQL 连接正在关闭' };
+  const safeTimeout = Number.isFinite(Number(timeout)) ? Math.min(60000, Math.max(100, Number(timeout))) : 30000;
+  let connection;
+  const cancellation = new AbortController();
+  const signal = options.signal ? AbortSignal.any([options.signal, cancellation.signal]) : cancellation.signal;
+  activeQueryControllers.add(cancellation);
   try {
-    // 不在应用层判断 SQL 类型，也不改写 SQL；权限由数据库只读账号负责。
-    const [rows, fields] = await activePool.query({ sql: sql.trim(), timeout });
-    const executionTime = Date.now() - startTime;
-
-    if (!Array.isArray(rows)) {
-      return {
-        success: true,
-        columns: [],
-        rows: [],
-        rowCount: rows?.affectedRows || 0,
-        executionTime,
-        truncated: false,
-        metadata: rows || null
-      };
-    }
-
-    const limitedRows = rows.slice(0, safeLimit);
-    const columns = Array.isArray(fields) && fields.length > 0
-      ? fields.map((field) => field.name)
-      : (limitedRows.length > 0 ? Object.keys(limitedRows[0]) : []);
-
-    return {
-      success: true,
-      columns,
-      rows: limitedRows,
-      rowCount: rows.length,
-      executionTime,
-      truncated: rows.length > safeLimit
-    };
+    const activePool = await createPool();
+    if (closingQueries) throw Object.assign(new Error('SQL 连接正在关闭'), { code: 'POOL_CLOSING' });
+    connection = await acquire(activePool.pool, { timeout: Math.min(10000, safeTimeout), signal });
+    if (closingQueries) { connection.destroy(); throw Object.assign(new Error('SQL 连接正在关闭'), { code: 'POOL_CLOSING' }); }
+    activeQueryConnections.add(connection);
+    return await runQuery(connection, sql.trim(), { limit: normalizeLimit(limit), timeout: safeTimeout, signal });
   } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      code: error.code
-    };
-  }
+    return { success: false, error: error.message, code: error.code };
+  } finally { activeQueryControllers.delete(cancellation); if (connection) activeQueryConnections.delete(connection); }
 }
 
 async function testConnection() {
   try {
     const activePool = await createPool();
-    await activePool.query('SELECT 1');
+    await activePool.query({ sql: 'SELECT 1', timeout: 5000 });
     const config = readDatabaseConfig();
     return {
       connected: true,
@@ -261,11 +228,12 @@ async function testConnection() {
 }
 
 async function closePool() {
-  if (pool) {
-    await pool.end();
-    pool = null;
-    verifiedAccount = null;
-  }
+  closingQueries = true;
+  for (const controller of activeQueryControllers) controller.abort();
+  activeQueryControllers.clear();
+  activeQueryConnections.clear();
+  try { await poolManager.close(); }
+  finally { pool = null; verifiedAccount = null; closingQueries = false; }
 }
 
 module.exports = {

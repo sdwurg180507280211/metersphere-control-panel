@@ -186,6 +186,8 @@ async function downloadFile(url, destination, options = {}) {
       const digest = new Transform({
         transform(chunk, encoding, callback) {
           bytes += chunk.length;
+          const maxBytes = Math.min(1024 * 1024 * 1024, Number(options.maxBytes) || 1024 * 1024 * 1024);
+          if (bytes > maxBytes) { callback(new Error('更新包超过允许大小')); return; }
           hash.update(chunk);
           callback(null, chunk);
         }
@@ -450,6 +452,9 @@ async function prepareUpdate(update, options = {}) {
     throw new Error('当前没有可安装的新版本');
   }
 
+  const assetName = String(update.asset.name || '');
+  if (!assetName || path.basename(assetName) !== assetName || path.win32.basename(assetName) !== assetName
+    || /[\x00-\x1f]/.test(assetName) || !assetName.endsWith('.zip')) throw new Error('更新包文件名无效');
   const baseDir = options.baseDir || path.join(os.homedir(), '.metersphere-control-panel', 'updates');
   const updateDir = path.join(baseDir, `${update.latestVersion}-${update.asset.arch}`);
   const zipPath = path.join(updateDir, update.asset.name);
@@ -469,7 +474,7 @@ async function prepareUpdate(update, options = {}) {
   await fsp.mkdir(updateDir, { recursive: true });
 
   const downloaded = await downloadFile(update.asset.url, zipPath, {
-    version: update.currentVersion
+    version: update.currentVersion, maxBytes: update.asset.bytes
   });
   if (downloaded.sha256 !== update.asset.sha256) {
     await fsp.rm(updateDir, { recursive: true, force: true });
@@ -495,105 +500,7 @@ async function prepareUpdate(update, options = {}) {
 }
 
 function createHelperScript() {
-  return `#!/bin/bash
-set -euo pipefail
-
-CURRENT_PID="$1"
-TARGET_APP="$2"
-STAGED_APP="$3"
-UPDATE_DIR="$4"
-MODE="\${5:-full}"
-APP_NAME="${APP_NAME}"
-TARGET_EXECUTABLE="$TARGET_APP/Contents/MacOS/$APP_NAME"
-NEW_APP="$TARGET_APP.new"
-BACKUP_APP="$TARGET_APP.previous"
-STAGED_APP_DIR="$STAGED_APP/Contents/Resources/app"
-NEW_APP_DIR="$NEW_APP/Contents/Resources/app"
-LOG_FILE="$UPDATE_DIR/update-helper.log"
-
-exec >>"$LOG_FILE" 2>&1
-printf '[%s] updater started (mode=%s)\\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$MODE"
-
-for _ in {1..150}; do
-  if ! kill -0 "$CURRENT_PID" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 0.1
-done
-
-if kill -0 "$CURRENT_PID" >/dev/null 2>&1; then
-  echo '旧版本未能在限定时间内退出'
-  exit 1
-fi
-
-rm -rf "$NEW_APP"
-
-if [[ "$MODE" == 'delta' ]]; then
-  test -f "$STAGED_APP/Contents/Info.plist"
-  test -f "$STAGED_APP_DIR/package.json"
-  # 克隆现有 App 以保留 Electron Runtime，只替换应用代码层。
-  if ! cp -cR "$TARGET_APP" "$NEW_APP" 2>/dev/null; then
-    rm -rf "$NEW_APP"
-    cp -R "$TARGET_APP" "$NEW_APP"
-  fi
-  rm -rf "$NEW_APP_DIR"
-  ditto "$STAGED_APP_DIR" "$NEW_APP_DIR"
-  cp -f "$STAGED_APP/Contents/Info.plist" "$NEW_APP/Contents/Info.plist"
-else
-  ditto "$STAGED_APP" "$NEW_APP"
-  test -f "$NEW_APP/Contents/Info.plist"
-fi
-
-test -x "$NEW_APP/Contents/MacOS/$APP_NAME"
-
-rm -rf "$BACKUP_APP"
-if [[ -d "$TARGET_APP" ]]; then
-  mv "$TARGET_APP" "$BACKUP_APP"
-fi
-
-rollback() {
-  echo '新版本启动失败，恢复旧版本'
-  rm -rf "$NEW_APP"
-  rm -rf "$TARGET_APP"
-  if [[ -d "$BACKUP_APP" ]]; then
-    mv "$BACKUP_APP" "$TARGET_APP"
-    open "$TARGET_APP" >/dev/null 2>&1 || true
-  fi
-}
-
-if ! mv "$NEW_APP" "$TARGET_APP"; then
-  rollback
-  exit 1
-fi
-
-if ! open "$TARGET_APP"; then
-  rollback
-  exit 1
-fi
-
-started=false
-for _ in {1..100}; do
-  if pgrep -f "$TARGET_EXECUTABLE" >/dev/null 2>&1; then
-    started=true
-    break
-  fi
-  sleep 0.1
-done
-
-if [[ "$started" != 'true' ]]; then
-  rollback
-  exit 1
-fi
-
-sleep 2
-if ! pgrep -f "$TARGET_EXECUTABLE" >/dev/null 2>&1; then
-  rollback
-  exit 1
-fi
-
-rm -rf "$BACKUP_APP"
-printf '[%s] update completed\\n' "$(date '+%Y-%m-%d %H:%M:%S')"
-`;
+  return fs.readFileSync(path.join(__dirname, '../utils/install-update.sh'), 'utf8');
 }
 
 async function launchInstallHelper(options = {}) {
@@ -604,11 +511,15 @@ async function launchInstallHelper(options = {}) {
   const updateDir = path.resolve(String(options.updateDir || ''));
   const currentPid = Number(options.currentPid);
   const mode = options.mode === 'delta' ? 'delta' : 'full';
+  const expectedVersion = normalizeVersion(options.version).text;
+  const nonce = crypto.randomBytes(32).toString('hex');
 
   if (!targetAppPath.endsWith(`/${APP_NAME}.app`) || !Number.isInteger(currentPid) || currentPid <= 0) {
     throw new Error('更新安装参数无效');
   }
 
+  try { await fsp.lstat(`${targetAppPath}.previous`); throw new Error('存在上一版更新备份，请先完成恢复；不会退出当前应用'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
   await fsp.access(path.dirname(targetAppPath), fs.constants.W_OK);
   await fsp.access(stagedAppPath, fs.constants.R_OK);
 
@@ -621,13 +532,18 @@ async function launchInstallHelper(options = {}) {
     targetAppPath,
     stagedAppPath,
     updateDir,
-    mode
+    mode,
+    expectedVersion,
+    nonce
   ], {
     detached: true,
     stdio: 'ignore'
   });
+  await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('spawn', resolve);
+  });
   child.unref();
-
   return { helperPath };
 }
 

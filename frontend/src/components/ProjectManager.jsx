@@ -1,4 +1,4 @@
-import { commandState } from './CommandProjectPanel'
+import { commandState } from '../commandState'
 
 export default function ProjectManager({ projects, commandStatus, commandBusy, manualRunning, meterSphereSummary, onSelect, onAdd, onEdit }) {
   return (

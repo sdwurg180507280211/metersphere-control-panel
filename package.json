@@ -28,7 +28,9 @@
     "desktop:version": "node scripts/prepare-desktop-release.js",
     "install:all": "npm install && cd frontend && npm install",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:frontend": "node --test frontend/__tests__/*.test.js",
+    "test:reliability": "node --test scripts/tests/reliability/*.test.cjs"
   },
   "dependencies": {
     "express": "^4.18.2",

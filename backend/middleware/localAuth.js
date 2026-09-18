@@ -2,7 +2,7 @@ const localAuthService = require('../services/localAuthService');
 const { createAppError, sendError } = require('../utils/errors');
 
 function localAuth(req, res, next) {
-  if (req.path === '/health') {
+  if (req.path === '/health' || req.path === '/ready') {
     return next();
   }
 

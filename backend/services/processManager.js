@@ -85,53 +85,9 @@ processManager._attachServiceLogTail = function attachServiceLogTail(serviceId) 
   fs.mkdirSync(path.dirname(serviceLogFile), { recursive: true });
   fs.closeSync(fs.openSync(serviceLogFile, 'a'));
   this._stopServiceLogTail(serviceId);
-
-  let position = fs.statSync(serviceLogFile).size;
-  let reading = false;
-  let closed = false;
-
-  const readAppendedContent = async (currentSize) => {
-    if (closed || reading) return;
-    reading = true;
-
-    try {
-      if (currentSize < position) {
-        position = 0;
-      }
-      if (currentSize === position) return;
-
-      const length = currentSize - position;
-      const handle = await fs.promises.open(serviceLogFile, 'r');
-      try {
-        const buffer = Buffer.alloc(length);
-        const { bytesRead } = await handle.read(buffer, 0, length, position);
-        position += bytesRead;
-        if (bytesRead > 0) {
-          logger.broadcast(buffer.subarray(0, bytesRead).toString(), 'service', serviceId);
-        }
-      } finally {
-        await handle.close();
-      }
-    } catch (error) {
-      logger.broadcast(`日志监控错误: ${error.message}`, 'service', serviceId);
-    } finally {
-      reading = false;
-    }
-  };
-
-  const listener = (current) => {
-    readAppendedContent(current.size).catch(() => {});
-  };
-
-  fs.watchFile(serviceLogFile, { interval: 500, persistent: false }, listener);
-
-  return {
-    kill() {
-      if (closed) return;
-      closed = true;
-      fs.unwatchFile(serviceLogFile, listener);
-    }
-  };
+  return require('../utils/fileTail').watch(serviceLogFile,
+    (text) => logger.broadcast(text, 'service', serviceId),
+    (error) => logger.broadcast(`日志监控错误: ${error.message}`, 'service', serviceId));
 };
 
 if (process.platform === 'win32') {

@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import '../styles/SqlTab.css';
 
 export default function SqlTab() {
   const [sql, setSql] = useState('');
+  const queryRef = useRef(null);
+  useEffect(() => () => { queryRef.current?.abort(); queryRef.current = null; }, []);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -34,9 +36,12 @@ export default function SqlTab() {
 
   const executeQuery = useCallback(async (customSql) => {
     const targetSql = typeof customSql === 'string' ? customSql : sql;
-    if (!targetSql.trim()) return;
+    if (!targetSql.trim() || queryRef.current) return;
+    const controller = new AbortController();
+    queryRef.current = controller;
 
     setLoading(true);
+    setResult(null);
     setError(null);
     setCurrentPage(1);
     
@@ -44,26 +49,34 @@ export default function SqlTab() {
       const res = await fetch('/api/sql/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql: targetSql })
+        body: JSON.stringify({ sql: targetSql }),
+        signal: controller.signal
       });
 
       const data = await res.json();
 
-      if (res.ok) {
+      if (queryRef.current !== controller || controller.signal.aborted) return;
+      if (res.ok && data.success !== false) {
         setResult(data);
         const newHistory = [
           { sql: targetSql, timestamp: Date.now() }, 
           ...history.filter(h => h.sql !== targetSql)
         ].slice(0, 50);
         setHistory(newHistory);
-        localStorage.setItem('sqlHistory', JSON.stringify(newHistory));
+        try { localStorage.setItem('sqlHistory', JSON.stringify(newHistory)); }
+        catch { toast.error('查询已完成，但浏览器历史记录保存失败'); }
       } else {
-        setError(data.error || '查询执行出错');
+        setError(data.error?.message || data.error || '查询执行出错');
       }
     } catch (err) {
-      setError(`网络错误: ${err.message}`);
+      if (queryRef.current !== controller) return;
+      if (controller.signal.aborted) toast('查询已取消', { id: 'sql-cancelled' });
+      else setError(`网络错误: ${err.message}`);
     } finally {
-      setLoading(false);
+      if (queryRef.current === controller) {
+        queryRef.current = null;
+        setLoading(false);
+      }
     }
   }, [sql, history]);
 
@@ -140,6 +153,7 @@ export default function SqlTab() {
               清空代码
             </button>
             <div className="divider"></div>
+            {loading && <button className="action-btn secondary" onClick={() => queryRef.current?.abort()}>取消查询</button>}
             <button 
               className="action-btn primary" 
               onClick={() => executeQuery()} 
@@ -177,7 +191,7 @@ export default function SqlTab() {
               <p>准备就绪。编写查询并点击“运行”以查看结果。</p>
               <div className="quick-hints">
                 <span>支持多行 SQL</span>
-                <span>结果自动截断至 1000 行</span>
+                <span>默认最多 1000 行，并限制结果数据量</span>
               </div>
             </div>
           )}
@@ -207,14 +221,14 @@ export default function SqlTab() {
                     成功
                   </span>
                   <span className="stat-item">
-                    <strong>{result.rowCount}</strong> 行受影响
+                    返回 <strong>{result.rows.length}</strong> 行
                   </span>
                   <span className="stat-item">
                     耗时 <strong>{result.executionTime}ms</strong>
                   </span>
                   {result.truncated && (
                     <span className="stat-badge warning">
-                      结果已截断
+                      {result.rowCountExact === false ? '结果已截断，总行数未知' : '结果已截断'}
                     </span>
                   )}
                 </div>

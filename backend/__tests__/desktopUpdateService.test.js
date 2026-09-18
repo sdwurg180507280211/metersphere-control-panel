@@ -7,6 +7,7 @@ const { EventEmitter } = require('events');
 const { Readable } = require('stream');
 const { ReadableStream } = require('stream/web');
 const { spawnSync } = require('child_process');
+const { acknowledgingExecutable } = require('../../scripts/tests/reliability/updater-fixture.cjs');
 
 const ELECTRON_VERSION = '44.3.0';
 
@@ -39,6 +40,7 @@ function loadTransport(fetchMock, electron = false, timers = {}) {
   };
 
   const sandbox = {
+    __dirname: path.dirname(filename), __filename: filename,
     module: { exports: {} },
     require: name => name === 'electron' ? { net } : require(name),
     process: { versions: electron ? { electron: ELECTRON_VERSION } : {} },
@@ -87,7 +89,7 @@ describe('Desktop updater network transport', () => {
       for (const [bundle, version] of [[target, 'old'], [staged, 'new']]) {
         fs.mkdirSync(path.join(bundle, 'Contents', 'MacOS'), { recursive: true });
         fs.writeFileSync(path.join(bundle, 'Contents', 'Info.plist'), version);
-        fs.writeFileSync(path.join(bundle, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+        fs.writeFileSync(path.join(bundle, 'Contents', 'MacOS', 'Local Service Hub'), acknowledgingExecutable(!launchFails), { mode: 0o755 });
       }
 
       writeStubBin(bin, {
@@ -97,7 +99,7 @@ describe('Desktop updater network transport', () => {
         sleep: 'exit 0'
       });
 
-      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory], {
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'full', '2.0.8', 'a'.repeat(64)], {
         input: loadTransport(jest.fn()).createHelperScript(),
         encoding: 'utf8',
         timeout: 5000,
@@ -330,6 +332,7 @@ describe('Delta updates', () => {
   });
 
   test('delta helper replaces the complete app layer and does not restore removed legacy assets', () => {
+    const launchFails = false;
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-delta-test-'));
     const target = path.join(directory, 'Local Service Hub.app');
     const staged = path.join(directory, 'delta-root');
@@ -338,7 +341,7 @@ describe('Delta updates', () => {
     try {
       fs.mkdirSync(path.join(target, 'Contents', 'MacOS'), { recursive: true });
       fs.writeFileSync(path.join(target, 'Contents', 'Info.plist'), 'old');
-      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), acknowledgingExecutable(!launchFails), { mode: 0o755 });
       const targetApp = path.join(target, 'Contents', 'Resources', 'app');
       fs.mkdirSync(path.join(targetApp, 'frontend', 'dist', 'legacy-assets'), { recursive: true });
       fs.writeFileSync(path.join(targetApp, 'package.json'), '{"version":"2.0.7"}');
@@ -358,7 +361,7 @@ describe('Delta updates', () => {
         sleep: 'exit 0'
       });
 
-      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta'], {
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta', '2.0.8', 'a'.repeat(64)], {
         input: loadTransport(jest.fn()).createHelperScript(),
         encoding: 'utf8',
         timeout: 10000,
@@ -380,6 +383,7 @@ describe('Delta updates', () => {
   });
 
   test('delta helper rolls back to the previous bundle when launch fails', () => {
+    const launchFails = true;
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'desktop-delta-test-'));
     const target = path.join(directory, 'Local Service Hub.app');
     const staged = path.join(directory, 'delta-root');
@@ -388,7 +392,7 @@ describe('Delta updates', () => {
     try {
       fs.mkdirSync(path.join(target, 'Contents', 'MacOS'), { recursive: true });
       fs.writeFileSync(path.join(target, 'Contents', 'Info.plist'), 'old');
-      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(target, 'Contents', 'MacOS', 'Local Service Hub'), acknowledgingExecutable(!launchFails), { mode: 0o755 });
       const targetApp = path.join(target, 'Contents', 'Resources', 'app');
       fs.mkdirSync(path.join(targetApp, 'legacy-assets'), { recursive: true });
       fs.writeFileSync(path.join(targetApp, 'package.json'), '{"version":"2.0.7"}');
@@ -405,7 +409,7 @@ describe('Delta updates', () => {
         sleep: 'exit 0'
       });
 
-      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta'], {
+      const child = spawnSync('/bin/bash', ['-s', '--', '2147483647', target, staged, directory, 'delta', '2.0.8', 'a'.repeat(64)], {
         input: loadTransport(jest.fn()).createHelperScript(),
         encoding: 'utf8',
         timeout: 10000,

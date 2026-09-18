@@ -25,19 +25,9 @@ class HealthChecker {
   }
 
   _isHealthyResponse(statusCode, payload) {
-    if (statusCode !== 200) {
-      return false;
-    }
-
-    if (!payload || typeof payload !== 'object') {
-      return true;
-    }
-
-    if (typeof payload.status === 'string') {
-      return payload.status.toUpperCase() === 'UP';
-    }
-
-    return true;
+    return statusCode === 200 && payload !== null && typeof payload === 'object'
+      && !Array.isArray(payload) && typeof payload.status === 'string'
+      && payload.status.toUpperCase() === 'UP';
   }
 
   _getErrorMessage(statusCode, payload, defaultError) {
@@ -121,7 +111,7 @@ class HealthChecker {
   /**
    * 检查服务健康状态
    */
-  async check(serviceId) {
+  async check(serviceId, options = {}) {
     const service = configManager.getResolvedConfig().services[serviceId];
     if (!service) {
       return { healthy: false, error: '服务不存在', failureCode: 'SERVICE_NOT_FOUND', terminal: true };
@@ -143,101 +133,15 @@ class HealthChecker {
       };
     }
 
-    return new Promise((resolve) => {
-      let responded = false;
-
-      const options = {
-        host: 'localhost',
-        port: healthPort,
-        path: healthPath,
-        timeout: this.timeout
-      };
-
-      const req = http.get(options, (res) => {
-        let body = '';
-
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          body += chunk;
-        });
-
-        res.on('end', () => {
-          if (responded) {
-            return;
-          }
-
-          responded = true;
-          const payload = this._parseHealthBody(body);
-          const healthy = this._isHealthyResponse(res.statusCode, payload);
-          const error = healthy ? null : this._getErrorMessage(
-            res.statusCode,
-            payload,
-            res.statusCode === 200 ? '服务未就绪' : `HTTP ${res.statusCode}`
-          );
-          const base = {
-            healthy,
-            statusCode: res.statusCode,
-            service: serviceId,
-            details: payload,
-            error,
-            mode: 'http',
-            path: healthPath,
-            port: healthPort
-          };
-          const classified = this._classifyFailure(base);
-
-          resolve({
-            ...base,
-            failureCode: classified.failureCode,
-            retriable: classified.retriable,
-            terminal: classified.terminal
-          });
-        });
-      });
-
-      req.on('error', () => {
-        if (!responded) {
-          responded = true;
-          const base = {
-            healthy: false,
-            error: '连接失败',
-            service: serviceId,
-            mode: 'http',
-            path: healthPath,
-            port: healthPort
-          };
-          const classified = this._classifyFailure(base);
-          resolve({
-            ...base,
-            failureCode: classified.failureCode,
-            retriable: classified.retriable,
-            terminal: classified.terminal
-          });
-        }
-      });
-
-      req.on('timeout', () => {
-        req.destroy();
-        if (!responded) {
-          responded = true;
-          const base = {
-            healthy: false,
-            error: '超时',
-            service: serviceId,
-            mode: 'http',
-            path: healthPath,
-            port: healthPort
-          };
-          const classified = this._classifyFailure(base);
-          resolve({
-            ...base,
-            failureCode: classified.failureCode,
-            retriable: classified.retriable,
-            terminal: classified.terminal
-          });
-        }
-      });
+    const response = await require('../utils/healthProbe').probe({
+      host: 'localhost', port: healthPort, path: healthPath, timeout: this.timeout, signal: options.signal
     });
+    const healthy = !response.error && this._isHealthyResponse(response.statusCode, response.payload);
+    const error = healthy ? null : response.error || this._getErrorMessage(response.statusCode, response.payload,
+      response.statusCode === 200 ? '健康响应不是有效的 Actuator UP' : `HTTP ${response.statusCode}`);
+    const result = { healthy, statusCode: response.statusCode, service: serviceId, details: response.payload,
+      error, mode: 'http', path: healthPath, port: healthPort, checkedAt: new Date().toISOString() };
+    return { ...result, ...this._classifyFailure(result) };
   }
 
   /**
@@ -285,7 +189,8 @@ class HealthChecker {
 
     while (Date.now() <= deadline) {
       attempts += 1;
-      lastResult = await this.check(serviceId);
+      options.signal?.throwIfAborted();
+      lastResult = await this.check(serviceId, { signal: options.signal });
 
       if (lastResult.healthy) {
         return {

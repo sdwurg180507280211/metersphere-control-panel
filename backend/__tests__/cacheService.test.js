@@ -1,8 +1,14 @@
 const cacheService = require('../services/cacheService');
+jest.mock('../config/redis', () => ({ mode: 'memory' }));
 
 describe('CacheService', () => {
-  beforeEach(() => {
-    cacheService.clear();
+  beforeEach(async () => {
+    await cacheService.delete('test-key');
+    await cacheService.delete('test-obj');
+  });
+  afterEach(async () => {
+    await cacheService.delete('test-key');
+    await cacheService.delete('test-obj');
   });
 
   describe('set and get', () => {

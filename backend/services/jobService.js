@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const cacheService = require('./cacheService');
 const websocketService = require('./websocketService');
 const { createAppError } = require('../utils/errors');
+const taskAdmission = require('./taskAdmissionService');
 
 const JOB_TTL_SECONDS = 24 * 60 * 60;
 const FAILED_JOB_TTL_SECONDS = 72 * 60 * 60;
@@ -298,6 +299,7 @@ class JobService {
   }
 
   async assertWritableRequestAllowed(resourceKey, details = {}) {
+    taskAdmission.assertAllowed();
     if (!this._redisRequiredForJobs()) {
       const rateLimit = await this.checkRateLimit(resourceKey);
       if (rateLimit.limited) {
@@ -344,6 +346,15 @@ class JobService {
   }
 
   async createJob(payload = {}) {
+    const release = taskAdmission.reserve();
+    try {
+      return await this._createAdmittedJob(payload);
+    } finally {
+      release();
+    }
+  }
+
+  async _createAdmittedJob(payload = {}) {
     if (this._redisRequiredForJobs()) {
       await this._flushBufferedWritesIfReady().catch(() => {
         throw this._createRedisUnavailableError();

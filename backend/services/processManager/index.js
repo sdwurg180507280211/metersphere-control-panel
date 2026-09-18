@@ -10,6 +10,7 @@
  */
 const { spawn, execFile } = require('child_process');
 const fs = require('fs');
+const processIdentity = require('../processIdentityService');
 const path = require('path');
 const configManager = require('../configManager');
 const logger = require('../../utils/logger');
@@ -36,6 +37,7 @@ class ProcessManager {
     this.pidDir = PID_DIR;
     this.logDir = LOG_DIR;
     this.serviceHealthMonitors = new Map();
+    this.healthAbortControllers = new Map();
     this.cleanupInterval = null;
     this.controlPanelShuttingDown = false;
     this._startPeriodicCleanup();
@@ -199,10 +201,15 @@ class ProcessManager {
 
   _clearHealthMonitor(serviceId) {
     this.serviceHealthMonitors.delete(serviceId);
+    this.healthAbortControllers.get(serviceId)?.abort();
+    this.healthAbortControllers.delete(serviceId);
   }
 
   _monitorServiceHealth(serviceId, serviceConfig, options = {}) {
+    this._clearHealthMonitor(serviceId);
     const token = Symbol(serviceId);
+    const abort = new AbortController();
+    this.healthAbortControllers.set(serviceId, abort);
     this.serviceHealthMonitors.set(serviceId, token);
 
     const initialDelay = options.initialDelay ?? 1500;
@@ -227,6 +234,7 @@ class ProcessManager {
       const healthResult = await healthChecker.waitForHealthy(serviceId, {
         timeout: BATCH_START_HEALTH_TIMEOUT,
         interval: BATCH_START_HEALTH_INTERVAL,
+        signal: abort.signal,
         initialDelay: 0
       });
 
@@ -253,10 +261,13 @@ class ProcessManager {
 
       if (this.serviceHealthMonitors.get(serviceId) === token) {
         this.serviceHealthMonitors.delete(serviceId);
+        this.healthAbortControllers.delete(serviceId);
       }
     })().catch((error) => {
+      if (this.serviceHealthMonitors.get(serviceId) !== token || abort.signal.aborted) return;
       if (this.serviceHealthMonitors.get(serviceId) === token) {
         this.serviceHealthMonitors.delete(serviceId);
+        this.healthAbortControllers.delete(serviceId);
       }
       this._setServiceStatus(serviceId, {
         phase: 'failed',
@@ -303,6 +314,19 @@ class ProcessManager {
 
   // ── PID 管理 ──
 
+  async _verifyServicePid(serviceId, pid, adopt = false) {
+    const service = this._getServiceConfig(serviceId);
+    if (!service || !processIdentity.validPid(pid)) return false;
+    const file = processIdentity.identityPath(this.pidDir, serviceId);
+    const saved = processIdentity.readIdentity(file);
+    if (saved?.invalid) return false;
+    const record = await processIdentity.identify(pid, { projectRoot: this._getProjectRoot(), pom: service.pom },
+      saved?.pid === Number(pid) ? saved : null);
+    if (!record) return false;
+    if (adopt) processIdentity.saveIdentity(file, record);
+    return true;
+  }
+
   _getPidFile(serviceId) {
     return path.join(this.pidDir, `${serviceId}.pid`);
   }
@@ -347,7 +371,7 @@ class ProcessManager {
       }
 
       // 检查进程是否还在运行
-      if (this._isProcessRunning(pid)) {
+      if (this._isProcessRunning(pid) && await this._verifyServicePid(serviceId, pid, true)) {
         // 获取服务配置
         const serviceConfig = this._getServiceConfig(serviceId);
         if (!serviceConfig) {
@@ -421,6 +445,11 @@ class ProcessManager {
     this._stopServiceLogTail(serviceId);
     serviceProcesses.delete(serviceId);
     this._clearPidFile(serviceId, expectedPid);
+    const identityFile = processIdentity.identityPath(this.pidDir, serviceId);
+    const identity = processIdentity.readIdentity(identityFile);
+    if (expectedPid === null || identity?.pid === expectedPid) {
+      try { fs.unlinkSync(identityFile); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
   }
 
   _getPid(serviceId) {
@@ -541,7 +570,7 @@ class ProcessManager {
   async _findPidsByPort(port) {
     if (!port) return [];
 
-    const stdout = await this._execFileSafe('lsof', ['-ti', `tcp:${port}`]);
+    const stdout = await this._execFileSafe('lsof', ['-nP', '-a', `-iTCP:${port}`, '-sTCP:LISTEN', '-t']);
     return stdout
       .split(/\s+/)
       .map((value) => parseInt(value, 10))
@@ -583,78 +612,44 @@ class ProcessManager {
    * 验证 PID 是否属于目标服务（命令行包含 pom 路径或是其子进程）
    */
   async _isPidBelongsToService(pid, serviceConfig, trackedPid) {
-    // 如果是追踪的 PID 或其子进程，直接可信
-    if (trackedPid) {
-      if (pid === trackedPid) return true;
-      if (await this._isProcessDescendantOf(trackedPid, pid)) return true;
-    }
-    // 检查命令行是否包含 pom 路径
-    const cmdline = await this._getProcessCmdline(pid);
-    if (cmdline && serviceConfig.pom && cmdline.includes(serviceConfig.pom)) return true;
-    return false;
+    if (!processIdentity.validPid(pid)) return false;
+    const record = await processIdentity.identify(pid, { projectRoot: this._getProjectRoot(), pom: serviceConfig.pom });
+    if (record) return true;
+    // A port child is accepted only under a verified tracked parent, never merely by PID equality.
+    const serviceId = Object.entries(this._getRuntimeConfig().services).find(([, value]) => value.pom === serviceConfig.pom)?.[0];
+    return Boolean(serviceId && trackedPid && await this._verifyServicePid(serviceId, trackedPid)
+      && await this._isProcessDescendantOf(trackedPid, pid));
   }
 
   async _terminateProcess(pid, options = {}) {
-    if (!pid || !this._isProcessRunning(pid)) {
-      return;
+    if (!processIdentity.validPid(pid)) return;
+    const protect = options.protectDevServers !== false;
+    if (protect && await this._isDevServerProcess(pid)) return;
+    const rootIdentity = await processIdentity.inspect(pid);
+    if (!rootIdentity || (options.verifyOwnership && !await options.verifyOwnership())) return;
+    const descendants = await this._findDescendantPids(pid);
+    const ordered = [...descendants].reverse().concat(Number(pid));
+    const identities = new Map();
+    for (const target of ordered) {
+      if (protect && await this._isDevServerProcess(target)) continue;
+      const identity = await processIdentity.inspect(target);
+      if (identity) identities.set(target, identity);
     }
-
-    const protectDevServers = options.protectDevServers !== false;
-    if (protectDevServers && await this._isDevServerProcess(pid)) {
-      logger.broadcast(`跳过终止开发服务器进程 (PID: ${pid})`, 'system');
-      return;
-    }
-
-    const killOne = (targetPid, signal) => {
-      try {
-        process.kill(targetPid, signal);
-        return true;
-      } catch (error) {
-        return false;
-      }
+    if (!identities.has(Number(pid)) || identities.get(Number(pid)).started !== rootIdentity.started) return;
+    const signalIfSame = async (target, signal) => {
+      const expected = identities.get(target);
+      if (!expected) return false;
+      const current = await processIdentity.inspect(target);
+      if (!current || current.started !== expected.started) return false;
+      try { process.kill(target, signal); return true; } catch { return false; }
     };
-
-    const descendantPids = await this._findDescendantPids(pid);
-    const orderedDescendants = [...descendantPids].reverse();
-
-    if (process.platform === 'win32') {
-      if (protectDevServers) {
-        for (const childPid of orderedDescendants) {
-          if (await this._isDevServerProcess(childPid)) {
-            logger.broadcast(`跳过终止包含开发服务器子进程的进程树 (PID: ${pid})`, 'system');
-            return;
-          }
-        }
-      }
-      await this._execFileSafe('taskkill', ['/PID', String(pid), '/T', '/F']);
-      return;
-    }
-
-    for (const childPid of orderedDescendants) {
-      if (protectDevServers && await this._isDevServerProcess(childPid)) {
-        logger.broadcast(`跳过终止开发服务器子进程 (PID: ${childPid})`, 'system');
-        continue;
-      }
-      killOne(childPid, 'SIGTERM');
-    }
-    killOne(pid, 'SIGTERM');
-
+    for (const target of ordered) await signalIfSame(target, 'SIGTERM');
     const deadline = Date.now() + 5000;
-    while (this._isProcessRunning(pid) && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    while (Date.now() < deadline && [...identities.keys()].some((target) => this._isProcessRunning(target))) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-
-    if (this._isProcessRunning(pid)) {
-      for (const childPid of orderedDescendants) {
-        if (this._isProcessRunning(childPid)) {
-          if (protectDevServers && await this._isDevServerProcess(childPid)) {
-            continue;
-          }
-          killOne(childPid, 'SIGKILL');
-        }
-      }
-      killOne(pid, 'SIGKILL');
-    }
+    // A parent exiting must not prevent escalation of its still-alive descendants.
+    for (const target of ordered) await signalIfSame(target, 'SIGKILL');
   }
 
   async _findChildPids(parentPid) {
@@ -688,21 +683,12 @@ class ProcessManager {
       return { command: config.npmPath, argsPrefix: [] };
     }
 
-    if (process.env.npm_execpath && path.isAbsolute(process.env.npm_execpath)) {
+    if (!process.versions?.electron && process.env.npm_execpath && path.isAbsolute(process.env.npm_execpath)) {
       return {
         command: process.execPath,
         argsPrefix: [process.env.npm_execpath]
       };
     }
-
-    const { execSync } = require('child_process');
-
-    try {
-      const npmPath = execSync('which npm', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
-      if (npmPath && fs.existsSync(npmPath)) {
-        return { command: npmPath, argsPrefix: [] };
-      }
-    } catch (e) {}
 
     const commonPaths = [
       '/usr/local/bin/npm',
@@ -815,7 +801,7 @@ class ProcessManager {
       });
       child.stderr?.on('data', (raw) => {
         const message = raw.toString();
-        stderrOutput += message;
+        stderrOutput = (stderrOutput + message).slice(-65536);
         logger.broadcast(message, logType, serviceId);
       });
       child.on('error', finishReject);

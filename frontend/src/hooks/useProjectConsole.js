@@ -227,11 +227,11 @@ export function useProjectConsole() {
     actionInFlight.current.add(id)
     setCommandBusy((current) => ({ ...current, [id]: action === 'start' ? 'starting' : 'stopping' }))
     try {
-      await requestJson(`/api/projects/commands/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
-      if (commandStatus[id]?.statusKnown !== true) {
+      const result = await requestJson(`/api/projects/commands/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+      if (result?.statusKnown !== true) {
         rememberManualRunning(id, action === 'start')
       }
-      toast.success(action === 'start' ? '启动命令已执行' : '关闭命令已执行')
+      toast.success(result?.alreadyInState ? '端口已可访问，未重复执行启动命令' : result?.statusKnown !== true ? '命令已发出，运行状态尚未验证' : action === 'start' ? '启动命令已执行，端口可访问' : '关闭命令已执行，端口未监听')
       await refresh(true)
     } catch (error) {
       toast.error(error.message || (action === 'start' ? '启动失败' : '关闭失败'))
@@ -243,7 +243,7 @@ export function useProjectConsole() {
         return next
       })
     }
-  }, [commandStatus, refresh, rememberManualRunning])
+  }, [refresh, rememberManualRunning])
 
   const visitCommandProject = useCallback(async (project) => {
     const projectStatus = commandStatus[project.id]
