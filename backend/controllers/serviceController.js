@@ -2,6 +2,7 @@
  * 服务控制器
  */
 const processManager = require('../services/processManager');
+const serviceStatusService = require('../services/serviceStatusService');
 const healthChecker = require('../services/healthChecker');
 const infraChecker = require('../services/infraChecker');
 const validator = require('../utils/validator');
@@ -36,7 +37,7 @@ const serviceController = {
 
   async getAllStatus(req, res) {
     try {
-      const status = await processManager.getAllStatus();
+      const status = await serviceStatusService.getAllStatus();
       res.json({ success: true, data: status });
     } catch (error) {
       sendError(res, error);
@@ -49,7 +50,7 @@ const serviceController = {
       if (!validator.isValidService(id)) {
         return sendError(res, createAppError(400, 'INVALID_SERVICE_ID', '无效的服务 ID', { serviceId: id }));
       }
-      const status = await processManager.getStatus(id);
+      const status = await serviceStatusService.getStatus(id);
       res.json({ success: true, data: status });
     } catch (error) {
       sendError(res, error);
