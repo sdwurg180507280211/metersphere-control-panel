@@ -3,6 +3,13 @@ import { create } from 'zustand'
 const MAX_LOG_LINES = 1000
 const inFlightRequests = new Map()
 let packageHistoryRequestSeq = 0
+let nativeLogRequestSeq = 0
+let serviceStatusRevision = 0
+
+export const SERVICE_BUSY_PHASES = new Set([
+  'starting', 'checking_health', 'stopping', 'restarting',
+  'compiling', 'reloading', 'processing', 'running_children'
+])
 
 function runInFlightRequest(key, runner) {
   if (inFlightRequests.has(key)) {
@@ -21,20 +28,47 @@ function runInFlightRequest(key, runner) {
   return request
 }
 
-export const useServiceStore = create((set) => ({
+export const useServiceStore = create((set, get) => ({
   catalog: [],
   services: {},
   loading: {},
+  statusRefreshing: false,
+  statusStale: true,
+  statusError: '',
+  statusFetchedAt: null,
 
-  setCatalog: (catalog) => set({ catalog }),
-  setServices: (services) => set({ services: normalizeServiceStatuses(services) }),
+  setCatalog: (catalog) => {
+    const changed = get().catalog.length > 0 && JSON.stringify(catalog) !== JSON.stringify(get().catalog)
+    if (changed) get().invalidateServiceObservations()
+    set({ catalog })
+    return changed
+  },
+  setServices: (services) => {
+    serviceStatusRevision += 1
+    set({ services: normalizeServiceStatuses(services), statusStale: false,
+      statusError: '', statusFetchedAt: new Date().toISOString() })
+  },
 
-  updateServiceStatus: (id, status) => set((state) => ({
-    services: {
-      ...state.services,
-      [id]: normalizeServiceStatus(id, status, state.services[id])
-    }
-  })),
+  updateServiceStatus: (id, status) => {
+    serviceStatusRevision += 1
+    set((state) => {
+      const services = { ...state.services,
+        [id]: normalizeServiceStatus(id, status, state.services[id]) }
+      // An event changes one service; its dependents' HTTP observations are now old.
+      for (const [otherId, other] of Object.entries(services)) {
+        if (otherId !== id && Array.isArray(other.dependencyStatus?.dependencies)
+          && other.dependencyStatus.dependencies.some((item) => item?.id === id)) {
+          services[otherId] = { ...other, dependencyStatusStale: true }
+        }
+      }
+      return { services }
+    })
+  },
+
+  invalidateServiceObservations: () => {
+    serviceStatusRevision += 1
+    set((state) => ({ services: staleServiceObservations(state.services), statusStale: true }))
+  },
 
   setLoading: (id, isLoading) => set((state) => ({
     loading: { ...state.loading, [id]: isLoading }
@@ -44,8 +78,8 @@ export const useServiceStore = create((set) => ({
     try {
       const res = await fetch('/api/services/catalog')
       const data = await res.json()
-      if (data.success) {
-        set({ catalog: data.data })
+      if (res.ok !== false && data.success && Array.isArray(data.data)) {
+        if (get().setCatalog(data.data)) await get().fetchServices()
       }
     } catch (error) {
       console.error('获取服务目录失败:', error)
@@ -53,17 +87,70 @@ export const useServiceStore = create((set) => ({
   }),
 
   fetchServices: async () => runInFlightRequest('services:status', async () => {
+    set({ statusRefreshing: true })
     try {
-      const res = await fetch('/api/services/status')
-      const data = await res.json()
-      if (data.success) {
-        set({ services: normalizeServiceStatuses(data.data) })
+      // A newer event/command wins over a slow HTTP response. All callers share
+      // at most one follow-up read; continuous events cannot create a tight loop.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const revision = serviceStatusRevision
+        const res = await fetch('/api/services/status')
+        const data = await res.json()
+        if (res.ok === false || !data.success || !data.data
+          || typeof data.data !== 'object' || Array.isArray(data.data)) {
+          throw new Error(serviceErrorMessage(data.error, '获取服务状态失败'))
+        }
+        if (revision !== serviceStatusRevision) continue
+        set({ services: normalizeServiceStatuses(data.data), statusStale: false,
+          statusError: '', statusFetchedAt: new Date().toISOString() })
+        return data.data
       }
+      set({ statusStale: true })
+      return null
     } catch (error) {
-      console.error('获取服务状态失败:', error)
+      set((state) => ({ services: staleServiceObservations(state.services), statusStale: true,
+        statusError: serviceErrorMessage(error, '获取服务状态失败') }))
+      return null
+    } finally {
+      set({ statusRefreshing: false })
     }
-  })
+  }),
+
+  requestServiceAction: async (serviceId, action) => {
+    const phases = { start: 'starting', stop: 'stopping', restart: 'restarting' }
+    if (!Object.hasOwn(phases, action) || typeof serviceId !== 'string' || !serviceId) {
+      throw new Error('无效的服务操作')
+    }
+    if (get().loading[serviceId] || SERVICE_BUSY_PHASES.has(get().services[serviceId]?.phase)) return null
+    // Acquire synchronously, before the first await (also guards same-tick clicks).
+    get().setLoading(serviceId, true)
+    get().invalidateServiceObservations()
+    const before = get().services[serviceId]
+    try {
+      const res = await fetch(`/api/services/${encodeURIComponent(serviceId)}/${action}`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok === false || !data.success) {
+        throw new Error(serviceErrorMessage(data.error, '服务操作失败'))
+      }
+      // A job may finish before the POST acknowledgement arrives.
+      if (get().services[serviceId] === before) {
+        get().updateServiceStatus(serviceId, { phase: phases[action], running: false, error: null })
+      }
+      return data
+    } finally {
+      try { await get().fetchServices() } finally { get().setLoading(serviceId, false) }
+    }
+  }
 }))
+
+function serviceErrorMessage(error, fallback) {
+  return typeof error === 'string' ? error : typeof error?.message === 'string' ? error.message : fallback
+}
+
+function staleServiceObservations(services) {
+  return Object.fromEntries(Object.entries(services).map(([id, status]) => [id,
+    { ...status, processStale: true, healthStale: true, dependencyStatusStale: true }
+  ]))
+}
 
 export const useLogStore = create((set, get) => ({
   serviceLogLines: [],
@@ -130,14 +217,12 @@ export const useLogStore = create((set, get) => ({
     serviceLogLines: [],
     logTails: { ...state.logTails, service: '' }
   })),
-  clearNativeServiceLogs: () => set((state) => ({
-    nativeServiceLogs: {
-      ...state.nativeServiceLogs,
-      lines: [],
-      meta: null,
-      error: ''
-    }
-  })),
+  clearNativeServiceLogs: () => {
+    nativeLogRequestSeq += 1
+    set((state) => ({
+      nativeServiceLogs: { ...state.nativeServiceLogs, lines: [], meta: null, loading: false, error: '' }
+    }))
+  },
   clearBuildLogs: () => set((state) => ({
     buildLogLines: [],
     logTails: { ...state.logTails, build: '' }
@@ -163,11 +248,14 @@ export const useLogStore = create((set, get) => ({
 
   loadNativeServiceLogs: async ({ serviceId, file = 'info.log', lines = 500 }) => {
     if (!serviceId) return null
+    const requestSeq = ++nativeLogRequestSeq
     set((state) => ({
       nativeServiceLogs: {
         ...state.nativeServiceLogs,
         serviceId,
         file,
+        lines: [],
+        meta: null,
         loading: true,
         error: ''
       }
@@ -177,8 +265,9 @@ export const useLogStore = create((set, get) => ({
       const params = new URLSearchParams({ serviceId, file, lines: String(lines) })
       const res = await fetch(`/api/logs/native/service?${params.toString()}`)
       const data = await res.json()
-      if (!data.success) {
-        throw new Error(data.error?.message || data.error || '读取 MeterSphere 原生日志失败')
+      if (requestSeq !== nativeLogRequestSeq) return null
+      if (res.ok === false || !data.success) {
+        throw new Error(serviceErrorMessage(data.error, '读取 MeterSphere 原生日志失败'))
       }
 
       const logLines = (data.data || []).map((text) => ({
@@ -199,6 +288,7 @@ export const useLogStore = create((set, get) => ({
       })
       return data
     } catch (error) {
+      if (requestSeq !== nativeLogRequestSeq) return null
       set((state) => ({
         nativeServiceLogs: {
           ...state.nativeServiceLogs,
@@ -426,12 +516,15 @@ export const usePackageStore = create((set, get) => ({
   isRunning: () => ['pending', 'running'].includes(get().currentTask?.status)
 }))
 
-export const useWebSocketStore = create((set) => ({
+export const useWebSocketStore = create((set, get) => ({
   connected: false,
   clientId: null,
   reconnectAttempts: 0,
 
-  setConnected: (connected) => set({ connected }),
+  setConnected: (connected) => {
+    if (!connected && get().connected) useServiceStore.getState().invalidateServiceObservations()
+    set({ connected })
+  },
   setClientId: (clientId) => set({ clientId }),
   incrementReconnect: () => set((state) => ({
     reconnectAttempts: state.reconnectAttempts + 1
@@ -987,40 +1080,34 @@ function normalizeServiceStatuses(services = {}) {
 
 function normalizeServiceStatus(serviceId, status, previous = null) {
   if (typeof status === 'boolean') {
-    return {
-      serviceId,
-      phase: status ? 'running' : 'stopped',
-      running: status,
-      pid: previous?.pid || null,
-      error: null,
-      updatedAt: previous?.updatedAt || new Date().toISOString()
-    }
+    status = { phase: status ? 'running' : 'stopped', running: status, health: null,
+      ...(status ? {} : { pid: null, processAlive: false }) }
   }
-
-  if (!status || typeof status !== 'object') {
-    return previous || {
-      serviceId,
-      phase: 'stopped',
-      running: false,
-      pid: null,
-      error: null,
-      updatedAt: new Date().toISOString()
-    }
+  if (!status || typeof status !== 'object' || Array.isArray(status)) {
+    return previous || { serviceId, phase: 'stopped', running: false, pid: null, error: null,
+      health: null, healthStale: true, dependencyStatus: null, dependencyStatusStale: true }
   }
-
+  const has = (key) => Object.hasOwn(status, key)
+  const value = (key, fallback = null) => has(key) ? status[key] : previous?.[key] ?? fallback
+  const phase = status.phase || (has('running') ? status.running ? 'running' : 'stopped' : previous?.phase || 'stopped')
+  const transitioning = SERVICE_BUSY_PHASES.has(phase)
   return {
     serviceId,
-    phase: status.phase || (status.running ? 'running' : 'stopped'),
-    running: Boolean(status.running),
-    pid: status.pid ?? previous?.pid ?? null,
-    error: status.error ?? null,
+    phase,
+    running: has('running') ? Boolean(status.running) : previous?.running ?? false,
+    pid: value('pid'),
+    error: has('error') ? status.error : has('phase') && phase !== 'failed' ? null : previous?.error ?? null,
     updatedAt: status.updatedAt || new Date().toISOString(),
     name: status.name || previous?.name || serviceId,
-    processAlive: status.processAlive ?? previous?.processAlive ?? null,
-    owned: status.owned ?? previous?.owned ?? null,
-    portOccupied: status.portOccupied ?? previous?.portOccupied ?? false,
-    observedPids: status.observedPids ?? previous?.observedPids ?? [],
-    health: Object.prototype.hasOwnProperty.call(status, 'health') ? status.health : previous?.health ?? null
+    processAlive: value('processAlive'),
+    processStale: !has('processAlive'),
+    owned: value('owned'),
+    portOccupied: value('portOccupied', false),
+    observedPids: value('observedPids', []),
+    health: transitioning ? null : value('health'),
+    healthStale: transitioning || !has('health'),
+    dependencyStatus: value('dependencyStatus'),
+    dependencyStatusStale: !has('dependencyStatus')
   }
 }
 

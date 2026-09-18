@@ -1,0 +1,50 @@
+.service-diagnostics {
+  border-top: 1px solid rgba(148, 163, 184, .18);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  min-width: 0;
+}
+.service-observation,
+.service-diagnostic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.service-observation { justify-content: space-between; }
+.service-diagnostics .tone-ok { color: #86efac; }
+.service-diagnostics .tone-warning { color: #fcd34d; }
+.service-diagnostics .tone-unknown { color: #cbd5e1; }
+.service-diagnostics p { margin: 6px 0; overflow-wrap: anywhere; }
+.service-issue-summary {
+  color: #fcd34d;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.service-diagnostic-actions { margin-top: 6px; }
+.service-diagnostic-actions button,
+.services-status-notice button {
+  font: inherit;
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, .09);
+  border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.service-diagnostic-actions button:hover,
+.services-status-notice button:hover { background: rgba(148, 163, 184, .2); }
+.service-diagnostic-actions button:focus-visible,
+.services-status-notice button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+.service-diagnostic-actions button:disabled { opacity: .55; cursor: wait; }
+.service-diagnostic-details { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(148, 163, 184, .25); }
+.service-issue-detail { white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.service-dependency-list { margin: 8px 0; padding: 0; list-style: none; }
+.service-dependency-list li { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; overflow-wrap: anywhere; }
+.service-advisory-note { color: #94a3b8; }
+.services-status-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; color: #fcd34d; font-size: 12px; }
+.services-status-notice span { overflow-wrap: anywhere; }
+.services-log-panel:focus { outline: 2px solid #93c5fd; outline-offset: -2px; }

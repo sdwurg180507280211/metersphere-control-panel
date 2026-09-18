@@ -6,6 +6,7 @@ import './LogViewer.css'
 
 const LOG_LINE_HEIGHT = 20
 const LOG_OVERSCAN = 20
+const EMPTY_LOG_LINES = []
 function createDefaultFilter() {
   return { logLevel: 'all', searchTerm: '' }
 }
@@ -115,8 +116,9 @@ function getNativeFileForLevel(level) {
   return 'info.log'
 }
 
-function LogViewer({ type, searchInputRef, services = [] }) {
+function LogViewer({ type, searchInputRef, services = [], serviceLogRequest = null }) {
   const logRef = useRef(null)
+  const [appliedLogRequest, setAppliedLogRequest] = useState(null)
   const searchInputRefLocal = useRef(null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [viewportHeight, setViewportHeight] = useState(0)
@@ -146,6 +148,9 @@ function LogViewer({ type, searchInputRef, services = [] }) {
     loadNativeServiceLogs
   } = useLogStore()
 
+  const pendingLogRequest = type === 'service' && serviceLogRequest !== null && serviceLogRequest !== appliedLogRequest
+    && services.some((service) => service.id === serviceLogRequest.serviceId)
+
   const storeFilters = filters[type] || createDefaultFilter()
   const currentSource = type === 'service' ? logSource : 'control'
   const isNativeSource = type === 'service' && currentSource === 'native'
@@ -159,7 +164,10 @@ function LogViewer({ type, searchInputRef, services = [] }) {
     ? `${selectedService?.name || selectedServiceId || '未选择服务'} / ${nativeFileLabel}`
     : ''
   // 直接订阅状态，确保响应式更新
-  const originalLines = useLogLines(type, currentSource)
+  const subscribedLines = useLogLines(type, currentSource)
+  const nativeSelectionMatches = nativeServiceLogs.serviceId === selectedServiceId && nativeServiceLogs.file === nativeFile
+  // Never render one service's content underneath another service's heading.
+  const originalLines = isNativeSource && !nativeSelectionMatches ? EMPTY_LOG_LINES : subscribedLines
 
   // 本地过滤逻辑，确保响应式
   const lines = useMemo(() => {
@@ -198,6 +206,18 @@ function LogViewer({ type, searchInputRef, services = [] }) {
       filters: sourceFilters
     })
   }, [logSource, selectedServiceId, sourceFilters])
+
+  useEffect(() => {
+    if (!pendingLogRequest) return
+    setLogSource('native')
+    setSelectedServiceId(serviceLogRequest.serviceId)
+    setSourceFilters((state) => ({ ...state, native: createDefaultFilter() }))
+    setAutoScroll(true)
+    setExpandedStackTraces(new Set())
+    // Also reload when the user opens the same service again. React batches these
+    // state updates so the read effect uses the selected service and reset filter.
+    setAppliedLogRequest(serviceLogRequest)
+  }, [pendingLogRequest, serviceLogRequest])
 
   // 监听全局搜索聚焦事件
   useEffect(() => {
@@ -257,13 +277,14 @@ function LogViewer({ type, searchInputRef, services = [] }) {
       return
     }
 
+    if (pendingLogRequest) return
     if (!selectedServiceId) {
       clearNativeServiceLogs()
       return
     }
 
     loadNativeServiceLogs({ serviceId: selectedServiceId, file: nativeFile, lines: 500 }).catch(() => {})
-  }, [type, currentSource, selectedServiceId, nativeFile, loadNativeServiceLogs, clearNativeServiceLogs])
+  }, [type, currentSource, selectedServiceId, nativeFile, appliedLogRequest, pendingLogRequest, loadNativeServiceLogs, clearNativeServiceLogs])
 
   useEffect(() => {
     if (logRef.current && autoScroll) {
@@ -367,7 +388,10 @@ function LogViewer({ type, searchInputRef, services = [] }) {
   const sourceLabel = currentSource === 'native' ? 'MeterSphere 原生日志' : '控制面板日志'
   const activeLogLabel = isNativeSource ? `${sourceLabel} / ${nativeLogLabel}` : sourceLabel
   const emptyState = (() => {
-    if (isNativeSource && nativeServiceLogs.error) {
+    if (isNativeSource && (!nativeSelectionMatches || nativeServiceLogs.loading)) {
+      return { type: 'logs', title: '正在读取服务日志…', description: `读取范围：${nativeLogLabel}` }
+    }
+    if (isNativeSource && nativeSelectionMatches && nativeServiceLogs.error) {
       return {
         type: 'error',
         title: '原生日志读取失败',
@@ -534,12 +558,12 @@ function LogViewer({ type, searchInputRef, services = [] }) {
           )}
           {type === 'service' && currentSource === 'native' && (
             <>
-              <select className="log-select native-service-select" value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)}>
+              <select aria-label="日志服务" className="log-select native-service-select" value={selectedServiceId} onChange={(e) => setSelectedServiceId(e.target.value)}>
                 {services.map((service) => (
                   <option key={service.id} value={service.id}>{service.name || service.id}</option>
                 ))}
               </select>
-              <div className="log-source-label">{nativeLogLabel}</div>
+              <div className="log-source-label" role="status">{nativeLogLabel}</div>
             </>
           )}
           <select

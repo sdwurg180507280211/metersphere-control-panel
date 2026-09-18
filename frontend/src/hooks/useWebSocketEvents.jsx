@@ -19,17 +19,10 @@ function extractError(data, defaultMessage) {
 export function useWebSocketEvents(scheduleRefresh) {
   const requestServiceAction = useCallback(async (action, serviceId, serviceName) => {
     try {
-      const response = await fetch(`/api/services/${serviceId}/${action}`, { method: 'POST' })
-      const data = await response.json()
-      if (!data.success) {
-        toast.error(extractError(data, action === 'restart' ? '重启失败' : '启动失败'))
-        return
-      }
-
-      const phase = action === 'restart' ? 'restarting' : 'starting'
+      const data = await useServiceStore.getState().requestServiceAction(serviceId, action)
+      if (!data) return
       const actionLabel = action === 'restart' ? '重启' : '启动'
-      toast.success(`${serviceName} ${actionLabel}命令已发送`)
-      useServiceStore.getState().updateServiceStatus(serviceId, { phase, running: false })
+      toast.success(`${serviceName} ${actionLabel}请求已受理`)
     } catch (error) {
       toast.error(`${action === 'restart' ? '重启' : '启动'}失败: ${error.message}`)
     }
@@ -272,6 +265,7 @@ export function useWebSocketEvents(scheduleRefresh) {
       case 'service:status':
         if (payload?.serviceId) {
           useServiceStore.getState().updateServiceStatus(payload.serviceId, payload)
+          scheduleRefresh('services', () => useServiceStore.getState().fetchServices(), 300)
         }
         break
       case 'build:completed':
@@ -305,6 +299,7 @@ export function useWebSocketEvents(scheduleRefresh) {
   }, [handleBatchBuildCompleted, handleBuildCompleted, handleJobEvent, handlePackageEvent, handleTunnelEvent, scheduleRefresh])
 
   const handleConnected = useCallback(() => {
+    useServiceStore.getState().invalidateServiceObservations()
     useServiceStore.getState().fetchServices()
     useBuildStore.getState().fetchActiveBuilds()
     usePackageStore.getState().fetchActiveTask()

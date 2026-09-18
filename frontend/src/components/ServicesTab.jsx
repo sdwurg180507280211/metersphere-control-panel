@@ -1,7 +1,8 @@
-import { useEffect, useCallback, useState, memo } from 'react'
+import { useEffect, useCallback, useState, useRef, memo } from 'react'
 import { toast } from 'react-hot-toast'
-import { useServiceStore, useWebSocketStore, useLogStore, useInfraStore, useConfigStore } from '../store/useAppStore'
+import { useServiceStore, useWebSocketStore, useInfraStore, useConfigStore, SERVICE_BUSY_PHASES } from '../store/useAppStore'
 import LogViewer from './LogViewer'
+import ServiceDiagnostics from './ServiceDiagnostics'
 import EmptyState from './EmptyState'
 import ConfirmDialog from './ConfirmDialog'
 import TunnelDialog from './TunnelDialog'
@@ -9,13 +10,13 @@ import Tooltip from './Tooltip'
 import { ServiceCardSkeleton } from './Skeleton'
 import './ServicesTab.css'
 
-const BUSY_SERVICE_PHASES = new Set(['starting', 'checking_health', 'stopping', 'restarting'])
+const BUSY_SERVICE_PHASES = SERVICE_BUSY_PHASES
 
 // 从 API 响应中提取错误消息（处理 error 是对象 {code, message, details} 的情况）
 function extractError(data, defaultMessage) {
   const { error } = data
   if (typeof error === 'object' && error !== null) {
-    return error.message || error
+    return typeof error.message === 'string' ? error.message : defaultMessage
   }
   return error || defaultMessage
 }
@@ -67,7 +68,7 @@ const STATE_CONFIG = {
     color: '#f87171',
     bgColor: '#311818',
     borderColor: '#8f3434',
-    text: '启动失败',
+    text: '服务异常',
     spin: false
   },
   restarting: {
@@ -160,7 +161,10 @@ function ServicesTab({ searchInputRef }) {
     loading,
     fetchCatalog,
     fetchServices,
-    setLoading,
+    requestServiceAction,
+    statusRefreshing,
+    statusStale,
+    statusError,
     updateServiceStatus
   } = useServiceStore()
   const { connected } = useWebSocketStore()
@@ -176,6 +180,17 @@ function ServicesTab({ searchInputRef }) {
   })
   const [tunnelDialogOpen, setTunnelDialogOpen] = useState(false)
   const [tunnelRunning, setTunnelRunning] = useState(false)
+  const [serviceLogRequest, setServiceLogRequest] = useState(null)
+  const logPanelRef = useRef(null)
+  const batchSubmittingRef = useRef(false)
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
+  const stale = statusStale || !connected
+
+  const openServiceLogs = useCallback((serviceId) => {
+    setServiceLogRequest((previous) => ({ serviceId, sequence: (previous?.sequence || 0) + 1 }))
+    logPanelRef.current?.scrollIntoView({ block: 'nearest' })
+    logPanelRef.current?.focus({ preventScroll: true })
+  }, [])
 
   // 轮询 SSH 隧道状态 + WebSocket 事件
   useEffect(() => {
@@ -203,11 +218,11 @@ function ServicesTab({ searchInputRef }) {
   }, [])
 
   useEffect(() => {
-    const loadData = async () => {
-      await Promise.all([fetchCatalog(), fetchServices()])
-      setTimeout(() => setInitialLoading(false), 300)
-    }
-    loadData()
+    let mounted = true
+    Promise.all([fetchCatalog(), fetchServices()]).finally(() => {
+      if (mounted) setInitialLoading(false)
+    })
+    return () => { mounted = false }
   }, [fetchCatalog, fetchServices])
 
   useEffect(() => {
@@ -237,67 +252,22 @@ function ServicesTab({ searchInputRef }) {
     })
   }, [])
 
-  const toggleService = useCallback(async (serviceId) => {
-    const serviceStatus = services[serviceId] || { running: false, phase: 'stopped' }
-    const isRunning = serviceStatus.running
-    const action = isRunning ? '停止' : '启动'
-
-    setLoading(serviceId, true)
-
+  const runServiceAction = useCallback(async (serviceId, action, event) => {
+    event?.stopPropagation()
+    if (batchSubmittingRef.current) return
+    const labels = { start: '启动', stop: '停止', restart: '重启' }
     try {
-      const endpoint = `/api/services/${serviceId}/${isRunning ? 'stop' : 'start'}`
-      const res = await fetch(endpoint, { method: 'POST' })
-      const data = await res.json()
-
-      if (data.success) {
-        toast.success(`${action}命令已发送`, { icon: isRunning ? '🛑' : '🚀' })
-        updateServiceStatus(serviceId, {
-          ...serviceStatus,
-          phase: isRunning ? 'stopping' : 'starting',
-          running: false,
-          error: null
-        })
-        if (!connected) {
-          setTimeout(fetchServices, 2000)
-        }
-      } else {
-        toast.error(extractError(data, `${action}失败`))
-      }
+      const result = await requestServiceAction(serviceId, action)
+      if (result) toast.success(`${labels[action]}请求已受理`)
     } catch (error) {
-      toast.error(`网络错误: ${error.message}`)
-    } finally {
-      setTimeout(() => setLoading(serviceId, false), 2000)
+      toast.error(error.message || `${labels[action]}请求失败`)
     }
-  }, [connected, services, setLoading, updateServiceStatus, fetchServices])
+  }, [requestServiceAction])
 
-  const handleRestart = useCallback(async (serviceId, e) => {
-    e.stopPropagation()
-    const serviceStatus = services[serviceId] || { running: false, phase: 'stopped' }
-    
-    setLoading(serviceId, true)
-
-    try {
-      const endpoint = `/api/services/${serviceId}/restart`
-      const res = await fetch(endpoint, { method: 'POST' })
-      const data = await res.json()
-
-      if (data.success) {
-        toast.success('重启命令已发送', { icon: '🔄' })
-        updateServiceStatus(serviceId, {
-          ...serviceStatus,
-          phase: 'restarting',
-          running: false,
-          error: null
-        })
-      } else {
-        toast.error(extractError(data, '重启失败'))
-      }
-    } catch (error) {
-      toast.error(`网络错误: ${error.message}`)
-    } finally {
-      setTimeout(() => setLoading(serviceId, false), 2000)
-    }
-  }, [services, setLoading, updateServiceStatus])
+  const toggleService = useCallback((serviceId) => {
+    const current = useServiceStore.getState().services[serviceId]
+    return runServiceAction(serviceId, current?.running ? 'stop' : 'start')
+  }, [runServiceAction])
 
   const handleBatchAction = useCallback((action) => {
     const actionLabels = {
@@ -316,6 +286,9 @@ function ServicesTab({ searchInputRef }) {
   }, [])
 
   const confirmBatchAction = useCallback(async () => {
+    if (batchSubmittingRef.current) return
+    batchSubmittingRef.current = true
+    setBatchSubmitting(true)
     const { action } = confirmDialog
     setConfirmDialog({ isOpen: false, action: '', title: '', message: '' })
     
@@ -339,14 +312,14 @@ function ServicesTab({ searchInputRef }) {
         return
       }
       updateServiceStatus(service.id, {
-        ...serviceStatus,
         phase: phaseMap[action],
         running: false,
         error: null
       })
     })
 
-    toast.promise(
+    try {
+      await toast.promise(
       fetch(endpoint, { method: 'POST' })
         .then((response) => response.json())
         .then((data) => {
@@ -362,14 +335,15 @@ function ServicesTab({ searchInputRef }) {
       }
     )
 
-    if (!connected) {
-      setTimeout(fetchServices, action === 'restart' ? 7000 : 5000)
+    } catch { /* toast.promise already reports the request error. */ }
+    finally {
+      try { await fetchServices() } finally {
+        batchSubmittingRef.current = false
+        setBatchSubmitting(false)
+      }
     }
-  }, [confirmDialog, catalog, services, updateServiceStatus, connected, fetchServices])
+  }, [confirmDialog, catalog, services, updateServiceStatus, fetchServices])
 
-  const runningCount = catalog.filter((service) => services[service.id]?.running).length
-  const busyCount = catalog.filter((service) => BUSY_SERVICE_PHASES.has(services[service.id]?.phase)).length
-  const failedCount = catalog.filter((service) => services[service.id]?.phase === 'failed').length
 
   // 渲染骨架屏
   if (initialLoading) {
@@ -400,6 +374,10 @@ function ServicesTab({ searchInputRef }) {
       <div className="tab-content services-tab">
         <div className="card">
           <EmptyState type="services" />
+          <div className="services-status-notice" role="status">
+            <span>{statusError || '尚无服务目录，可重新读取或检查项目配置。'}</span>
+            <button type="button" disabled={statusRefreshing} onClick={() => { fetchCatalog(); fetchServices() }}>重新读取</button>
+          </div>
         </div>
       </div>
     )
@@ -407,6 +385,10 @@ function ServicesTab({ searchInputRef }) {
 
   return (
     <div className="tab-content services-tab">
+      {(stale || statusError) && <div className="services-status-notice" role="status">
+        <span>{statusError ? `状态刷新失败：${statusError}` : !connected ? '实时连接已断开，以下为最近一次观测。' : '状态正在同步，部分观测可能已过期。'}</span>
+        <button type="button" onClick={() => fetchServices()} disabled={statusRefreshing}>{statusRefreshing ? '刷新中…' : '刷新状态'}</button>
+      </div>}
       <div className="services-workspace">
         <section className="card services-control-panel">
           <div className="card-header">
@@ -418,19 +400,19 @@ function ServicesTab({ searchInputRef }) {
                 </button>
               </Tooltip>
               <Tooltip content="启动所有服务" position="bottom">
-                <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')}>
+                <button className="btn-batch btn-start" onClick={() => handleBatchAction('start')} disabled={batchSubmitting}>
                   <span className="btn-icon-text">ON</span>
                   启动全部
                 </button>
               </Tooltip>
               <Tooltip content="重启所有服务" position="bottom">
-                <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')}>
+                <button className="btn-batch btn-restart" onClick={() => handleBatchAction('restart')} disabled={batchSubmitting}>
                   <span className="btn-icon-text">RS</span>
                   重启全部
                 </button>
               </Tooltip>
               <Tooltip content="停止所有服务" position="bottom">
-                <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')}>
+                <button className="btn-batch btn-stop" onClick={() => handleBatchAction('stop')} disabled={batchSubmitting}>
                   <span className="btn-icon-text">OFF</span>
                   停止全部
                 </button>
@@ -448,30 +430,15 @@ function ServicesTab({ searchInputRef }) {
                 key={service.id}
                 service={service}
                 status={services[service.id] || { running: false, phase: 'stopped', error: null }}
-                isLoading={loading[service.id]}
+                isLoading={loading[service.id] || batchSubmitting}
                 isErrorExpanded={expandedErrors.has(service.id)}
                 onToggle={() => toggleService(service.id)}
-                onRestart={(e) => handleRestart(service.id, e)}
-                onForceStop={async (e) => {
-                  if (e) e.stopPropagation()
-                  const serviceStatus = services[service.id] || { running: false, phase: 'stopped' }
-                  setLoading(service.id, true)
-                  try {
-                    const res = await fetch(`/api/services/${service.id}/stop`, { method: 'POST' })
-                    const data = await res.json()
-                    if (data.success) {
-                      toast.success('停止命令已发送', { icon: '🛑' })
-                      updateServiceStatus(service.id, { ...serviceStatus, phase: 'stopping', running: false, error: null })
-                      if (!connected) setTimeout(fetchServices, 2000)
-                    } else {
-                      toast.error(extractError(data, '停止失败'))
-                    }
-                  } catch (err) {
-                    toast.error(`网络错误: ${err.message}`)
-                  } finally {
-                    setTimeout(() => setLoading(service.id, false), 2000)
-                  }
-                }}
+                onRestart={(e) => runServiceAction(service.id, 'restart', e)}
+                onForceStop={(e) => runServiceAction(service.id, 'stop', e)}
+                onViewLogs={() => openServiceLogs(service.id)}
+                onRefresh={() => fetchServices()}
+                refreshing={statusRefreshing}
+                stale={stale}
                 onToggleError={() => toggleErrorExpand(service.id)}
                 animationDelay={index * 50}
               />
@@ -479,11 +446,11 @@ function ServicesTab({ searchInputRef }) {
           </div>
         </section>
 
-        <aside className="card log-card services-log-panel">
+        <aside ref={logPanelRef} tabIndex={-1} aria-label="服务日志区域" className="card log-card services-log-panel">
           <div className="card-header">
             <h2 className="card-title">服务日志</h2>
           </div>
-          <LogViewer type="service" searchInputRef={searchInputRef} services={catalog} />
+          <LogViewer type="service" searchInputRef={searchInputRef} services={catalog} serviceLogRequest={serviceLogRequest} />
         </aside>
       </div>
 
@@ -507,45 +474,6 @@ function ServicesTab({ searchInputRef }) {
   )
 }
 
-// 错误类型识别
-function getErrorTypeLabel(error) {
-  if (!error) return '错误信息'
-  if (error.includes('服务内部错误') || error.includes('HTTP 50')) {
-    return '服务异常'
-  }
-  if (error.includes('连接失败')) {
-    return '连接失败'
-  }
-  if (error.includes('超时')) {
-    return '检查超时'
-  }
-  if (error.includes('404')) {
-    return '端点错误'
-  }
-  if (error.includes('权限')) {
-    return '权限不足'
-  }
-  return '启动失败'
-}
-
-// 错误提示建议
-function getErrorHint(error) {
-  if (!error) return null
-  if (error.includes('服务内部错误') || error.includes('HTTP 50')) {
-    return '服务进程已启动但内部报错，请查看右侧服务日志排查问题'
-  }
-  if (error.includes('连接失败')) {
-    return '服务可能尚未启动或端口未监听'
-  }
-  if (error.includes('超时')) {
-    return '服务启动较慢或健康检查未及时响应，可尝试重试'
-  }
-  if (error.includes('404')) {
-    return '请检查 config.json 中健康检查端点配置是否正确'
-  }
-  return null
-}
-
 const ServiceButton = memo(function ServiceButton({
   service,
   status,
@@ -555,12 +483,16 @@ const ServiceButton = memo(function ServiceButton({
   onRestart,
   onForceStop,
   onToggleError,
+  onViewLogs,
+  onRefresh,
+  refreshing,
+  stale,
   animationDelay
 }) {
-  const { phase, running, error, pid } = status
+  const { phase, running, pid } = status
   const isBusy = BUSY_SERVICE_PHASES.has(phase)
   const actionLabel = running ? '停止' : '启动'
-  const config = STATE_CONFIG[phase] || STATE_CONFIG[running ? 'running' : 'stopped']
+  const config = STATE_CONFIG[phase] || (isBusy ? { ...STATE_CONFIG.starting, text: '处理中' } : STATE_CONFIG[running ? 'running' : 'stopped'])
 
   return (
     <div
@@ -572,6 +504,8 @@ const ServiceButton = memo(function ServiceButton({
       }}
     >
       <button
+        type="button"
+        aria-label={`${actionLabel} ${service.name || service.id}`}
         className="service-btn-main"
         onClick={onToggle}
         disabled={isLoading || isBusy}
@@ -623,6 +557,9 @@ const ServiceButton = memo(function ServiceButton({
           <Tooltip content="重启服务" position="bottom">
             <button 
               className="btn-icon btn-restart-small" 
+              type="button"
+              aria-label={`重启 ${service.name || service.id}`}
+              disabled={isLoading || isBusy}
               onClick={onRestart}
             >
               🔄
@@ -636,6 +573,9 @@ const ServiceButton = memo(function ServiceButton({
           <Tooltip content="停止服务" position="bottom">
             <button
               className="btn-icon btn-stop-small"
+              type="button"
+              aria-label={`停止 ${service.name || service.id}`}
+              disabled={isLoading || isBusy}
               onClick={onForceStop}
             >
               🛑
@@ -644,13 +584,19 @@ const ServiceButton = memo(function ServiceButton({
           <Tooltip content="重新启动" position="bottom">
             <button
               className="btn-icon btn-restart-small"
-              onClick={(e) => { e.stopPropagation(); onToggle(); }}
+              type="button"
+              aria-label={`重启 ${service.name || service.id}`}
+              disabled={isLoading || isBusy}
+              onClick={onRestart}
             >
               🔄
             </button>
           </Tooltip>
         </div>
       )}
+      <ServiceDiagnostics service={service} status={status} stale={stale}
+        expanded={isErrorExpanded} onToggle={onToggleError} onViewLogs={onViewLogs}
+        onRefresh={onRefresh} refreshing={refreshing} />
     </div>
   )
 })
