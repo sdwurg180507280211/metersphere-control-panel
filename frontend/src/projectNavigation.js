@@ -1,11 +1,18 @@
-export const METERSPHERE_TABS = ['services', 'build', 'package', 'sql', 'config']
-export const DEFAULT_ROUTE = { projectId: 'metersphere', tab: 'services' }
+export const METERSPHERE_TABS = ['workspace', 'services', 'tasks', 'diagnosis', 'build', 'package', 'sql', 'config']
+export const DEFAULT_ROUTE = { projectId: 'metersphere', tab: 'workspace' }
 
 export function normalizeRoute(route = {}) {
   route = route || {}
   if (route.projectId === null) return { projectId: null, tab: 'overview' }
   const projectId = typeof route.projectId === 'string' && route.projectId ? route.projectId : 'metersphere'
-  return { projectId, tab: projectId === 'metersphere' && METERSPHERE_TABS.includes(route.tab) ? route.tab : projectId === 'metersphere' ? 'services' : 'overview' }
+  return {
+    projectId,
+    tab: projectId === 'metersphere' && METERSPHERE_TABS.includes(route.tab)
+      ? route.tab
+      : projectId === 'metersphere'
+        ? 'workspace'
+        : 'overview'
+  }
 }
 
 export function parseProjectHash(hash, fallback = DEFAULT_ROUTE) {
