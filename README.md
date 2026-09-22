@@ -340,3 +340,15 @@ npm run test:reliability
 本机 CPA 项目现使用云端管理连接：启动命令运行 `/Users/edy/ideaProjects/new-api/.local/cloud/连接云端.command`，状态端口为 `18317`，访问地址为 `http://127.0.0.1:18317/management.html`。连接脚本同时提供 Codex `1455` 和 Google `51121` 授权回调通道。
 
 停止命令断开该脚本建立的共享 SSH 通道（包括 New API 的本机 `13001` 入口），不会停止云服务器上的 CPA 或 New API，也不会影响客户访问公网 API。
+
+### 可恢复的连接脚本与项目源码
+
+连接脚本已纳入版本管理：`scripts/cloud-connect.command` 和 `scripts/cloud-disconnect.command`。后者支持重复断开，不会因通道已经关闭而返回 SSH 255。控制面板可将启动、停止命令分别设为 `/bin/zsh <本仓库绝对路径>/scripts/cloud-connect.command` 和 `/bin/zsh <本仓库绝对路径>/scripts/cloud-disconnect.command`。
+
+新电脑需先自行配置 SSH 别名 `aliyun`。可以用 `CLOUD_SSH_HOST` 指定其他别名，用 `CLOUD_TUNNEL_DIR` 指定控制文件目录；默认目录为 `$HOME/ideaProjects/new-api/.local/cloud`，与现有本机脚本共用通道。脚本只连接已部署的服务，不会部署服务器、恢复数据库或导入账号授权。
+
+- CPA fork： https://github.com/sdwurg180507280211/CLIProxyAPI
+- New API fork： https://github.com/sdwurg180507280211/new-api
+- 本次本机源码基线：CPA `c93978c4ea2e908255a2a06c37599fda3651554a`，New API `2906e4f779b715f282ae11203211dca77051d5af`；分别保存在 fork 的 `codex/cloud-deployment-baseline` 分支。
+
+Git 仓库只保存源码和无凭据的连接脚本。运行配置、账号授权、API 密钥、代理订阅、数据库和 SSH 私钥不随仓库上传。
