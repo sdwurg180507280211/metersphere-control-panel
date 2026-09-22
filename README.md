@@ -333,3 +333,10 @@ npm run test:reliability
 ```
 
 该命令不能替代原有 Jest、前端构建和 macOS 桌面验收。
+# 云端 CPA 访问
+
+命令项目支持可选的 `accessUrl`（完整 HTTP/HTTPS 地址）。配置项目中的“完整访问地址”用于“访问服务”按钮；留空时继续使用本机状态端口。状态检测仍使用 `statusPort`。
+
+本机 CPA 项目现使用云端管理连接：启动命令运行 `/Users/edy/ideaProjects/new-api/.local/cloud/连接云端.command`，状态端口为 `18317`，访问地址为 `http://127.0.0.1:18317/management.html`。连接脚本同时提供 Codex `1455` 和 Google `51121` 授权回调通道。
+
+停止命令断开该脚本建立的共享 SSH 通道（包括 New API 的本机 `13001` 入口），不会停止云服务器上的 CPA 或 New API，也不会影响客户访问公网 API。

@@ -37,6 +37,13 @@ afterEach(() => {
 });
 
 describe('Command Project config migration', () => {
+  test('preserves a full management URL on save and read, rejecting unsafe protocols', () => {
+    const { configService } = loadServices({ projects: {} });
+    const input = { name: 'CPA', startCommand: 'connect', stopCommand: 'disconnect', statusPort: 18317, accessUrl: 'http://127.0.0.1:18317/management.html' };
+    const saved = configService.saveProject(input);
+    expect(configService.getProjects()[0].accessUrl).toBe(input.accessUrl);
+    expect(() => configService.saveProject({ ...input, id: saved.id, accessUrl: 'javascript:alert(1)' })).toThrow();
+  });
   test('reads legacy desktopApplications without mutating the file', () => {
     const initial = {
       projectRoot: '/tmp/metersphere',

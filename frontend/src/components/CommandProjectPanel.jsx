@@ -10,7 +10,7 @@ export default function CommandProjectPanel({ project, status, manualRunning, bu
       </div>
       <div className="console-project-hero">
         <div><span className={`console-status ${state.tone}`}><i />{state.label}</span>
-          <h2>{state.port ? `127.0.0.1:${state.port}` : '手动控制'}</h2>
+          <h2>{project.accessUrl || (state.port ? `127.0.0.1:${state.port}` : '手动控制')}</h2>
           <p>{state.port ? '端口状态仅表示是否可连接，不代表进程归属或整个项目的健康状态。' : '未配置状态端口，无法验证运行状态。启动和停止命令仍可手动执行。'}</p>
           {state.lastStartIssued && <p>上次已发出启动命令，尚未验证服务是否就绪。</p>}
           {status?.error && <p role="alert">上次操作未确认：{status.error}</p>}

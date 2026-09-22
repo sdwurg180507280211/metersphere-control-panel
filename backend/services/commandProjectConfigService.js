@@ -107,6 +107,14 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
   const startCommand = String(input.startCommand || '').trim();
   const stopCommand = String(input.stopCommand || '').trim();
   const statusPort = normalizePort(input.statusPort);
+  const accessUrl = String(input.accessUrl || '').trim();
+  if (accessUrl) {
+    let parsed;
+    try { parsed = new URL(accessUrl); } catch {}
+    if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+      throw createAppError(400, 'DESKTOP_APP_URL_INVALID', '访问地址必须是有效的 HTTP 或 HTTPS 地址，且不能包含账号密码');
+    }
+  }
 
   if (!name) throw createAppError(400, 'DESKTOP_APP_NAME_MISSING', '请填写服务名称');
   if (!startCommand) throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', '请填写启动命令');
@@ -127,6 +135,7 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
       type: COMMAND_PROJECT_TYPE,
       startCommand,
       stopCommand,
+      ...(accessUrl ? { accessUrl } : {}),
       ...(statusPort ? { statusPort } : {})
     }
   };
@@ -140,6 +149,7 @@ function getProjects() {
     name: String(raw.name || id),
     startCommand: String(raw.startCommand || ''),
     stopCommand: String(raw.stopCommand || ''),
+    ...(raw.accessUrl ? { accessUrl: String(raw.accessUrl) } : {}),
     statusPort: Number.isInteger(Number(raw.statusPort)) ? Number(raw.statusPort) : null
   }));
 }

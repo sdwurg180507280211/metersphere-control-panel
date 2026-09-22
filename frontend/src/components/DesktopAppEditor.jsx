@@ -17,6 +17,7 @@ function buildInitial(project) {
     name: project?.name || '',
     startCommand: project?.startCommand || '',
     stopCommand: project?.stopCommand || '',
+    accessUrl: project?.accessUrl || '',
     statusPort: project?.statusPort || ''
   }
 }
@@ -70,6 +71,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
           name: form.name.trim(),
           startCommand: form.startCommand.trim(),
           stopCommand: form.stopCommand.trim(),
+          accessUrl: form.accessUrl.trim(),
           statusPort: form.statusPort === '' ? null : Number(form.statusPort)
         })
       })
@@ -160,6 +162,11 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
           </label>
 
           <div className="desktop-command-safety">
+            <label className="desktop-editor-block">
+              <span>完整访问地址（可选）</span>
+              <input type="url" value={form.accessUrl} onChange={(event) => update('accessUrl', event.target.value)} placeholder="http://127.0.0.1:18317/management.html" />
+              <small>访问服务时使用此地址，保留页面路径；留空则使用本机状态端口。</small>
+            </label>
             命令只会先保存到本机配置；点击对应项目的“启动”或“关闭”时，后端才会按项目 ID 读取并执行。
           </div>
         </fieldset>

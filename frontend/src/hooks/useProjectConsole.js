@@ -250,7 +250,7 @@ export function useProjectConsole() {
     const port = projectStatus?.port || project.statusPort
     if (!port || projectStatus?.statusKnown !== true || projectStatus?.running !== true) return
 
-    const url = `http://127.0.0.1:${port}`
+    const url = project.accessUrl || `http://127.0.0.1:${port}`
     try {
       if (window.desktopBridge?.openExternal) {
         await window.desktopBridge.openExternal(url)
