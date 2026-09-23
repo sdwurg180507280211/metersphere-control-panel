@@ -6,7 +6,7 @@ export function commandState(project, status, manualRunning, busy) {
   const port = status?.port || project.statusPort
   return {
     known, running, port,
-    canVisit: Boolean(port && running && !busy),
+    canVisit: Boolean(!busy && ((project.accessUrl && !port) || (port && running))),
     lastStartIssued: !known && manualRunning === true,
     label: labels[phase] || labels.unknown,
     tone: busy ? 'busy' : !known ? 'unknown' : running ? 'running' : 'stopped'

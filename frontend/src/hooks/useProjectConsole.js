@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { buildProjectViewModel } from '../projectModel'
+import { commandState } from '../commandState'
 
 const POLL_MS = 3000
 const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
@@ -248,7 +249,7 @@ export function useProjectConsole() {
   const visitCommandProject = useCallback(async (project) => {
     const projectStatus = commandStatus[project.id]
     const port = projectStatus?.port || project.statusPort
-    if (!port || projectStatus?.statusKnown !== true || projectStatus?.running !== true) return
+    if (!commandState(project, projectStatus, false, commandBusy[project.id]).canVisit) return
 
     const url = project.accessUrl || `http://127.0.0.1:${port}`
     try {
@@ -260,7 +261,7 @@ export function useProjectConsole() {
     } catch (error) {
       toast.error(error.message || '打开服务地址失败')
     }
-  }, [commandStatus])
+  }, [commandStatus, commandBusy])
 
   return { projects, commandStatus, commandBusy, manualRunning, loading, loaded, loadError, lastUpdated, meterSphereSummary, commandSummary, refresh, runCommandAction, visitCommandProject, update, checkUpdate, installUpdate }
 }

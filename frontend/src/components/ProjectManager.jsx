@@ -12,7 +12,7 @@ export default function ProjectManager({ projects, commandStatus, commandBusy, m
             <article className="console-project-card" key={project.id}>
               <span className="console-project-monogram" aria-hidden="true">{isMS ? 'MS' : project.name.slice(0, 2).toUpperCase()}</span>
               <h2><button onClick={() => onSelect(project.id)}>{project.name}</button></h2>
-              <p>{isMS ? '服务、构建、打包与 SQL' : '本机命令启动与关闭'}</p>
+              <p>{isMS ? '服务、构建、打包与 SQL' : project.accessUrl || '本机命令启动与关闭'}</p>
               <span className={`console-status ${state.tone}`}><i />{state.label}</span>
               <div className="console-actions"><button className="console-button" onClick={() => onSelect(project.id)}>进入项目 →</button>{!isMS && <button className="console-button quiet" onClick={() => onEdit(project)} disabled={Boolean(commandBusy[project.id])}>配置</button>}</div>
             </article>

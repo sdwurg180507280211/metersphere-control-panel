@@ -30,7 +30,10 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:frontend": "node --test frontend/__tests__/*.test.js",
-    "test:reliability": "node --test scripts/tests/reliability/*.test.cjs"
+    "test:reliability": "node --test scripts/tests/reliability/*.test.cjs",
+    "gallery:open": "bash scripts/image-gallery.command open",
+    "gallery:deploy": "bash scripts/image-gallery.command deploy",
+    "gallery:rollback": "bash scripts/image-gallery.command rollback"
   },
   "dependencies": {
     "express": "^4.18.2",

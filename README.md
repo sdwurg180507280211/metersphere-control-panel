@@ -352,3 +352,19 @@ npm run test:reliability
 - 本次本机源码基线：CPA `c93978c4ea2e908255a2a06c37599fda3651554a`，New API `2906e4f779b715f282ae11203211dca77051d5af`；分别保存在 fork 的 `codex/cloud-deployment-baseline` 分支。
 
 Git 仓库只保存源码和无凭据的连接脚本。运行配置、账号授权、API 密钥、代理订阅、数据库和 SSH 私钥不随仓库上传。
+
+## 图片素材库（阿里云）
+
+在 Local Service Hub 的「管理项目」或「当前项目」中选择 **图片素材库 Image Gallery（阿里云）**，点击 **访问服务 ↗** 即可打开 <http://39.102.212.37/image-gallery/>。网址也直接显示在项目卡片与概览中，不必记住 IP。
+
+图库持续托管于阿里云，不需要先启动本机服务。本机配置中的启动命令打开网页，停止命令仅显示提示，不关闭云端站点。云端项目填写完整访问地址并留空状态端口时允许直接访问；配置了本机状态端口的项目（例如 CPA SSH 通道）仍需端口运行后才允许访问。
+
+本仓库维护统一入口与发布命令，图库源码及图片继续保存在同级 `../image-gallery` 独立仓库，阿里云部署使用其 `codex/aliyun-deploy` 分支。
+
+```bash
+npm run gallery:open      # 打开图库
+npm run gallery:deploy    # 本地构建并通过 ssh aliyun 发布
+npm run gallery:rollback  # 回退到上一个线上版本
+```
+
+图库位于其他位置时，可通过 `IMAGE_GALLERY_ROOT` 指定。控制面板项目配置存储于 `~/.metersphere-control-panel/config.json`，不随 Git 提交；换电脑时可在「添加项目」中填写上述网址，启动命令设为 `/bin/bash <本仓库绝对路径>/scripts/image-gallery.command open`，停止命令将末尾 `open` 改为 `stop`，状态端口留空。
