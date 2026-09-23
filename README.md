@@ -368,3 +368,7 @@ npm run gallery:rollback  # 回退到上一个线上版本
 ```
 
 图库位于其他位置时，可通过 `IMAGE_GALLERY_ROOT` 指定。控制面板项目配置存储于 `~/.metersphere-control-panel/config.json`，不随 Git 提交；换电脑时可在「添加项目」中填写上述网址，启动命令设为 `/bin/bash <本仓库绝对路径>/scripts/image-gallery.command open`，停止命令将末尾 `open` 改为 `stop`，状态端口留空。
+
+### Image Gallery 风格管理
+
+图库服务的“启动”入口通过 `scripts/image-gallery.command open` 打开 SSH 安全管理页面（本机 18780 端口），可保存公众号风格、默认组合和方案；“访问服务”仍打开公开图库。`browse` 可单独打开公开网址，`styles` 与 `open` 等效。密钥由 SSH 读取并仅保存在浏览器会话中，不写入面板配置或日志。
