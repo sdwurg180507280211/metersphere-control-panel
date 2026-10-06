@@ -2,7 +2,7 @@
 cloud_host=${CLOUD_SSH_HOST:-aliyun}
 cloud_dir=${CLOUD_TUNNEL_DIR:-$HOME/ideaProjects/new-api/.local/cloud}
 disconnect_result=0
-for socket in "$cloud_dir/ssh-oauth-control" "$cloud_dir/ssh-control"; do
+for socket in "$cloud_dir/ssh-cpa-callback-control" "$cloud_dir/ssh-oauth-control" "$cloud_dir/ssh-control"; do
   if [[ ! -S "$socket" ]]; then
     print -- "通道已断开，无需重复关闭：${socket:t}"
     continue

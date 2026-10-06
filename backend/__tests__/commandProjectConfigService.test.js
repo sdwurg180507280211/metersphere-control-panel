@@ -37,6 +37,36 @@ afterEach(() => {
 });
 
 describe('Command Project config migration', () => {
+  test('one project retains grouped page links across reads, edits from older clients and explicit removal', () => {
+    const { configPath, configService } = loadServices({ projects: { other: { type: 'command', name: 'Other', startCommand: 'other-start', stopCommand: 'other-stop' } } });
+    const input = { name: 'Event Q&A', startCommand: 'qna-start', stopCommand: 'qna-stop', statusPort: 3036, accessLinks: [
+      { label: '提问', url: 'http://127.0.0.1:3036/event/demo/ask', group: '本地开发', requiresRunning: true },
+      { label: '审核后台', url: 'http://39.102.212.37:3036/admin', group: '线上活动', requiresRunning: false }
+    ] };
+    const saved = configService.saveProject(input);
+    expect(configService.getProjects().find((project) => project.id === saved.id).accessLinks).toEqual(input.accessLinks);
+    const { accessLinks, ...oldClientInput } = input;
+    configService.saveProject({ ...oldClientInput, id: saved.id, name: 'Event Q&A updated' });
+    expect(readConfig(configPath).projects[saved.id].accessLinks).toEqual(accessLinks);
+    expect(readConfig(configPath).projects.other).toEqual({ type: 'command', name: 'Other', startCommand: 'other-start', stopCommand: 'other-stop' });
+    configService.saveProject({ ...oldClientInput, id: saved.id, accessLinks: [] });
+    expect(configService.getProjects().find((project) => project.id === saved.id).accessLinks).toBeUndefined();
+  });
+
+  test.each([
+    [{ label: 'Bad', url: 'javascript:alert(1)' }],
+    [{ label: 'Bad', url: 'https://user:secret@example.com/' }],
+    [{ label: '', url: 'https://example.com/' }],
+    [{ label: 'Bad', url: 'https://example.com/', requiresRunning: 'false' }],
+    Array.from({ length: 21 }, () => ({ label: 'Excess', url: 'https://example.com/' })),
+    'invalid', null
+  ].map((accessLinks) => [accessLinks]))('rejects invalid access links without modifying persisted projects (%#)', (accessLinks) => {
+    const initial = { projects: {} };
+    const { configPath, configService } = loadServices(initial);
+    expect(() => configService.saveProject({ name: 'Event Q&A', startCommand: 'start', stopCommand: 'stop', accessLinks })).toThrow();
+    expect(readConfig(configPath)).toEqual(initial);
+  });
+
   test('preserves a full management URL on save and read, rejecting unsafe protocols', () => {
     const { configService } = loadServices({ projects: {} });
     const input = { name: 'CPA', startCommand: 'connect', stopCommand: 'disconnect', statusPort: 18317, accessUrl: 'http://127.0.0.1:18317/management.html' };

@@ -18,6 +18,7 @@ function buildInitial(project) {
     startCommand: project?.startCommand || '',
     stopCommand: project?.stopCommand || '',
     accessUrl: project?.accessUrl || '',
+    accessLinks: (project?.accessLinks || []).map((link) => ({ ...link, group: link.group || '', requiresRunning: link.requiresRunning === true })),
     statusPort: project?.statusPort || ''
   }
 }
@@ -30,7 +31,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const dirty = Object.keys(form).some((key) => String(form[key]) !== String(initial.current[key]))
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial.current)
   const busy = saving || deleting
   const requestClose = () => {
     if (busy) return
@@ -51,12 +52,20 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
   }, [dirty, busy])
 
   const validPort = form.statusPort === '' || (Number.isInteger(Number(form.statusPort)) && Number(form.statusPort) >= 1 && Number(form.statusPort) <= 65535)
-  const canSave = validPort && form.name.trim()
+  const validUrl = (value) => {
+    try {
+      const url = new URL(value)
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
+    } catch { return false }
+  }
+  const validLinks = form.accessLinks.every((link) => link.label.trim() && link.label.trim().length <= 80 && link.group.trim().length <= 80 && validUrl(link.url))
+  const canSave = validPort && validLinks && (!form.accessUrl.trim() || validUrl(form.accessUrl)) && form.name.trim()
     && form.startCommand.trim()
     && form.stopCommand.trim()
     && !busy
 
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }))
+  const updateLink = (index, key, value) => setForm((current) => ({ ...current, accessLinks: current.accessLinks.map((link, position) => position === index ? { ...link, [key]: value } : link) }))
 
   const handleSave = async () => {
     if (!canSave) return
@@ -72,6 +81,7 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
           startCommand: form.startCommand.trim(),
           stopCommand: form.stopCommand.trim(),
           accessUrl: form.accessUrl.trim(),
+          accessLinks: form.accessLinks,
           statusPort: form.statusPort === '' ? null : Number(form.statusPort)
         })
       })
@@ -160,6 +170,28 @@ export default function CommandProjectEditor({ project = null, onClose, onSaved 
             {!validPort && <small role="alert">端口必须是 1–65535 之间的整数。</small>}
             <small>填写后通过 127.0.0.1 端口判断运行状态；不填写时仍可手动启动和关闭。</small>
           </label>
+
+          <section className="desktop-editor-links" aria-label="维护页面入口">
+            <div className="desktop-editor-links-heading">
+              <h3>项目内的页面入口</h3>
+              <button type="button" disabled={form.accessLinks.length >= 20} onClick={() => update('accessLinks', [...form.accessLinks, { label: '', url: '', group: '', requiresRunning: false }])}>添加入口</button>
+            </div>
+            <small>提问、管理、展示等页面属于同一个项目，可按本地或线上分组。</small>
+            {form.accessLinks.map((link, index) => (
+              <div className="desktop-editor-link" key={index}>
+                <div className="desktop-editor-link-fields">
+                  <label className="desktop-editor-block"><span>入口名称</span><input aria-label={`入口 ${index + 1} 名称`} maxLength="80" value={link.label} onChange={(event) => updateLink(index, 'label', event.target.value)} placeholder="提问页面" /></label>
+                  <label className="desktop-editor-block"><span>分组（可选）</span><input aria-label={`入口 ${index + 1} 分组`} maxLength="80" value={link.group} onChange={(event) => updateLink(index, 'group', event.target.value)} placeholder="线上活动" /></label>
+                </div>
+                <label className="desktop-editor-block"><span>访问地址</span><input aria-label={`入口 ${index + 1} 地址`} type="url" value={link.url} onChange={(event) => updateLink(index, 'url', event.target.value)} placeholder="https://example.com/event/demo/ask" /></label>
+                <div className="desktop-editor-link-options">
+                  <label><input type="checkbox" checked={link.requiresRunning} onChange={(event) => updateLink(index, 'requiresRunning', event.target.checked)} />本地项目运行后可访问</label>
+                  <button type="button" aria-label={`移除入口 ${index + 1}`} onClick={() => update('accessLinks', form.accessLinks.filter((_, position) => position !== index))}>移除</button>
+                </div>
+              </div>
+            ))}
+            {!validLinks && <small role="alert">请为每个入口填写名称和有效的 HTTP/HTTPS 地址。</small>}
+          </section>
 
           <div className="desktop-command-safety">
             <label className="desktop-editor-block">

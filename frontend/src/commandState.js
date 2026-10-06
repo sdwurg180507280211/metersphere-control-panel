@@ -12,3 +12,10 @@ export function commandState(project, status, manualRunning, busy) {
     tone: busy ? 'busy' : !known ? 'unknown' : running ? 'running' : 'stopped'
   }
 }
+
+export function canVisitAccessLink(project, status, link, busy) {
+  if (!link?.url) return false
+  if (!link.requiresRunning) return true
+  const state = commandState(project, status, false, busy)
+  return Boolean(!busy && state.port && state.running)
+}

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { commandState } from '../src/commandState.js'
+import { commandState, canVisitAccessLink } from '../src/commandState.js'
 
 test('a remembered start is an action receipt, not verified running state', () => {
   const state = commandState({}, { statusKnown: false }, true)
@@ -34,4 +34,23 @@ test('an explicit URL with a local tunnel port still requires that port to be ru
   assert.equal(commandState(project, { statusKnown: false }).canVisit, false)
   assert.equal(commandState(project, { statusKnown: true, running: false }).canVisit, false)
   assert.equal(commandState(project, { statusKnown: true, running: true }).canVisit, true)
+})
+
+test('cloud pages stay accessible while the same project is stopped or changing local state', () => {
+  const project = { statusPort: 3036 }
+  const link = { url: 'http://39.102.212.37:3036/admin', requiresRunning: false }
+  for (const status of [{}, { statusKnown: true, running: false }, { statusKnown: true, running: true }]) {
+    assert.equal(canVisitAccessLink(project, status, link), true)
+    assert.equal(canVisitAccessLink(project, status, link, 'stopping'), true)
+  }
+})
+
+test('local page links require a confirmed running project and remain unavailable during transitions', () => {
+  const project = { statusPort: 3036 }
+  const link = { url: 'http://127.0.0.1:3036/admin', requiresRunning: true }
+  assert.equal(canVisitAccessLink(project, {}, link), false)
+  assert.equal(canVisitAccessLink(project, { statusKnown: true, running: false }, link), false)
+  assert.equal(canVisitAccessLink(project, { statusKnown: true, running: true }, link), true)
+  assert.equal(canVisitAccessLink(project, { statusKnown: true, running: true }, link, 'starting'), false)
+  assert.equal(canVisitAccessLink({}, { statusKnown: true, running: true }, link), false)
 })

@@ -4,7 +4,27 @@ const path = require('path');
 
 const localAuthService = require('../services/localAuthService');
 const privateFile = require('../utils/privateFile');
-const { getTrustedRendererOrigins, isTrustedRendererUrl, hardenBrowserWindow } = require('../../electron-security');
+const { getTrustedRendererOrigins, isTrustedRendererUrl, hardenBrowserWindow, normalizeExternalServiceUrl } = require('../../electron-security');
+
+describe('Desktop external service links', () => {
+  test.each([
+    'http://39.102.212.37/management.html#/oauth',
+    'http://39.102.212.37:3036/event/demo/ask',
+    'https://example.com/admin?view=questions',
+    'http://127.0.0.1:3036/admin',
+    'http://localhost:13001/'
+  ])('opens local and public HTTP(S) addresses: %s', (url) => {
+    expect(normalizeExternalServiceUrl(url)).toBe(url);
+  });
+
+  test.each([
+    '', 'not a URL', 'file:///etc/passwd', 'javascript:alert(1)',
+    'data:text/html,hello', 'ftp://example.com/',
+    'https://user:password@example.com/', 'http://user@example.com/'
+  ])('rejects invalid addresses, other protocols and embedded credentials: %s', (url) => {
+    expect(() => normalizeExternalServiceUrl(url)).toThrow();
+  });
+});
 
 function request({ method = 'POST', origin, host = '127.0.0.1:5001', remoteAddress = '127.0.0.1', fetchSite } = {}) {
   const headers = { host };

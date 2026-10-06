@@ -335,15 +335,25 @@ npm run test:reliability
 该命令不能替代原有 Jest、前端构建和 macOS 桌面验收。
 # 云端 CPA 访问
 
+2026-10-05 更新：公网管理后台为 `http://39.102.212.37/management.html`，OAuth 页面为 `http://39.102.212.37/management.html#/oauth`。使用现有 CPA 管理密钥登录（不同于 New API 的模型 API Key）。公网入口经服务器网页服务转发到内部 CPA `127.0.0.1:8317`；管理接口仍校验密钥，CPA 服务端口保持内部监听。
+
+客户端模型调用使用 OpenAI 兼容 Base URL：`http://39.102.212.37:3001/v1`，搭配 New API 为用户签发的 API Key。New API 后台为 `http://39.102.212.37:3001`。CPA 管理网页不作为客户的模型 Base URL，文档及控制面板链接不保存 API Key。
+
+Codex 的官方授权仍会先回到浏览器所在电脑的 `localhost:1455`。CPA 的回调转发器随后按服务内部端口生成 `http://127.0.0.1:8317/codex/callback`，不会自动采用本机管理映射端口 `18317`。因此连接脚本现在同时建立 `1455` 和 `8317` 的回调通道，以及 Google `51121` 和后台 `18317` 通道。新增的 `8317` 通道使用独立控制文件 `ssh-cpa-callback-control`，已有 SSH 主通道不需要重新创建。
+
+添加账号需要本机授权回调时，单独运行 `/bin/zsh /Users/edy/ideaProjects/metersphere-control-panel/scripts/cloud-connect.command`。若回调仍显示连接被拒绝，可在授权会话有效期间，将返回 URL 的 `http://127.0.0.1:8317` 部分替换为 `http://39.102.212.37`，保留 `/codex/callback` 和全部查询参数；不要修改官方授权链接内的 `redirect_uri`。公网回调入口为 `http://39.102.212.37/codex/callback`，不能单独打开空地址完成授权。回调页面 HTTP 200 只说明入口可达，最终必须以 CPA 提示授权成功或出现新认证文件为准。会话超时或 CPA 重启后需要重新发起授权。
+
+控制面板项目内保留公网管理、OAuth、认证文件、New API 后台和模型 Base URL 入口，均可直接访问。文档及项目入口不保存临时授权 code、state 或管理密钥。当前公网入口为 HTTP，管理密钥及授权参数传输未加密；需要加密管理访问时可先运行连接脚本，再打开 SSH 入口 `http://127.0.0.1:18317/management.html`。
+
 命令项目支持可选的 `accessUrl`（完整 HTTP/HTTPS 地址）。配置项目中的“完整访问地址”用于“访问服务”按钮；留空时继续使用本机状态端口。状态检测仍使用 `statusPort`。
 
-本机 CPA 项目现使用云端管理连接：启动命令运行 `/Users/edy/ideaProjects/new-api/.local/cloud/连接云端.command`，状态端口为 `18317`，访问地址为 `http://127.0.0.1:18317/management.html`。连接脚本同时提供 Codex `1455` 和 Google `51121` 授权回调通道。
+本机 CPA 项目名称为 `CLIProxyAPI（云端）`，启动命令为 `/usr/bin/open 'http://39.102.212.37/management.html'`，完整访问地址使用同一公网 URL，状态端口留空。“访问服务”无需先启动本机项目或建立 SSH 通道；“启动”直接打开公网管理网页。本机项目配置存储于 `~/.metersphere-control-panel/config.json`。
 
-停止命令断开该脚本建立的共享 SSH 通道（包括 New API 的本机 `13001` 入口），不会停止云服务器上的 CPA 或 New API，也不会影响客户访问公网 API。
+该项目的“停止”仅显示云端服务持续运行的提示，关闭页面可直接操作浏览器。需要断开可选 SSH 通道时单独运行断开脚本；它会断开共享通道中的本机后台入口与授权回调通道，云服务器上的 CPA 和 New API 继续运行。
 
 ### 可恢复的连接脚本与项目源码
 
-连接脚本已纳入版本管理：`scripts/cloud-connect.command` 和 `scripts/cloud-disconnect.command`。后者支持重复断开，不会因通道已经关闭而返回 SSH 255。控制面板可将启动、停止命令分别设为 `/bin/zsh <本仓库绝对路径>/scripts/cloud-connect.command` 和 `/bin/zsh <本仓库绝对路径>/scripts/cloud-disconnect.command`。
+可选连接脚本已纳入版本管理：`scripts/cloud-connect.command` 和 `scripts/cloud-disconnect.command`。分别使用 `/bin/zsh <本仓库绝对路径>/scripts/cloud-connect.command` 和 `/bin/zsh <本仓库绝对路径>/scripts/cloud-disconnect.command` 手动连接或断开。后者支持重复断开，不会因通道已经关闭而返回 SSH 255。这两个脚本独立于控制面板 CPA 项目的启动、停止操作。
 
 新电脑需先自行配置 SSH 别名 `aliyun`。可以用 `CLOUD_SSH_HOST` 指定其他别名，用 `CLOUD_TUNNEL_DIR` 指定控制文件目录；默认目录为 `$HOME/ideaProjects/new-api/.local/cloud`，与现有本机脚本共用通道。脚本只连接已部署的服务，不会部署服务器、恢复数据库或导入账号授权。
 
@@ -357,7 +367,7 @@ Git 仓库只保存源码和无凭据的连接脚本。运行配置、账号授�
 
 在 Local Service Hub 的「管理项目」或「当前项目」中选择 **图片素材库 Image Gallery（阿里云）**，点击 **访问服务 ↗** 即可打开 <http://39.102.212.37/image-gallery/>。网址也直接显示在项目卡片与概览中，不必记住 IP。
 
-图库持续托管于阿里云，不需要先启动本机服务。本机配置中的启动命令打开网页，停止命令仅显示提示，不关闭云端站点。云端项目填写完整访问地址并留空状态端口时允许直接访问；配置了本机状态端口的项目（例如 CPA SSH 通道）仍需端口运行后才允许访问。
+图库持续托管于阿里云，不需要先启动本机服务。本机配置中的启动命令打开网页，停止命令仅显示提示，不关闭云端站点。云端项目填写完整访问地址并留空状态端口时允许直接访问；配置了本机状态端口的项目仍需端口运行后才允许访问。
 
 本仓库维护统一入口与发布命令，图库源码及图片继续保存在同级 `../image-gallery` 独立仓库，阿里云部署使用其 `codex/aliyun-deploy` 分支。
 
@@ -372,3 +382,13 @@ npm run gallery:rollback  # 回退到上一个线上版本
 ### Image Gallery 风格管理
 
 图库服务的“启动”入口通过 `scripts/image-gallery.command open` 打开 SSH 安全管理页面（本机 18780 端口），可保存公众号风格、默认组合和方案；“访问服务”仍打开公开图库。`browse` 可单独打开公开网址，`styles` 与 `open` 等效。密钥由 SSH 读取并仅保存在浏览器会话中，不写入面板配置或日志。
+
+## 活动提问 Event Q&A
+
+Local Service Hub 将同级 `../event-qna` 作为一个 **Event Q&A** 项目维护，默认地址为 `http://39.102.212.37:3036/event/demo/ask`。项目“启动”和“访问服务”直接打开公网提问页面，“停止”仅显示云端服务持续运行的提示，状态端口留空。项目内提供线上提问页面、审核后台、iPad 展示三个页面入口。`npm run qna:start` / `qna:stop` 仍可单独管理本地开发服务；`qna:live` / `qna:live-admin` / `qna:live-display` 打开线上三个页面。`qna:preview` 打开本地 FORUM 品牌预览。
+
+本地关闭仅处理经目录与进程身份检查的 event-qna 应用，数据库继续保留；线上入口不会关闭阿里云服务。完整配置、维护方式与版本边界见 [Event Q&A 维护说明](docs/EVENT-QNA.md)。
+
+command 项目可配置 `accessLinks` 页面入口（名称、HTTP/HTTPS 地址、可选分组和 `requiresRunning`），在“配置项目”内维护，最多 20 项。原有 `accessUrl` 继续作为默认访问地址；旧客户端编辑未传 `accessLinks` 时保留入口，显式传空数组清除。
+
+桌面端“访问服务”及页面入口支持本机与公网 HTTP(S) 地址，在系统默认浏览器中打开；不接受其他协议或在 URL 中嵌入账号密码。主窗口仍保持本机来源与 IPC 校验。

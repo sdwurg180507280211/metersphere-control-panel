@@ -1,4 +1,5 @@
 import { commandState } from '../commandState'
+import ProjectAccessLinks from './ProjectAccessLinks'
 
 export default function CommandProjectPanel({ project, status, manualRunning, busy, onStart, onStop, onVisit, onEdit, lastUpdated }) {
   const state = commandState(project, status, manualRunning, busy)
@@ -18,9 +19,10 @@ export default function CommandProjectPanel({ project, status, manualRunning, bu
         <div className="console-actions">
           <button className="console-button primary" disabled={Boolean(busy) || state.running} onClick={onStart}>{busy === 'starting' ? '启动中…' : '启动项目'}</button>
           <button className="console-button danger" disabled={Boolean(busy)} onClick={onStop}>{busy === 'stopping' ? '关闭中…' : '停止项目'}</button>
-          <button className="console-button" onClick={onVisit} disabled={!state.canVisit} title={state.canVisit ? '在系统浏览器中访问' : '配置完整访问地址，或等待本机服务运行后可访问'}>访问服务 ↗</button>
+          <button className="console-button" onClick={() => onVisit()} disabled={!state.canVisit} title={state.canVisit ? '在系统浏览器中访问' : '配置完整访问地址，或等待本机服务运行后可访问'}>访问服务 ↗</button>
         </div>
       </div>
+      <ProjectAccessLinks project={project} status={status} busy={busy} onVisit={onVisit} />
       <div className="console-command-grid">
         <section className="console-command-card"><h2>启动命令</h2><pre>{project.startCommand || '尚未配置'}</pre></section>
         <section className="console-command-card"><h2>关闭命令</h2><pre>{project.stopCommand || '尚未配置'}</pre></section>

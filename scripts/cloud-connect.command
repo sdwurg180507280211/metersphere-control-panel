@@ -12,5 +12,9 @@ oauth_socket="$cloud_dir/ssh-oauth-control"
 if ! ssh -S "$oauth_socket" -O check "$cloud_host" 2>/dev/null; then
   ssh -M -S "$oauth_socket" -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:1455:127.0.0.1:1455 -L 127.0.0.1:51121:127.0.0.1:51121 "$cloud_host"
 fi
+callback_socket="$cloud_dir/ssh-cpa-callback-control"
+if ! ssh -S "$callback_socket" -O check "$cloud_host" 2>/dev/null; then
+  ssh -M -S "$callback_socket" -fN -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -L 127.0.0.1:8317:127.0.0.1:8317 "$cloud_host"
+fi
 open http://127.0.0.1:13001
 open http://127.0.0.1:18317/management.html

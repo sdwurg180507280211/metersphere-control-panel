@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { buildProjectViewModel } from '../projectModel'
-import { commandState } from '../commandState'
+import { commandState, canVisitAccessLink } from '../commandState'
 
 const POLL_MS = 3000
 const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000
@@ -246,12 +246,12 @@ export function useProjectConsole() {
     }
   }, [refresh, rememberManualRunning])
 
-  const visitCommandProject = useCallback(async (project) => {
+  const visitCommandProject = useCallback(async (project, link) => {
     const projectStatus = commandStatus[project.id]
     const port = projectStatus?.port || project.statusPort
-    if (!commandState(project, projectStatus, false, commandBusy[project.id]).canVisit) return
+    if (link ? !canVisitAccessLink(project, projectStatus, link, commandBusy[project.id]) : !commandState(project, projectStatus, false, commandBusy[project.id]).canVisit) return
 
-    const url = project.accessUrl || `http://127.0.0.1:${port}`
+    const url = link?.url || project.accessUrl || `http://127.0.0.1:${port}`
     try {
       if (window.desktopBridge?.openExternal) {
         await window.desktopBridge.openExternal(url)

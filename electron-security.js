@@ -1,3 +1,12 @@
+function normalizeExternalServiceUrl(rawUrl) {
+  let target;
+  try { target = new URL(String(rawUrl || '')); } catch { throw new Error('服务访问地址无效'); }
+  if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password) {
+    throw new Error('只允许访问不含账号密码的 HTTP(S) 服务地址');
+  }
+  return target.toString();
+}
+
 function getTrustedRendererOrigins({ backendPort, startUrl } = {}) {
   const origins = new Set();
   const candidates = [
@@ -47,6 +56,7 @@ function hardenBrowserWindow(window, options = {}) {
 }
 
 module.exports = {
+  normalizeExternalServiceUrl,
   getTrustedRendererOrigins,
   isTrustedRendererUrl,
   hardenBrowserWindow

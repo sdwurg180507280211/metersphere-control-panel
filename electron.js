@@ -5,7 +5,7 @@ const http = require('http');
 const https = require('https');
 const path = require('path');
 const fixPath = require('fix-path');
-const { hardenBrowserWindow } = require('./electron-security');
+const { hardenBrowserWindow, normalizeExternalServiceUrl } = require('./electron-security');
 
 fixPath();
 app.setName('Local Service Hub');
@@ -249,12 +249,7 @@ ipcMain.handle('project:open-workspace', async (_event, projectId) => {
 });
 ipcMain.handle('desktop:open-external', async (_event, rawUrl) => {
   if (!hubWindow || _event.sender !== hubWindow.webContents || (_event.senderFrame && _event.senderFrame !== hubWindow.webContents.mainFrame)) throw new Error('IPC 来源无效');
-  let target;
-  try { target = new URL(String(rawUrl || '')); } catch { throw new Error('服务访问地址无效'); }
-  const allowedProtocol = target.protocol === 'http:' || target.protocol === 'https:';
-  const allowedHost = target.hostname === '127.0.0.1' || target.hostname === 'localhost';
-  if (!allowedProtocol || !allowedHost) throw new Error('只允许访问本机 HTTP(S) 服务');
-  await shell.openExternal(target.toString());
+  await shell.openExternal(normalizeExternalServiceUrl(rawUrl));
   return true;
 });
 app.on('second-instance', () => { if (!hasSingleInstanceLock) return; requestHubFocus(); });

@@ -95,6 +95,36 @@ function normalizePort(value) {
   return port;
 }
 
+function validateAccessUrl(value) {
+  let parsed;
+  try { parsed = new URL(value); } catch {}
+  if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw createAppError(400, 'DESKTOP_APP_URL_INVALID', '访问地址必须是有效的 HTTP 或 HTTPS 地址，且不能包含账号密码');
+  }
+}
+
+function normalizeAccessLinks(value) {
+  if (!Array.isArray(value) || value.length > 20) {
+    throw createAppError(400, 'PROJECT_ACCESS_LINKS_INVALID', '页面入口必须是数组，最多 20 项');
+  }
+  return value.map((link) => {
+    if (!isObjectRecord(link)) {
+      throw createAppError(400, 'PROJECT_ACCESS_LINKS_INVALID', '请填写有效的页面入口');
+    }
+    const label = String(link.label || '').trim();
+    const url = String(link.url || '').trim();
+    const group = String(link.group || '').trim();
+    if (!label || label.length > 80 || group.length > 80) {
+      throw createAppError(400, 'PROJECT_ACCESS_LINKS_INVALID', '页面入口名称不能为空，名称和分组最多 80 字符');
+    }
+    validateAccessUrl(url);
+    if (link.requiresRunning !== undefined && typeof link.requiresRunning !== 'boolean') {
+      throw createAppError(400, 'PROJECT_ACCESS_LINKS_INVALID', '页面入口的本地运行要求必须是布尔值');
+    }
+    return { label, url, ...(group ? { group } : {}), requiresRunning: link.requiresRunning === true };
+  });
+}
+
 function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions = definitions) {
   const requestedType = input.type === undefined || input.type === null || input.type === ''
     ? COMMAND_PROJECT_TYPE
@@ -108,13 +138,7 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
   const stopCommand = String(input.stopCommand || '').trim();
   const statusPort = normalizePort(input.statusPort);
   const accessUrl = String(input.accessUrl || '').trim();
-  if (accessUrl) {
-    let parsed;
-    try { parsed = new URL(accessUrl); } catch {}
-    if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
-      throw createAppError(400, 'DESKTOP_APP_URL_INVALID', '访问地址必须是有效的 HTTP 或 HTTPS 地址，且不能包含账号密码');
-    }
-  }
+  if (accessUrl) validateAccessUrl(accessUrl);
 
   if (!name) throw createAppError(400, 'DESKTOP_APP_NAME_MISSING', '请填写服务名称');
   if (!startCommand) throw createAppError(400, 'DESKTOP_APP_START_COMMAND_MISSING', '请填写启动命令');
@@ -128,6 +152,9 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
     id = createUniqueId(name, reservedDefinitions);
   }
 
+  // Older clients do not know this field. An explicit [] removes the links.
+  const accessLinks = normalizeAccessLinks(hasOwn(input, 'accessLinks') ? input.accessLinks : definitions[id]?.accessLinks || []);
+
   return {
     id,
     definition: {
@@ -136,6 +163,7 @@ function normalizeDefinition(input = {}, definitions = {}, reservedDefinitions =
       startCommand,
       stopCommand,
       ...(accessUrl ? { accessUrl } : {}),
+      ...(accessLinks.length ? { accessLinks } : {}),
       ...(statusPort ? { statusPort } : {})
     }
   };
@@ -150,6 +178,7 @@ function getProjects() {
     startCommand: String(raw.startCommand || ''),
     stopCommand: String(raw.stopCommand || ''),
     ...(raw.accessUrl ? { accessUrl: String(raw.accessUrl) } : {}),
+    ...(Array.isArray(raw.accessLinks) && raw.accessLinks.length ? { accessLinks: normalizeAccessLinks(raw.accessLinks) } : {}),
     statusPort: Number.isInteger(Number(raw.statusPort)) ? Number(raw.statusPort) : null
   }));
 }

@@ -94,7 +94,7 @@ export default function DesktopShell() {
           {(visitedMS || isMS) && <div className="console-workspace-host" hidden={!isMS} inert={!isMS ? '' : undefined}><App activeTab={activeTab} isActive={isMS} /></div>}
           {!route.projectId && <ProjectManager {...consoleState} onSelect={selectProject} onAdd={() => setEditor({ project: null })} onEdit={(project) => setEditor({ project })} />}
           {selected && !isMS && <CommandProjectPanel project={selected} status={loadError ? {} : commandStatus[selected.id]} busy={commandBusy[selected.id]} manualRunning={!loadError && manualRunning[selected.id]} lastUpdated={consoleState.lastUpdated}
-            onStart={() => consoleState.runCommandAction(selected.id, 'start')} onStop={() => consoleState.runCommandAction(selected.id, 'stop')} onVisit={() => consoleState.visitCommandProject(selected)} onEdit={() => setEditor({ project: selected })} />}
+            onStart={() => consoleState.runCommandAction(selected.id, 'start')} onStop={() => consoleState.runCommandAction(selected.id, 'stop')} onVisit={(link) => consoleState.visitCommandProject(selected, link)} onEdit={() => setEditor({ project: selected })} />}
           {route.projectId && !selected && <div className="console-loading" role="status">{loading ? '正在读取项目…' : loadError ? '恢复连接后将继续显示这个项目。' : '正在返回项目列表…'}</div>}
         </div>
       </main>
